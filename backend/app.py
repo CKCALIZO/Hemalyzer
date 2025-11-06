@@ -71,30 +71,17 @@ def load_convnext_model():
         
         from convnext_wbc_classifier import convnext_base
         
-        # Initialize model
-        convnext_model = convnext_base(weights=None)
-        
-        # Modify classifier for 5 classes
-        num_classes = 5
-        in_features = 1024
-        convnext_model.classifier[2] = nn.Linear(in_features, num_classes)
-        
-        # Load checkpoint
-        model_path = Path(__file__).parent / "models" / "best_leukemia_model.pth"
+        # Load checkpoint first to determine number of classes
+        model_path = Path(__file__).parent / "models" / "best_leukemia_model (2).pth"
         checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
         
-        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-            convnext_model.load_state_dict(checkpoint['model_state_dict'])
-            class_names = checkpoint.get('class_names', [
-                'Normal',
-                'Acute Lymphoblastic Leukemia',
-                'Acute Myeloid Leukemia',
-                'Chronic Lymphocytic Leukemia',
-                'Chronic Myeloid Leukemia'
-            ])
-            print(f"✅ ConvNeXt loaded from epoch {checkpoint.get('epoch', 'unknown')}")
+        # Get number of classes from checkpoint
+        if isinstance(checkpoint, dict) and 'num_classes' in checkpoint:
+            num_classes = checkpoint['num_classes']
+            class_names = checkpoint.get('class_names', [])
         else:
-            convnext_model.load_state_dict(checkpoint)
+            # Fallback to 5 classes if not in checkpoint
+            num_classes = 5
             class_names = [
                 'Normal',
                 'Acute Lymphoblastic Leukemia',
@@ -103,20 +90,37 @@ def load_convnext_model():
                 'Chronic Myeloid Leukemia'
             ]
         
+        # Initialize model
+        convnext_model = convnext_base(weights=None)
+        
+        # Modify classifier for the correct number of classes
+        in_features = 1024  # ConvNeXt Base has 1024 features
+        convnext_model.classifier[2] = nn.Linear(in_features, num_classes)
+        
+        # Load trained weights
+        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
+            convnext_model.load_state_dict(checkpoint['model_state_dict'])
+            print(f"✅ ConvNeXt loaded from epoch {checkpoint.get('epoch', 'unknown')}")
+            if 'val_acc' in checkpoint:
+                print(f"   Validation Accuracy: {checkpoint['val_acc']:.2f}%")
+        else:
+            convnext_model.load_state_dict(checkpoint)
+        
         # Move to device and set eval mode
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         convnext_model = convnext_model.to(device)
         convnext_model.eval()
         
-        # Define transforms
+        # Define transforms (must match training transforms)
         convnext_transform = transforms.Compose([
-            transforms.Resize((384, 384)),
+            transforms.Resize((384, 384)),  # Match training config
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         
         print(f"✅ ConvNeXt model ready on {device}")
-        print(f"   Classes: {class_names}")
+        print(f"   Number of classes: {num_classes}")
+        print(f"   Classes: {class_names[:5]}..." if len(class_names) > 5 else f"   Classes: {class_names}")
         return True
         
     except Exception as e:
@@ -295,17 +299,11 @@ def process_blood_smear(image_bytes, conf_threshold=0.25, iou_threshold=0.45):
             
             detections['cells'].append(detection)
             
-            # Count by cell type with size validation
+            # Count by cell type - trust YOLOv8's detection
+            # (Size validation removed - YOLOv8 is already trained to distinguish cell types)
             if cls_name.upper() == 'WBC':
-                # WBCs should be larger than median (typically 2-3x larger than RBCs)
-                # Only count as WBC if area is at least 1.5x the median
-                if area >= median_area * 1.5:
-                    detections['counts']['WBC'] += 1
-                    wbc_boxes.append((box, detection))
-                else:
-                    # Likely a misclassified RBC - recount as RBC
-                    detections['counts']['RBC'] += 1
-                    detection['class'] = 'RBC'  # Correct the class
+                detections['counts']['WBC'] += 1
+                wbc_boxes.append((box, detection))
             elif cls_name.upper() == 'RBC':
                 detections['counts']['RBC'] += 1
             elif cls_name.upper() in ['PLATELET', 'PLATELETS']:
@@ -358,20 +356,29 @@ def process_blood_smear(image_bytes, conf_threshold=0.25, iou_threshold=0.45):
         }
         
         # Colors for WBC classifications (RGB format)
-        wbc_classification_colors = {
-            'Normal': (100, 255, 100),         # Green
-            'Acute Lymphocytic Leukemia': (255, 100, 100), # Red
-            'Acute Myeloid Leukemia': (255, 100, 100),       # Red
-            'Chronic Lymphocytic Leukemia': (255, 100, 100), # Red
-            'Chronic Myeloid Leukemia': (255, 100, 100)      # Red
-        }
+        # Determine color based on classification name
+        def get_wbc_color(classification):
+            """Return color based on WBC classification"""
+            classification_lower = classification.lower()
+            
+            # Normal cells (healthy) - Green
+            if 'normal' in classification_lower:
+                return (100, 255, 100)  # Green
+            
+            # Leukemia cells - Red (ALL, AML, CLL, CML prefixes)
+            leukemia_prefixes = ['all_', 'aml_', 'cll_', 'cml_', 'acute', 'chronic', 'leukemia']
+            if any(prefix in classification_lower for prefix in leukemia_prefixes):
+                return (255, 100, 100)  # Red
+            
+            # Default to light blue for unknown classifications
+            return (100, 200, 255)  # Light Blue
         
         # Create a mapping of WBC bbox to classification color
         wbc_color_map = {}
         for wbc in wbc_classifications:
             bbox_key = tuple(wbc['bbox'])
             classification = wbc['classification']
-            wbc_color_map[bbox_key] = wbc_classification_colors.get(classification, (100, 255, 100))
+            wbc_color_map[bbox_key] = get_wbc_color(classification)
         
         # Convert to BGR for OpenCV drawing operations
         annotated_img_bgr = cv2.cvtColor(annotated_img, cv2.COLOR_RGB2BGR)
