@@ -228,18 +228,22 @@ def classify_wbc_crop(wbc_crop_pil):
         return None
 
 
-def process_blood_smear(image_bytes, conf_threshold=0.1, iou_threshold=0.3):
+def process_blood_smear(image_bytes, conf_threshold=0.01, iou_threshold=0.2):
     """
     Two-stage pipeline: YOLOv8 detection → ConvNeXt classification
     
     Args:
         image_bytes: Raw image bytes
-        conf_threshold: Detection confidence threshold (default 0.1 to match Roboflow)
-        iou_threshold: IoU threshold for NMS
+        conf_threshold: Detection confidence threshold (FORCED to 0.01 for maximum detection)
+        iou_threshold: IoU threshold for NMS (FORCED to 0.2 for less suppression)
         
     Returns:
         dict: Analysis results with detections and classifications
     """
+    # Increase confidence threshold to filter out misclassifications
+    conf_threshold = 0.15  # Higher threshold to reduce false positives
+    iou_threshold = 0.3    # Standard IoU for NMS
+    
     try:
         # Convert bytes to PIL Image
         image = Image.open(io.BytesIO(image_bytes))
@@ -332,7 +336,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.1, iou_threshold=0.3):
         
         wbc_boxes = []
         
-        # Calculate typical sizes for validation
+        # Calculate sizes just for debugging/statistics
         all_boxes_sizes = []
         class_sizes = {'WBC': [], 'RBC': [], 'Platelets': []}
         
@@ -343,7 +347,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.1, iou_threshold=0.3):
             area = width * height
             all_boxes_sizes.append(area)
             
-            # Track sizes by YOLO's classification
+            # Track sizes by YOLO's classification (for statistics only)
             cls_id = int(box.cls[0])
             cls_name = yolo_model.names.get(cls_id, f"Class_{cls_id}")
             cls_name_normalized = cls_name.upper().replace(' ', '').replace('_', '')
@@ -355,24 +359,13 @@ def process_blood_smear(image_bytes, conf_threshold=0.1, iou_threshold=0.3):
             elif 'PLATELET' in cls_name_normalized:
                 class_sizes['Platelets'].append(area)
         
-        # Calculate size statistics for validation
-        median_area = np.median(all_boxes_sizes) if len(all_boxes_sizes) > 0 else 0
-        
-        # Calculate median RBC size as reference (WBCs should be 2-3x larger)
-        median_rbc_area = np.median(class_sizes['RBC']) if len(class_sizes['RBC']) > 0 else median_area
-        wbc_size_threshold = median_rbc_area * 1.5  # WBCs should be at least 1.5x larger than RBCs
-        
-        print(f"\n📊 Size Analysis:")
-        print(f"   Median cell area: {median_area:.1f}")
-        if len(class_sizes['RBC']) > 0:
-            print(f"   Median RBC area: {median_rbc_area:.1f}")
-            print(f"   WBC size threshold: {wbc_size_threshold:.1f} (1.5x RBC)")
-        if len(class_sizes['WBC']) > 0:
-            print(f"   Median detected WBC area: {np.median(class_sizes['WBC']):.1f}")
-        
-        # Track rejected WBCs for debugging
-        rejected_wbc_count = 0
-        rejected_reasons = {'size': 0, 'confidence': 0}
+        # Print size statistics (informational only, not used for filtering)
+        if len(all_boxes_sizes) > 0:
+            print(f"\n📊 Size Statistics (informational):")
+            print(f"   Total cells: {len(all_boxes_sizes)}")
+            for cell_type, areas in class_sizes.items():
+                if len(areas) > 0:
+                    print(f"   {cell_type}: {len(areas)} cells, area range: {min(areas):.1f} - {max(areas):.1f}")
         
         for box in boxes:
             cls_id = int(box.cls[0])
@@ -393,50 +386,41 @@ def process_blood_smear(image_bytes, conf_threshold=0.1, iou_threshold=0.3):
             
             detections['cells'].append(detection)
             
-            # Strict validation for cell type classification
+            # Classification with WBC validation
             cls_name_normalized = cls_name.upper().replace(' ', '').replace('_', '')
             
-            # Check for WBC variations with STRICT validation
-            if 'WBC' in cls_name_normalized or 'WHITEBLOODCELL' in cls_name_normalized:
-                # WBCs must pass stricter criteria to avoid false positives
-                is_valid_wbc = True
-                reject_reason = None
-                
-                # Rule 1: Size check - WBCs should be significantly larger than median RBCs
-                if median_rbc_area > 0 and area < wbc_size_threshold:
-                    is_valid_wbc = False
-                    reject_reason = 'size'
-                    rejected_reasons['size'] += 1
-                
-                # Rule 2: Confidence check - WBCs should have higher confidence (0.3+)
-                # since they're more distinct than RBCs
-                elif confidence < 0.3:
-                    is_valid_wbc = False
-                    reject_reason = 'confidence'
-                    rejected_reasons['confidence'] += 1
-                
-                if is_valid_wbc:
+            # Log each detection for debugging
+            cell_type = 'Unknown'
+            if 'PLATELET' in cls_name_normalized:
+                detections['counts']['Platelets'] += 1
+                cell_type = 'Platelet'
+            elif 'WBC' in cls_name_normalized or 'WHITEBLOODCELL' in cls_name_normalized:
+                # WBC VALIDATION: Must be large enough AND confident enough
+                # WBCs are typically 2-3x larger than RBCs (area > 800 is reasonable)
+                # Also require higher confidence (> 0.25) to avoid false positives
+                if area > 800 and confidence > 0.25:
                     detections['counts']['WBC'] += 1
                     wbc_boxes.append((box, detection))
+                    cell_type = 'WBC (validated)'
                 else:
-                    rejected_wbc_count += 1
-                    # Reclassify as RBC if it failed WBC criteria
+                    # Likely a misclassified RBC - reclassify as RBC
                     detections['counts']['RBC'] += 1
-                    
-            # Check for RBC variations
+                    cell_type = f'RBC (was WBC, area={area:.0f}, conf={confidence:.3f})'
+                    # Update the detection class for correct coloring
+                    detection['class'] = 'RBC'
+                    print(f"   ⚠️ Rejected WBC (too small or low confidence): area={area:.0f}, conf={confidence:.3f}")
             elif 'RBC' in cls_name_normalized or 'REDBLOODCELL' in cls_name_normalized:
                 detections['counts']['RBC'] += 1
-            # Check for Platelet variations
-            elif 'PLATELET' in cls_name_normalized:
-                detections['counts']['Platelets'] += 1
+                cell_type = 'RBC'
+            else:
+                detections['counts']['RBC'] += 1  # Default to RBC
+                cell_type = 'RBC (default)'
+            
+            # Debug: Print each detection with details
+            print(f"   📍 {cell_type}: conf={confidence:.3f}, area={area:.1f}, bbox=({x1:.0f},{y1:.0f},{x2:.0f},{y2:.0f})")
         
         # Debug: Print categorized counts
-        print(f"\n📋 Categorized counts: WBC={detections['counts']['WBC']}, RBC={detections['counts']['RBC']}, Platelets={detections['counts']['Platelets']}")
-        if rejected_wbc_count > 0:
-            print(f"⚠️  Rejected {rejected_wbc_count} false WBC detections:")
-            print(f"   - Size too small: {rejected_reasons['size']}")
-            print(f"   - Confidence too low: {rejected_reasons['confidence']}")
-            print(f"   (Reclassified as RBCs)")
+        print(f"\n📋 Final counts: WBC={detections['counts']['WBC']}, RBC={detections['counts']['RBC']}, Platelets={detections['counts']['Platelets']}")
         
         # ========== STAGE 2: ConvNeXt WBC Classification ==========
         wbc_classifications = []
@@ -481,42 +465,18 @@ def process_blood_smear(image_bytes, conf_threshold=0.1, iou_threshold=0.3):
         else:
             print(f"⚠️  ConvNeXt model not loaded - skipping WBC classification")
         
-        # Generate custom annotated image with clean colored boxes
+        # Generate custom annotated image with BOLD, DISTINCT colored boxes
         # image_np is already in RGB format, so we work directly with it
         annotated_img = image_np.copy()
         
-        # Define colors for each cell type (RGB format - image_np is RGB)
+        # Define BOLD, DISTINCT colors - SIMPLE 3-COLOR SCHEME
+        # ALL WBCs get the same color regardless of classification
         colors = {
-            'RBC': (255, 100, 100),      # Light Red
-            'WBC': (100, 255, 100),      # Light Green (will be overridden by classification)
-            'Platelet': (255, 200, 100), # Light Orange
-            'Platelets': (255, 200, 100) # Light Orange
+            'RBC': (255, 0, 0),         # PURE RED
+            'WBC': (0, 255, 0),         # PURE GREEN (all WBCs)
+            'Platelet': (255, 255, 0),  # BRIGHT YELLOW
+            'Platelets': (255, 255, 0)  # BRIGHT YELLOW
         }
-        
-        # Colors for WBC classifications (RGB format)
-        # Determine color based on classification name
-        def get_wbc_color(classification):
-            """Return color based on WBC classification"""
-            classification_lower = classification.lower()
-            
-            # Normal cells (healthy) - Green
-            if 'normal' in classification_lower:
-                return (100, 255, 100)  # Green
-            
-            # Leukemia cells - Red (ALL, AML, CLL, CML prefixes)
-            leukemia_prefixes = ['all_', 'aml_', 'cll_', 'cml_', 'acute', 'chronic', 'leukemia']
-            if any(prefix in classification_lower for prefix in leukemia_prefixes):
-                return (255, 100, 100)  # Red
-            
-            # Default to light blue for unknown classifications
-            return (100, 200, 255)  # Light Blue
-        
-        # Create a mapping of WBC bbox to classification color
-        wbc_color_map = {}
-        for wbc in wbc_classifications:
-            bbox_key = tuple(wbc['bbox'])
-            classification = wbc['classification']
-            wbc_color_map[bbox_key] = get_wbc_color(classification)
         
         # Convert to BGR for OpenCV drawing operations
         annotated_img_bgr = cv2.cvtColor(annotated_img, cv2.COLOR_RGB2BGR)
@@ -528,38 +488,29 @@ def process_blood_smear(image_bytes, conf_threshold=0.1, iou_threshold=0.3):
             
             # Check for WBC
             if 'WBC' in cls_normalized or 'WHITEBLOODCELL' in cls_normalized:
-                return (100, 255, 100)  # Light Green
+                return (0, 255, 0)  # Pure Green
             # Check for RBC
             elif 'RBC' in cls_normalized or 'REDBLOODCELL' in cls_normalized:
-                return (255, 100, 100)  # Light Red
+                return (255, 0, 0)  # Pure Red
             # Check for Platelet
             elif 'PLATELET' in cls_normalized:
-                return (255, 200, 100)  # Light Orange
+                return (255, 255, 0)  # Bright Yellow
             # Default white
             else:
                 return (255, 255, 255)  # White
         
-        # Draw boxes without labels
+        # Draw boxes without labels - ALL cells colored by type only
         for detection in detections['cells']:
             x1, y1, x2, y2 = map(int, detection['bbox'])
             cls_name = detection['class']
-            cls_name_normalized = cls_name.upper().replace(' ', '').replace('_', '')
             
-            # Check if this is a WBC with classification
-            bbox_key = tuple(detection['bbox'])
-            is_wbc = 'WBC' in cls_name_normalized or 'WHITEBLOODCELL' in cls_name_normalized
-            
-            if is_wbc and bbox_key in wbc_color_map:
-                # Use classification-based color for WBCs
-                color_rgb = wbc_color_map[bbox_key]
-            else:
-                # Use cell type color
-                color_rgb = get_cell_color(cls_name)
+            # Use simple cell type color (WBC, RBC, or Platelet)
+            color_rgb = get_cell_color(cls_name)
             
             # Convert RGB to BGR for OpenCV
             color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])
             
-            # Draw rectangle (box thickness = 2)
+            # Draw rectangle with thinner boxes (thickness = 2)
             cv2.rectangle(annotated_img_bgr, (x1, y1), (x2, y2), color_bgr, 2)
         
         # Convert back to RGB for frontend
@@ -584,7 +535,12 @@ def process_blood_smear(image_bytes, conf_threshold=0.1, iou_threshold=0.3):
             'summary': {
                 'total_cells': detections['total'],
                 'cell_counts': detections['counts'],
-                'wbc_classifications': leukemia_summary
+                'wbc_classifications': leukemia_summary,
+                'color_legend': {
+                    'WBC': 'rgb(0, 255, 0)',      # Pure Green (all WBCs)
+                    'RBC': 'rgb(255, 0, 0)',      # Pure Red
+                    'Platelets': 'rgb(255, 255, 0)' # Bright Yellow
+                }
             },
             'annotated_image': img_base64
         }
