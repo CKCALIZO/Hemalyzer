@@ -1,7 +1,7 @@
 """
 Hemalyzer Backend API
 Two-Stage Blood Cell Analysis Pipeline:
-1. YOLOv8-NAS: Detect all blood cells (RBC, WBC, Platelets)
+1. YOLOv8: Detect all blood cells (RBC, WBC, Platelets)
 2. ConvNeXt: Classify each WBC (Normal vs Leukemia types)
 """
 
@@ -129,15 +129,22 @@ def load_convnext_model():
         return False
 
 
-def load_yolo_model():
-    """Load YOLOv8-NAS blood cell detection model"""
+def load_yolo_model(model_name="best (2).pt"):
+    """Load YOLOv8 blood cell detection model"""
     global yolo_model
     
     try:
-        model_path = Path(__file__).parent / "models" / "best.pt"
+        model_path = Path(__file__).parent / "models" / model_name
+        
+        # Check if model file exists
+        if not model_path.exists():
+            print(f"❌ Model file not found: {model_path}")
+            return False
+        
+        print(f"   Loading model: {model_name}")
         yolo_model = YOLO(str(model_path))
         
-        print("✅ YOLOv8-NAS model loaded successfully")
+        print("✅ YOLOv8 model loaded successfully")
         print(f"   Classes: {yolo_model.names}")
         return True
         
@@ -153,15 +160,17 @@ def initialize_models():
     print("🔬 INITIALIZING HEMALYZER BACKEND")
     print("="*70 + "\n")
     
-    print("Step 1: Registering NAS modules...")
-    if not register_nas_modules():
-        print("⚠️ NAS module registration failed - YOLOv8 may not load correctly")
+    print("Step 1: Loading YOLOv8 detection model...")
+    # Try to load the primary model first, with fallback
+    if not load_yolo_model("best (2).pt"):
+        print("\n⚠️  Failed to load 'best (2).pt', trying 'best.pt'...")
+        if not load_yolo_model("best.pt"):
+            print("\n❌ Could not load any YOLO model")
+            return False
+        else:
+            print("✅ Successfully loaded fallback model 'best.pt'")
     
-    print("\nStep 2: Loading YOLOv8 detection model...")
-    if not load_yolo_model():
-        return False
-    
-    print("\nStep 3: Loading ConvNeXt classification model...")
+    print("\nStep 2: Loading ConvNeXt classification model...")
     if not load_convnext_model():
         return False
     
@@ -219,13 +228,13 @@ def classify_wbc_crop(wbc_crop_pil):
         return None
 
 
-def process_blood_smear(image_bytes, conf_threshold=0.25, iou_threshold=0.45):
+def process_blood_smear(image_bytes, conf_threshold=0.1, iou_threshold=0.3):
     """
     Two-stage pipeline: YOLOv8 detection → ConvNeXt classification
     
     Args:
         image_bytes: Raw image bytes
-        conf_threshold: Detection confidence threshold
+        conf_threshold: Detection confidence threshold (default 0.1 to match Roboflow)
         iou_threshold: IoU threshold for NMS
         
     Returns:
@@ -234,6 +243,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.25, iou_threshold=0.45):
     try:
         # Convert bytes to PIL Image
         image = Image.open(io.BytesIO(image_bytes))
+        original_size = image.size
         
         # Convert to numpy array for OpenCV
         image_np = np.array(image)
@@ -242,18 +252,72 @@ def process_blood_smear(image_bytes, conf_threshold=0.25, iou_threshold=0.45):
         elif image_np.shape[2] == 4:  # RGBA
             image_np = cv2.cvtColor(image_np, cv2.COLOR_RGBA2RGB)
         
+        # Debug: Print processing parameters
+        print(f"\n{'='*70}")
+        print(f"🔍 PROCESSING IMAGE")
+        print(f"{'='*70}")
+        print(f"📐 Original image size: {original_size} (W x H)")
+        print(f"📐 Array shape: {image_np.shape}")
+        print(f"⚙️  Confidence threshold: {conf_threshold}")
+        print(f"⚙️  IoU threshold: {iou_threshold}")
+        print(f"⚙️  Image size for inference: 640")
+        print(f"⚙️  Max detections: 2000")
+        print(f"⚙️  Agnostic NMS: True")
+        
         # ========== STAGE 1: YOLOv8 Detection ==========
+        # Using aggressive parameters to maximize detection
         results = yolo_model.predict(
             source=image_np,
             conf=conf_threshold,
             iou=iou_threshold,
             imgsz=640,
+            max_det=2000,  # Further increased to capture more cells
+            agnostic_nms=True,  # Enable class-agnostic NMS (don't suppress across classes)
             device='cuda' if torch.cuda.is_available() else 'cpu',
-            verbose=False
+            verbose=True  # Enable to see YOLO's internal processing
         )
         
         result = results[0]
         boxes = result.boxes
+        
+        # CRITICAL DEBUG: Check what YOLO actually detected BEFORE any filtering
+        print(f"\n🔍 RAW YOLO OUTPUT ANALYSIS:")
+        print(f"   - Results object type: {type(result)}")
+        print(f"   - Total boxes returned: {len(boxes)}")
+        if hasattr(result, 'orig_shape'):
+            print(f"   - Original shape: {result.orig_shape}")
+        if hasattr(result, 'boxes') and hasattr(result.boxes, 'data'):
+            print(f"   - Boxes data shape: {result.boxes.data.shape}")
+            print(f"   - Box data sample (first 3): {result.boxes.data[:3] if len(result.boxes.data) > 0 else 'None'}")
+        
+        # Debug: Print unique class names detected with counts and confidence stats
+        if len(boxes) > 0:
+            class_counts = {}
+            all_confidences = []
+            for box in boxes:
+                cls_name = yolo_model.names.get(int(box.cls[0]))
+                class_counts[cls_name] = class_counts.get(cls_name, 0) + 1
+                all_confidences.append(float(box.conf[0]))
+            
+            print(f"\n✅ Detected {len(boxes)} total cells:")
+            for cls, count in class_counts.items():
+                print(f"   - {cls}: {count}")
+            
+            # Confidence statistics
+            conf_array = np.array(all_confidences)
+            print(f"📈 Confidence stats:")
+            print(f"   - Min: {conf_array.min():.3f}")
+            print(f"   - Max: {conf_array.max():.3f}")
+            print(f"   - Mean: {conf_array.mean():.3f}")
+            print(f"   - Median: {np.median(conf_array):.3f}")
+            print(f"{'='*70}\n")
+        else:
+            print(f"⚠️  WARNING: No cells detected!")
+            print(f"   This could mean:")
+            print(f"   1. Confidence threshold ({conf_threshold}) is too high")
+            print(f"   2. Image quality or format issues")
+            print(f"   3. Model expects different image preprocessing")
+            print(f"{'='*70}\n")
         
         # Parse detections
         detections = {
@@ -270,15 +334,45 @@ def process_blood_smear(image_bytes, conf_threshold=0.25, iou_threshold=0.45):
         
         # Calculate typical sizes for validation
         all_boxes_sizes = []
+        class_sizes = {'WBC': [], 'RBC': [], 'Platelets': []}
+        
         for box in boxes:
             x1, y1, x2, y2 = box.xyxy[0].tolist()
             width = x2 - x1
             height = y2 - y1
             area = width * height
             all_boxes_sizes.append(area)
+            
+            # Track sizes by YOLO's classification
+            cls_id = int(box.cls[0])
+            cls_name = yolo_model.names.get(cls_id, f"Class_{cls_id}")
+            cls_name_normalized = cls_name.upper().replace(' ', '').replace('_', '')
+            
+            if 'WBC' in cls_name_normalized or 'WHITEBLOODCELL' in cls_name_normalized:
+                class_sizes['WBC'].append(area)
+            elif 'RBC' in cls_name_normalized or 'REDBLOODCELL' in cls_name_normalized:
+                class_sizes['RBC'].append(area)
+            elif 'PLATELET' in cls_name_normalized:
+                class_sizes['Platelets'].append(area)
         
-        # Get median size to distinguish WBCs (typically larger than RBCs)
+        # Calculate size statistics for validation
         median_area = np.median(all_boxes_sizes) if len(all_boxes_sizes) > 0 else 0
+        
+        # Calculate median RBC size as reference (WBCs should be 2-3x larger)
+        median_rbc_area = np.median(class_sizes['RBC']) if len(class_sizes['RBC']) > 0 else median_area
+        wbc_size_threshold = median_rbc_area * 1.5  # WBCs should be at least 1.5x larger than RBCs
+        
+        print(f"\n📊 Size Analysis:")
+        print(f"   Median cell area: {median_area:.1f}")
+        if len(class_sizes['RBC']) > 0:
+            print(f"   Median RBC area: {median_rbc_area:.1f}")
+            print(f"   WBC size threshold: {wbc_size_threshold:.1f} (1.5x RBC)")
+        if len(class_sizes['WBC']) > 0:
+            print(f"   Median detected WBC area: {np.median(class_sizes['WBC']):.1f}")
+        
+        # Track rejected WBCs for debugging
+        rejected_wbc_count = 0
+        rejected_reasons = {'size': 0, 'confidence': 0}
         
         for box in boxes:
             cls_id = int(box.cls[0])
@@ -299,20 +393,56 @@ def process_blood_smear(image_bytes, conf_threshold=0.25, iou_threshold=0.45):
             
             detections['cells'].append(detection)
             
-            # Count by cell type - trust YOLOv8's detection
-            # (Size validation removed - YOLOv8 is already trained to distinguish cell types)
-            if cls_name.upper() == 'WBC':
-                detections['counts']['WBC'] += 1
-                wbc_boxes.append((box, detection))
-            elif cls_name.upper() == 'RBC':
+            # Strict validation for cell type classification
+            cls_name_normalized = cls_name.upper().replace(' ', '').replace('_', '')
+            
+            # Check for WBC variations with STRICT validation
+            if 'WBC' in cls_name_normalized or 'WHITEBLOODCELL' in cls_name_normalized:
+                # WBCs must pass stricter criteria to avoid false positives
+                is_valid_wbc = True
+                reject_reason = None
+                
+                # Rule 1: Size check - WBCs should be significantly larger than median RBCs
+                if median_rbc_area > 0 and area < wbc_size_threshold:
+                    is_valid_wbc = False
+                    reject_reason = 'size'
+                    rejected_reasons['size'] += 1
+                
+                # Rule 2: Confidence check - WBCs should have higher confidence (0.3+)
+                # since they're more distinct than RBCs
+                elif confidence < 0.3:
+                    is_valid_wbc = False
+                    reject_reason = 'confidence'
+                    rejected_reasons['confidence'] += 1
+                
+                if is_valid_wbc:
+                    detections['counts']['WBC'] += 1
+                    wbc_boxes.append((box, detection))
+                else:
+                    rejected_wbc_count += 1
+                    # Reclassify as RBC if it failed WBC criteria
+                    detections['counts']['RBC'] += 1
+                    
+            # Check for RBC variations
+            elif 'RBC' in cls_name_normalized or 'REDBLOODCELL' in cls_name_normalized:
                 detections['counts']['RBC'] += 1
-            elif cls_name.upper() in ['PLATELET', 'PLATELETS']:
+            # Check for Platelet variations
+            elif 'PLATELET' in cls_name_normalized:
                 detections['counts']['Platelets'] += 1
+        
+        # Debug: Print categorized counts
+        print(f"\n📋 Categorized counts: WBC={detections['counts']['WBC']}, RBC={detections['counts']['RBC']}, Platelets={detections['counts']['Platelets']}")
+        if rejected_wbc_count > 0:
+            print(f"⚠️  Rejected {rejected_wbc_count} false WBC detections:")
+            print(f"   - Size too small: {rejected_reasons['size']}")
+            print(f"   - Confidence too low: {rejected_reasons['confidence']}")
+            print(f"   (Reclassified as RBCs)")
         
         # ========== STAGE 2: ConvNeXt WBC Classification ==========
         wbc_classifications = []
         
         if len(wbc_boxes) > 0 and convnext_model is not None:
+            print(f"\n🧬 Starting ConvNeXt classification for {len(wbc_boxes)} WBCs...")
             for idx, (box, detection) in enumerate(wbc_boxes, 1):
                 x1, y1, x2, y2 = map(int, detection['bbox'])
                 
@@ -342,6 +472,14 @@ def process_blood_smear(image_bytes, conf_threshold=0.25, iou_threshold=0.45):
                         'classification_confidence': classification['confidence'],
                         'probabilities': classification['probabilities']
                     })
+            
+            print(f"✅ Classified {len(wbc_classifications)} WBCs using ConvNeXt")
+            if len(wbc_classifications) > 0:
+                print(f"   Classifications: {[w['classification'] for w in wbc_classifications[:5]]}{'...' if len(wbc_classifications) > 5 else ''}")
+        elif len(wbc_boxes) == 0:
+            print(f"⚠️  No WBCs detected - skipping ConvNeXt classification")
+        else:
+            print(f"⚠️  ConvNeXt model not loaded - skipping WBC classification")
         
         # Generate custom annotated image with clean colored boxes
         # image_np is already in RGB format, so we work directly with it
@@ -383,17 +521,40 @@ def process_blood_smear(image_bytes, conf_threshold=0.25, iou_threshold=0.45):
         # Convert to BGR for OpenCV drawing operations
         annotated_img_bgr = cv2.cvtColor(annotated_img, cv2.COLOR_RGB2BGR)
         
+        # Function to get color based on cell type
+        def get_cell_color(cls_name):
+            """Get color for a cell based on its class name (normalized matching)"""
+            cls_normalized = cls_name.upper().replace(' ', '').replace('_', '')
+            
+            # Check for WBC
+            if 'WBC' in cls_normalized or 'WHITEBLOODCELL' in cls_normalized:
+                return (100, 255, 100)  # Light Green
+            # Check for RBC
+            elif 'RBC' in cls_normalized or 'REDBLOODCELL' in cls_normalized:
+                return (255, 100, 100)  # Light Red
+            # Check for Platelet
+            elif 'PLATELET' in cls_normalized:
+                return (255, 200, 100)  # Light Orange
+            # Default white
+            else:
+                return (255, 255, 255)  # White
+        
         # Draw boxes without labels
         for detection in detections['cells']:
             x1, y1, x2, y2 = map(int, detection['bbox'])
             cls_name = detection['class']
+            cls_name_normalized = cls_name.upper().replace(' ', '').replace('_', '')
             
             # Check if this is a WBC with classification
             bbox_key = tuple(detection['bbox'])
-            if cls_name.upper() == 'WBC' and bbox_key in wbc_color_map:
+            is_wbc = 'WBC' in cls_name_normalized or 'WHITEBLOODCELL' in cls_name_normalized
+            
+            if is_wbc and bbox_key in wbc_color_map:
+                # Use classification-based color for WBCs
                 color_rgb = wbc_color_map[bbox_key]
             else:
-                color_rgb = colors.get(cls_name, (255, 255, 255))
+                # Use cell type color
+                color_rgb = get_cell_color(cls_name)
             
             # Convert RGB to BGR for OpenCV
             color_bgr = (color_rgb[2], color_rgb[1], color_rgb[0])
@@ -478,9 +639,9 @@ def analyze_blood_smear():
                 'error': 'Empty filename'
             }), 400
         
-        # Get optional parameters
-        conf_threshold = float(request.form.get('conf_threshold', 0.25))
-        iou_threshold = float(request.form.get('iou_threshold', 0.45))
+        # Get optional parameters (using lower conf_threshold to match Roboflow defaults)
+        conf_threshold = float(request.form.get('conf_threshold', 0.1))
+        iou_threshold = float(request.form.get('iou_threshold', 0.3))  # Lower IoU for less NMS suppression
         
         # Read image bytes
         image_bytes = file.read()
@@ -511,8 +672,82 @@ def models_info():
             'loaded': convnext_model is not None,
             'classes': class_names if class_names else None,
             'device': str(device) if device else None
+        },
+        'default_params': {
+            'conf_threshold': 0.1,
+            'iou_threshold': 0.3,
+            'max_det': 2000,
+            'imgsz': 640,
+            'agnostic_nms': True
         }
     })
+
+
+@app.route('/api/test-detection', methods=['POST'])
+def test_detection():
+    """
+    Test endpoint for diagnosing detection issues with multiple confidence levels
+    
+    Expected: multipart/form-data with 'image' file
+    
+    Returns: Detection counts at different confidence thresholds
+    """
+    try:
+        if 'image' not in request.files:
+            return jsonify({'success': False, 'error': 'No image file provided'}), 400
+        
+        file = request.files['image']
+        if file.filename == '':
+            return jsonify({'success': False, 'error': 'Empty filename'}), 400
+        
+        image_bytes = file.read()
+        image = Image.open(io.BytesIO(image_bytes))
+        image_np = np.array(image)
+        
+        if len(image_np.shape) == 2:
+            image_np = cv2.cvtColor(image_np, cv2.COLOR_GRAY2RGB)
+        elif image_np.shape[2] == 4:
+            image_np = cv2.cvtColor(image_np, cv2.COLOR_RGBA2RGB)
+        
+        # Test with multiple confidence thresholds
+        test_thresholds = [0.01, 0.05, 0.1, 0.15, 0.2, 0.25, 0.3]
+        results_summary = []
+        
+        for conf in test_thresholds:
+            results = yolo_model.predict(
+                source=image_np,
+                conf=conf,
+                iou=0.3,  # Lower IoU for less suppression
+                imgsz=640,
+                max_det=2000,
+                agnostic_nms=True,
+                device='cuda' if torch.cuda.is_available() else 'cpu',
+                verbose=False
+            )
+            
+            boxes = results[0].boxes
+            class_counts = {}
+            for box in boxes:
+                cls_name = yolo_model.names.get(int(box.cls[0]))
+                class_counts[cls_name] = class_counts.get(cls_name, 0) + 1
+            
+            results_summary.append({
+                'conf_threshold': conf,
+                'total_detections': len(boxes),
+                'class_counts': class_counts
+            })
+        
+        return jsonify({
+            'success': True,
+            'image_size': f"{image.size[0]}x{image.size[1]}",
+            'results': results_summary,
+            'recommendation': 'Use the conf_threshold that gives you the most balanced results'
+        })
+        
+    except Exception as e:
+        print(f"Error in test-detection endpoint: {e}")
+        traceback.print_exc()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 # ============================================================
