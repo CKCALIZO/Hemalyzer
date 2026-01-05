@@ -32,10 +32,7 @@ from super_gradients.training.models.detection_models.pp_yolo_e import PPYoloEPo
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
 
-# ============================================================
-# GLOBAL VARIABLES
-# ============================================================
-from typing import Optional, List, Any, Callable
+from typing import Optional, List, Any, Callable 
 
 yolonas_model: Optional[Any] = None
 convnext_model: Optional[nn.Module] = None
