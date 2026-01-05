@@ -120,21 +120,3 @@ def main():
             print(f"\n✅ Both models perform similarly (difference: {diff})")
     
     print("="*70)
-
-
-if __name__ == "__main__":
-    # First try with NAS modules registered
-    print("\n🔧 Step 1: Attempting to register NAS modules...")
-    try:
-        sys.path.insert(0, str(Path(__file__).parent.parent / "testing-grounds" / "references" / "michael"))
-        from nas_modules import register_nas_modules
-        if register_nas_modules():
-            print("✅ NAS modules registered")
-        else:
-            print("⚠️  NAS registration had issues")
-    except Exception as e:
-        print(f"⚠️  Could not register NAS modules: {e}")
-        print("   Will test models anyway...")
-    
-    print("\n🔧 Step 2: Testing models...\n")
-    main()

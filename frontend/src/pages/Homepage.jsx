@@ -36,8 +36,11 @@ const Homepage = () => {
         try {
             const formData = new FormData();
             formData.append('image', selectedFile);
-            formData.append('conf_threshold', '0.25');
-            formData.append('iou_threshold', '0.45');
+            // OPTIMIZED FOR MAXIMUM BLOOD CELL DETECTION:
+            // - conf_threshold: 0.01 (detect everything, confidence disregarded)
+            // - iou_threshold: 0.2 (20% overlap threshold for minimal NMS suppression)
+            formData.append('conf_threshold', '0.01');
+            formData.append('iou_threshold', '0.2');
 
             const response = await fetch(`${API_URL}/api/analyze`, {
                 method: 'POST',
