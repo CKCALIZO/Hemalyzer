@@ -1,15 +1,18 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Header } from "../components/Header.jsx"
 import { Footer } from "../components/Footer.jsx";
 
 const API_URL = 'http://localhost:5000';
 
 const Homepage = () => {
+    const navigate = useNavigate();
     const [selectedFile, setSelectedFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState(null);
     const [error, setError] = useState(null);
+    const [showMetrics, setShowMetrics] = useState(false);
 
     // Handle file selection
     const handleFileChange = (e) => {
@@ -24,7 +27,11 @@ const Homepage = () => {
 
     // Handle upload and analysis
     const handleAnalyze = async () => {
+        console.log('🔵 handleAnalyze called!');
+        console.log('🔵 selectedFile:', selectedFile);
+        
         if (!selectedFile) {
+            console.error('❌ No file selected');
             setError('Please select an image first');
             return;
         }
@@ -32,34 +39,69 @@ const Homepage = () => {
         setLoading(true);
         setError(null);
         setResults(null);
+        setShowMetrics(false);
 
         try {
+            console.log('📤 Sending request to:', `${API_URL}/api/analyze`);
+            console.log('📤 File name:', selectedFile.name);
+            console.log('📤 File size:', selectedFile.size, 'bytes');
+            
             const formData = new FormData();
             formData.append('image', selectedFile);
-            // OPTIMIZED FOR MAXIMUM BLOOD CELL DETECTION:
-            // - conf_threshold: 0.01 (detect everything, confidence disregarded)
-            // - iou_threshold: 0.2 (20% overlap threshold for minimal NMS suppression)
-            formData.append('conf_threshold', '0.01');
+            // DETECTION SETTINGS:
+            // - conf_threshold: 0.2 (20% confidence)
+            // - iou_threshold: 0.2 (20% overlap threshold)
+            formData.append('conf_threshold', '0.2');
             formData.append('iou_threshold', '0.2');
 
+            console.log('📤 FormData created, making fetch request...');
+            
             const response = await fetch(`${API_URL}/api/analyze`, {
                 method: 'POST',
                 body: formData,
             });
 
+            console.log('📥 Response received!');
+            console.log('📥 Response status:', response.status);
+            console.log('📥 Response ok:', response.ok);
+            
             const data = await response.json();
+            console.log('📥 Response data:', data);
 
             if (data.success) {
+                console.log('✅ Success! Setting results...');
+                console.log('✅ Total cells detected:', data.stage1_detection?.total);
                 setResults(data);
             } else {
+                console.error('❌ Analysis failed:', data.error);
                 setError(data.error || 'Analysis failed');
             }
         } catch (err) {
-            console.error('Error:', err);
+            console.error('❌ Fetch error:', err);
+            console.error('❌ Error stack:', err.stack);
             setError(`Failed to connect to backend: ${err.message}`);
         } finally {
             setLoading(false);
+            console.log('🔵 handleAnalyze complete');
         }
+    };
+
+    // Save report to localStorage
+    const saveReport = () => {
+        if (!results) return;
+        
+        const reports = JSON.parse(localStorage.getItem('hemalyzer_reports') || '[]');
+        const newReport = {
+            id: Date.now(),
+            timestamp: new Date().toLocaleString(),
+            data: results
+        };
+        
+        reports.unshift(newReport); // Add to beginning
+        localStorage.setItem('hemalyzer_reports', JSON.stringify(reports));
+        
+        alert('Report saved successfully!');
+        navigate('/reports');
     };
 
     // Render WBC classification results
@@ -191,6 +233,22 @@ const Homepage = () => {
 
                             {results && (
                                 <div className="space-y-6">
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={saveReport}
+                                            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
+                                        >
+                                            💾 Save Report
+                                        </button>
+                                        <button
+                                            onClick={() => setShowMetrics(!showMetrics)}
+                                            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold"
+                                        >
+                                            {showMetrics ? '📊 Hide Metrics' : '📊 Detailed Metrics'}
+                                        </button>
+                                    </div>
+
                                     {/* Annotated Image */}
                                     {results.annotated_image && (
                                         <div className="border-2 border-gray-300 rounded-lg overflow-hidden">
@@ -206,30 +264,119 @@ const Homepage = () => {
                                     <div className="bg-blue-50 p-4 rounded-lg">
                                         <h3 className="font-semibold text-lg mb-2">Cell Detection Summary:</h3>
                                         <div className="grid grid-cols-2 gap-2 text-sm">
-                                            <div>Total Cells: <strong>{results.summary.total_cells}</strong></div>
-                                            <div>RBC: <strong>{results.summary.cell_counts.RBC}</strong></div>
-                                            <div>WBC: <strong>{results.summary.cell_counts.WBC}</strong></div>
-                                            <div>Platelets: <strong>{results.summary.cell_counts.Platelets}</strong></div>
+                                            <div>Total Cells: <strong>{results.stage1_detection?.total || 0}</strong></div>
+                                            <div>RBC: <strong>{results.stage1_detection?.counts?.RBC || 0}</strong></div>
+                                            <div>WBC: <strong>{results.stage1_detection?.counts?.WBC || 0}</strong></div>
+                                            <div>Platelets: <strong>{results.stage1_detection?.counts?.Platelets || 0}</strong></div>
                                         </div>
                                     </div>
 
-                                    {/* WBC Classifications */}
-                                    <div className="bg-gray-50 p-4 rounded-lg">
-                                        {renderWBCClassifications()}
-                                    </div>
-
-                                    {/* Leukemia Summary */}
-                                    {results.summary.wbc_classifications && 
-                                     Object.keys(results.summary.wbc_classifications).length > 0 && (
-                                        <div className="bg-purple-50 p-4 rounded-lg">
-                                            <h3 className="font-semibold text-lg mb-2">Leukemia Analysis:</h3>
-                                            <div className="space-y-1 text-sm">
-                                                {Object.entries(results.summary.wbc_classifications).map(([cls, count]) => (
-                                                    <div key={cls} className="flex justify-between">
-                                                        <span>{cls}:</span>
-                                                        <strong>{count}</strong>
+                                    {/* Detections List */}
+                                    {results.stage1_detection?.cells && results.stage1_detection.cells.length > 0 && (
+                                        <div className="bg-gray-50 p-4 rounded-lg">
+                                            <h3 className="font-semibold text-lg mb-2">Detected Cells:</h3>
+                                            <div className="max-h-48 overflow-y-auto space-y-2">
+                                                {results.stage1_detection.cells.slice(0, 20).map((cell, idx) => (
+                                                    <div key={idx} className="flex justify-between text-sm p-2 bg-white rounded">
+                                                        <span>#{idx + 1} - {cell.class}</span>
+                                                        <span className="text-gray-600">{(cell.confidence * 100).toFixed(1)}%</span>
                                                     </div>
                                                 ))}
+                                                {results.stage1_detection.cells.length > 20 && (
+                                                    <p className="text-gray-500 text-sm text-center">
+                                                        ... and {results.stage1_detection.cells.length - 20} more
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Detailed Metrics Panel */}
+                                    {showMetrics && (
+                                        <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-lg border-2 border-blue-200">
+                                            <h3 className="font-bold text-xl mb-4 text-blue-800">📊 Detailed Analysis Metrics</h3>
+                                            
+                                            {/* Cell Distribution */}
+                                            <div className="bg-white p-4 rounded-lg mb-4">
+                                                <h4 className="font-semibold mb-3">Cell Distribution Analysis</h4>
+                                                <div className="space-y-2">
+                                                    <div className="flex items-center">
+                                                        <div className="w-32 text-sm">RBC:</div>
+                                                        <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
+                                                            <div 
+                                                                className="bg-red-500 h-full" 
+                                                                style={{width: `${(results.stage1_detection?.counts?.RBC / results.stage1_detection?.total * 100) || 0}%`}}
+                                                            ></div>
+                                                        </div>
+                                                        <div className="w-20 text-right text-sm font-mono">
+                                                            {((results.stage1_detection?.counts?.RBC / results.stage1_detection?.total * 100) || 0).toFixed(1)}%
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <div className="w-32 text-sm">WBC:</div>
+                                                        <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
+                                                            <div 
+                                                                className="bg-green-500 h-full" 
+                                                                style={{width: `${(results.stage1_detection?.counts?.WBC / results.stage1_detection?.total * 100) || 0}%`}}
+                                                            ></div>
+                                                        </div>
+                                                        <div className="w-20 text-right text-sm font-mono">
+                                                            {((results.stage1_detection?.counts?.WBC / results.stage1_detection?.total * 100) || 0).toFixed(1)}%
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        <div className="w-32 text-sm">Platelets:</div>
+                                                        <div className="flex-1 bg-gray-200 rounded-full h-4 overflow-hidden">
+                                                            <div 
+                                                                className="bg-yellow-500 h-full" 
+                                                                style={{width: `${(results.stage1_detection?.counts?.Platelets / results.stage1_detection?.total * 100) || 0}%`}}
+                                                            ></div>
+                                                        </div>
+                                                        <div className="w-20 text-right text-sm font-mono">
+                                                            {((results.stage1_detection?.counts?.Platelets / results.stage1_detection?.total * 100) || 0).toFixed(1)}%
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Model Information */}
+                                            <div className="bg-white p-4 rounded-lg mb-4">
+                                                <h4 className="font-semibold mb-3">Model Configuration</h4>
+                                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                                    <div>
+                                                        <span className="text-gray-600">Confidence Threshold:</span>
+                                                        <p className="font-mono font-semibold">20% (0.2)</p>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-gray-600">Overlap Threshold:</span>
+                                                        <p className="font-mono font-semibold">20% (0.2)</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Detection Statistics */}
+                                            <div className="bg-white p-4 rounded-lg">
+                                                <h4 className="font-semibold mb-3">Detection Statistics</h4>
+                                                <div className="grid grid-cols-3 gap-4 text-center">
+                                                    <div className="bg-blue-50 p-3 rounded">
+                                                        <p className="text-2xl font-bold text-blue-600">{results.stage1_detection?.total || 0}</p>
+                                                        <p className="text-xs text-gray-600">Total Cells</p>
+                                                    </div>
+                                                    <div className="bg-green-50 p-3 rounded">
+                                                        <p className="text-2xl font-bold text-green-600">
+                                                            {results.stage1_detection?.cells ? 
+                                                                (results.stage1_detection.cells.reduce((sum, c) => sum + c.confidence, 0) / results.stage1_detection.cells.length * 100).toFixed(1) 
+                                                                : 0}%
+                                                        </p>
+                                                        <p className="text-xs text-gray-600">Avg Confidence</p>
+                                                    </div>
+                                                    <div className="bg-purple-50 p-3 rounded">
+                                                        <p className="text-2xl font-bold text-purple-600">
+                                                            {new Date().toLocaleTimeString()}
+                                                        </p>
+                                                        <p className="text-xs text-gray-600">Analysis Time</p>
+                                                    </div>
+                                                </div>
                                             </div>
                                         </div>
                                     )}

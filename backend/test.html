@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Direct Backend Test</title>
+</head>
+<body>
+    <h1>Direct Backend API Test</h1>
+    <input type="file" id="imageInput" accept="image/*">
+    <button onclick="testUpload()">Test Upload</button>
+    <div id="result"></div>
+
+    <script>
+        async function testUpload() {
+            const fileInput = document.getElementById('imageInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select an image first');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('image', file);
+            formData.append('conf_threshold', '0.01');
+            formData.append('iou_threshold', '0.2');
+
+            document.getElementById('result').innerHTML = 'Uploading...';
+
+            try {
+                const response = await fetch('http://localhost:5000/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                document.getElementById('result').innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                
+                console.log('Response:', data);
+                
+                if (data.success && data.annotated_image) {
+                    const img = document.createElement('img');
+                    img.src = 'data:image/jpeg;base64,' + data.annotated_image;
+                    img.style.maxWidth = '100%';
+                    document.getElementById('result').appendChild(img);
+                }
+            } catch (error) {
+                document.getElementById('result').innerHTML = 'Error: ' + error.message;
+                console.error('Error:', error);
+            }
+        }
+    </script>
+</body>
+</html>
