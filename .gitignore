@@ -14,6 +14,7 @@ dist-ssr
 *.local
 testing-grounds
 models
+.env
 
 # Editor directories and files
 .vscode/*
