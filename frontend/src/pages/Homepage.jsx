@@ -248,6 +248,51 @@ const Homepage = () => {
                                             {showMetrics ? '📊 Hide Metrics' : '📊 Detailed Metrics'}
                                         </button>
                                     </div>
+                                    
+                                    {/* View Cell Classifications Button */}
+                                    {results.cropped_cells && results.cropped_cells.length > 0 && (
+                                        <button
+                                            onClick={() => navigate('/classifications', {
+                                                state: {
+                                                    croppedCells: results.cropped_cells,
+                                                    wbcClassifications: results.stage2_classification,
+                                                    summary: results.summary
+                                                }
+                                            })}
+                                            className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold flex items-center justify-center gap-2"
+                                        >
+                                            🔬 View Cell Classifications ({results.cropped_cells.length} cells)
+                                        </button>
+                                    )}
+                                    
+                                    {/* Classification Summary Alert */}
+                                    {results.summary && (results.summary.abnormal_wbc_count > 0 || results.summary.sickle_cell_count > 0) && (
+                                        <div className="bg-red-50 border-2 border-red-300 p-4 rounded-lg">
+                                            <p className="font-bold text-red-800 flex items-center gap-2">
+                                                ⚠️ Abnormal Cells Detected
+                                            </p>
+                                            <div className="mt-2 text-sm text-red-700 space-y-1">
+                                                {results.summary.abnormal_wbc_count > 0 && (
+                                                    <p>• {results.summary.abnormal_wbc_count} abnormal WBC(s) found</p>
+                                                )}
+                                                {results.summary.sickle_cell_count > 0 && (
+                                                    <p>• {results.summary.sickle_cell_count} Sickle Cell(s) detected</p>
+                                                )}
+                                            </div>
+                                            <button
+                                                onClick={() => navigate('/classifications', {
+                                                    state: {
+                                                        croppedCells: results.cropped_cells,
+                                                        wbcClassifications: results.stage2_classification,
+                                                        summary: results.summary
+                                                    }
+                                                })}
+                                                className="mt-3 text-sm text-red-800 underline hover:text-red-900"
+                                            >
+                                                View detailed classifications →
+                                            </button>
+                                        </div>
+                                    )}
 
                                     {/* Annotated Image */}
                                     {results.annotated_image && (
