@@ -64,10 +64,15 @@ export const CellClassifications = () => {
                             </p>
                         </div>
                         <button
-                            onClick={() => navigate('/')}
+                            onClick={() => navigate('/', {
+                                state: {
+                                    results: location.state?.results,
+                                    previewUrl: location.state?.previewUrl
+                                }
+                            })}
                             className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-semibold"
                         >
-                            ← Back to Analysis
+                            ← Back to Results
                         </button>
                     </div>
 

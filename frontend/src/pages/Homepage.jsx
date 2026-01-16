@@ -1,18 +1,29 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Header } from "../components/Header.jsx"
 import { Footer } from "../components/Footer.jsx";
+import { ThresholdResults } from "../components/ThresholdResults.jsx";
+import { DiseaseInterpretation } from "../components/DiseaseInterpretation.jsx";
 
 const API_URL = 'http://localhost:5000';
 
 const Homepage = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [selectedFile, setSelectedFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [loading, setLoading] = useState(false);
     const [results, setResults] = useState(null);
     const [error, setError] = useState(null);
     const [showMetrics, setShowMetrics] = useState(false);
+
+    // Restore state when navigating back from classifications
+    useEffect(() => {
+        if (location.state?.results) {
+            setResults(location.state.results);
+            setPreviewUrl(location.state.previewUrl);
+        }
+    }, [location.state]);
 
     // Handle file selection
     const handleFileChange = (e) => {
@@ -219,6 +230,14 @@ const Homepage = () => {
                                     <p className="text-sm">{error}</p>
                                 </div>
                             )}
+
+                            {/* Disease Interpretation - Below Analyze Button */}
+                            {results?.disease_interpretation && (
+                                <DiseaseInterpretation 
+                                    diseaseInterpretation={results.disease_interpretation}
+                                    clinicalThresholds={results.clinical_thresholds}
+                                />
+                            )}
                         </div>
 
                         {/* Results Section */}
@@ -256,7 +275,9 @@ const Homepage = () => {
                                                 state: {
                                                     croppedCells: results.cropped_cells,
                                                     wbcClassifications: results.stage2_classification,
-                                                    summary: results.summary
+                                                    summary: results.summary,
+                                                    results: results,
+                                                    previewUrl: previewUrl
                                                 }
                                             })}
                                             className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 font-semibold flex items-center justify-center gap-2"
@@ -284,7 +305,9 @@ const Homepage = () => {
                                                     state: {
                                                         croppedCells: results.cropped_cells,
                                                         wbcClassifications: results.stage2_classification,
-                                                        summary: results.summary
+                                                        summary: results.summary,
+                                                        results: results,
+                                                        previewUrl: previewUrl
                                                     }
                                                 })}
                                                 className="mt-3 text-sm text-red-800 underline hover:text-red-900"
@@ -423,6 +446,17 @@ const Homepage = () => {
                                                     </div>
                                                 </div>
                                             </div>
+                                        </div>
+                                    )}
+
+                                    {/* Clinical Thresholds & Interpretation */}
+                                    {results?.disease_interpretation && (
+                                        <div className="bg-gradient-to-br from-green-50 to-emerald-50 p-6 rounded-lg border-2 border-green-200">
+                                            <h3 className="font-bold text-xl mb-4 text-green-800">🩺 Clinical Thresholds & Interpretation</h3>
+                                            <ThresholdResults 
+                                                diseaseInterpretation={results.disease_interpretation}
+                                                clinicalThresholds={results.clinical_thresholds}
+                                            />
                                         </div>
                                     )}
 

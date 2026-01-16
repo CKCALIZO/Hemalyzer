@@ -16,12 +16,108 @@ from sklearn.metrics import classification_report, confusion_matrix
 import seaborn as sns
 from datetime import datetime
 import json
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter
 from collections import defaultdict
 from torch.utils.data import Subset
+import cv2
 
 # Import the ConvNeXt model
 from convnext_wbc_classifier import convnext_base, ConvNeXt_Base_Weights
+
+
+class CellFocusedPreprocessing:
+    """Preprocessing to focus on central cell structure"""
+    
+    def __init__(self, center_crop_ratio=0.7, apply_clahe=True, enhance_edges=True):
+        """
+        Args:
+            center_crop_ratio: Ratio of image to keep from center (0.7 = keep center 70%)
+            apply_clahe: Apply Contrast Limited Adaptive Histogram Equalization
+            enhance_edges: Apply edge enhancement to make cell boundaries clearer
+        """
+        self.center_crop_ratio = center_crop_ratio
+        self.apply_clahe = apply_clahe
+        self.enhance_edges = enhance_edges
+    
+    def __call__(self, img):
+        """Apply cell-focused preprocessing to PIL Image"""
+        # Convert to numpy for processing
+        img_array = np.array(img)
+        
+        # Apply CLAHE for better contrast on cell structures
+        if self.apply_clahe:
+            img_array = self._apply_clahe(img_array)
+        
+        # Convert back to PIL
+        img = Image.fromarray(img_array)
+        
+        # Apply circular mask to focus on center cell
+        img = self._apply_circular_focus(img, self.center_crop_ratio)
+        
+        # Enhance edges to make cell boundaries more prominent
+        if self.enhance_edges:
+            img = self._enhance_cell_edges(img)
+        
+        return img
+    
+    def _apply_clahe(self, img_array):
+        """Apply CLAHE to enhance cell structures"""
+        # Convert to LAB color space for better processing
+        lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
+        l, a, b = cv2.split(lab)
+        
+        # Apply CLAHE to L channel
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        l = clahe.apply(l)
+        
+        # Merge back and convert to RGB
+        lab = cv2.merge([l, a, b])
+        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+        
+        return enhanced
+    
+    def _apply_circular_focus(self, img, ratio):
+        """Apply circular mask to focus on center of image where cell typically is"""
+        width, height = img.size
+        
+        # Create circular mask
+        mask = Image.new('L', (width, height), 0)
+        from PIL import ImageDraw
+        draw = ImageDraw.Draw(mask)
+        
+        # Calculate circle dimensions (centered, with specified ratio)
+        center_x, center_y = width // 2, height // 2
+        radius = int(min(width, height) * ratio / 2)
+        
+        # Draw white circle (area to keep)
+        draw.ellipse(
+            [(center_x - radius, center_y - radius),
+             (center_x + radius, center_y + radius)],
+            fill=255
+        )
+        
+        # Apply Gaussian blur to mask for smooth transition
+        mask = mask.filter(ImageFilter.GaussianBlur(radius=5))
+        
+        # Create white background
+        background = Image.new('RGB', (width, height), (240, 240, 240))
+        
+        # Composite: use mask to blend cell (img) with background
+        result = Image.composite(img, background, mask)
+        
+        return result
+    
+    def _enhance_cell_edges(self, img):
+        """Enhance cell edges and structures"""
+        # Enhance sharpness to make cell boundaries clearer
+        enhancer = ImageEnhance.Sharpness(img)
+        img = enhancer.enhance(1.5)
+        
+        # Enhance contrast
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(1.2)
+        
+        return img
 
 
 class TransformSubset(Dataset):
@@ -100,12 +196,13 @@ class LeukemiaDataset(Dataset):
         
         elif self.classification_type == 'Detailed':
             self.class_to_idx = {
-                'Normal': 0,
+                'Normal WBC': 0,
                 'Acute Lymphoblastic Leukemia': 1,
                 'Acute Myeloid Leukemia': 2,
                 'Chronic Lymphocytic Leukemia': 3,
                 'Chronic Myeloid Leukemia': 4,
-                'Sickle Cell': 5
+                'Normal RBC': 5,
+                'Sickle Cell': 6
             }
             
             # Load Normal cells
@@ -113,9 +210,16 @@ class LeukemiaDataset(Dataset):
             if normal_path.exists():
                 for cell_type_folder in normal_path.iterdir():
                     if cell_type_folder.is_dir():
+                        cell_type_name = cell_type_folder.name.lower()
+                        # Separate RBCs from WBCs
+                        if 'rbc' in cell_type_name or 'erythrocyte' in cell_type_name or 'red blood' in cell_type_name:
+                            label = 5  # Normal RBC
+                        else:
+                            label = 0  # Normal WBC
+                        
                         for img_file in cell_type_folder.glob('*.*'):
                             if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp']:
-                                self.samples.append((str(img_file), 0))
+                                self.samples.append((str(img_file), label))
             
             # Load each leukemia type
             leukemia_mapping = {
@@ -139,7 +243,7 @@ class LeukemiaDataset(Dataset):
             if sickle_path.exists():
                 for img_file in sickle_path.glob('*.*'):
                     if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp']:
-                        self.samples.append((str(img_file), 5))
+                        self.samples.append((str(img_file), 6))
         
         elif self.classification_type == 'detailed':
             # Detailed: Cell type + Disease status (e.g., "Basophil: Normal" vs "Basophil: CML")
@@ -152,7 +256,13 @@ class LeukemiaDataset(Dataset):
                     if cell_type_folder.is_dir():
                         # Capitalize cell type name for consistency
                         cell_type_name = cell_type_folder.name.capitalize()
-                        class_name = f"{cell_type_name}: Normal"
+                        cell_type_lower = cell_type_folder.name.lower()
+                        
+                        # Handle RBCs specifically to distinguish from sickle cells
+                        if 'rbc' in cell_type_lower or 'erythrocyte' in cell_type_lower or 'red blood' in cell_type_lower:
+                            class_name = "RBC: Normal"
+                        else:
+                            class_name = f"{cell_type_name}: Normal"
                         
                         if class_name not in self.class_to_idx:
                             self.class_to_idx[class_name] = label_counter
@@ -189,21 +299,23 @@ class LeukemiaDataset(Dataset):
                                 if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp']:
                                     self.samples.append((str(img_file), label))
             
-            # Sickle Cell Anemia - RBCs that are sickle cells
-            sickle_path = self.root_dir / "Sickle Cell anemia" / "Sickle Cells"
-            if sickle_path.exists():
-                class_name = "RBC: Sickle Cell Anemia"
-                self.class_to_idx[class_name] = label_counter
-                label_counter += 1
-                label = self.class_to_idx[class_name]
-                
-                for img_file in sickle_path.glob('*.*'):
-                    if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp']:
-                        self.samples.append((str(img_file), label))
+            # Anemia cells - create "RBC: AnemiaType" labels
+            anemia_folders = {
+                "Sickle Cell anemia": "Sickle Cell Anemia"
+            }
             
-            # Note: Normal RBCs would be inferred during inference - any RBC that's not classified
-            # as "RBC: Sickle Cell Anemia" would be considered "RBC: Normal"
-            # For training, we only have sickle cells, so we don't create a "RBC: Normal" class
+            for anemia_type, disease_name in anemia_folders.items():
+                anemia_path = self.root_dir / anemia_type / "Sickle Cells"
+                if anemia_path.exists():
+                    class_name = f"RBC: {disease_name}"
+                    if class_name not in self.class_to_idx:
+                        self.class_to_idx[class_name] = label_counter
+                        label_counter += 1
+                    
+                    label = self.class_to_idx[class_name]
+                    for img_file in anemia_path.glob('*.*'):
+                        if img_file.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp']:
+                            self.samples.append((str(img_file), label))
         
         # Create reverse mapping
         self.idx_to_class = {v: k for k, v in self.class_to_idx.items()}
@@ -218,8 +330,43 @@ class LeukemiaDataset(Dataset):
             class_counts[label] += 1
         
         print("\nClass distribution:")
+        
+        # Group by cell type for better visualization
+        wbc_normal = []
+        wbc_abnormal = []
+        rbc_classes = []
+        
         for class_name, idx in sorted(self.class_to_idx.items(), key=lambda x: x[1]):
-            print(f"  {class_name}: {class_counts[idx]} images")
+            count = class_counts[idx]
+            if 'RBC:' in class_name:
+                rbc_classes.append((class_name, count))
+            elif 'Normal' in class_name and 'RBC' not in class_name:
+                wbc_normal.append((class_name, count))
+            else:
+                wbc_abnormal.append((class_name, count))
+        
+        if wbc_normal:
+            print("\n  === NORMAL WBCs (from PBC_dataset_normal_DIB) ===")
+            for class_name, count in wbc_normal:
+                print(f"    {class_name}: {count} images")
+        
+        if wbc_abnormal:
+            print("\n  === ABNORMAL WBCs (Leukemia Types) ===")
+            for class_name, count in wbc_abnormal:
+                print(f"    {class_name}: {count} images")
+        
+        if rbc_classes:
+            print("\n  === RBCs (Separate from WBCs) ===")
+            for class_name, count in rbc_classes:
+                print(f"    {class_name}: {count} images")
+        
+        # Summary
+        total_wbc = sum(c for _, c in wbc_normal) + sum(c for _, c in wbc_abnormal)
+        total_rbc = sum(c for _, c in rbc_classes)
+        print(f"\n  SUMMARY:")
+        print(f"    Total WBC images (Normal + Abnormal): {total_wbc}")
+        print(f"    Total RBC images: {total_rbc}")
+        print(f"    Grand Total: {len(self.samples)}")
     
     def __len__(self):
         return len(self.samples)
@@ -474,21 +621,37 @@ def main():
         print(f'GPU: {torch.cuda.get_device_name(0)}')
     print()
     
-    # Define transforms
+    # Define transforms with cell-focused preprocessing
+    print("Configuring cell-focused preprocessing...")
+    print("  - Applying circular focus on center cells")
+    print("  - Enhancing cell structures with CLAHE")
+    print("  - Sharpening cell boundaries\n")
+    
+    # Cell-focused preprocessing
+    cell_preprocessor = CellFocusedPreprocessing(
+        center_crop_ratio=0.75,  # Focus on center 75% of image
+        apply_clahe=True,
+        enhance_edges=True
+    )
+    
     train_transform = transforms.Compose([
-        transforms.Resize((int(CONFIG['img_size'] * 1.1), int(CONFIG['img_size'] * 1.1))),
-        transforms.RandomCrop(CONFIG['img_size']),
+        transforms.Resize((int(CONFIG['img_size'] * 1.15), int(CONFIG['img_size'] * 1.15))),
+        transforms.CenterCrop(int(CONFIG['img_size'] * 1.1)),  # Center crop to focus on middle
+        cell_preprocessor,  # Apply cell-focused preprocessing
+        transforms.Resize((CONFIG['img_size'], CONFIG['img_size'])),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomVerticalFlip(p=0.5),
-        transforms.RandomRotation(degrees=30),
-        transforms.ColorJitter(brightness=0.3, contrast=0.3, saturation=0.2, hue=0.1),
-        transforms.RandomAffine(degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1)),
+        transforms.RandomRotation(degrees=20),  # Reduced rotation to keep cell centered
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.15, hue=0.05),
+        transforms.RandomAffine(degrees=0, translate=(0.05, 0.05), scale=(0.95, 1.05)),  # Reduced to keep cell centered
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        transforms.RandomErasing(p=0.2, scale=(0.02, 0.15))
     ])
     
     val_transform = transforms.Compose([
+        transforms.Resize((int(CONFIG['img_size'] * 1.1), int(CONFIG['img_size'] * 1.1))),
+        transforms.CenterCrop(CONFIG['img_size']),  # Center crop for validation too
+        cell_preprocessor,  # Apply same preprocessing to validation
         transforms.Resize((CONFIG['img_size'], CONFIG['img_size'])),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])

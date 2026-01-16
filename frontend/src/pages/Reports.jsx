@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Header} from "../components/Header.jsx";
 import { Footer } from "../components/Footer.jsx";
+import { ThresholdResults } from "../components/ThresholdResults.jsx";
 
 export const Reports = () => {
     const [reports, setReports] = useState([]);
@@ -162,6 +163,17 @@ export const Reports = () => {
                                                 </div>
                                             </div>
                                         </div>
+
+                                        {/* Clinical Interpretation */}
+                                        {selectedReport.data?.disease_interpretation && (
+                                            <div className="mt-6 bg-green-50 border border-green-200 p-4 rounded-lg">
+                                                <h3 className="font-semibold text-lg mb-3 text-green-800">🩺 Clinical Thresholds & Interpretation</h3>
+                                                <ThresholdResults 
+                                                    diseaseInterpretation={selectedReport.data.disease_interpretation}
+                                                    clinicalThresholds={selectedReport.data.clinical_thresholds}
+                                                />
+                                            </div>
+                                        )}
 
                                         {/* Clinical Note */}
                                         <div className="mt-6 bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
