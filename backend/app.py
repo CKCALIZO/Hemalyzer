@@ -10,7 +10,7 @@ from inference_sdk import InferenceHTTPClient
 from dotenv import load_dotenv
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageFilter, ImageDraw
 import io
 import base64
 import os
@@ -19,6 +19,114 @@ import torch
 import torch.nn as nn
 from torchvision import transforms
 from torchvision.models import convnext_base, ConvNeXt_Base_Weights
+
+
+# ============================================================
+# CELL-FOCUSED PREPROCESSING (Matches Training Pipeline)
+# ============================================================
+class CellFocusedPreprocessing:
+    """
+    Preprocessing to focus on central cell structure.
+    This MUST match the preprocessing used during ConvNeXt training.
+    """
+    
+    def __init__(self, center_crop_ratio=0.75, apply_clahe=True, enhance_edges=True):
+        """
+        Args:
+            center_crop_ratio: Ratio of image to keep from center (0.75 = keep center 75%)
+            apply_clahe: Apply Contrast Limited Adaptive Histogram Equalization
+            enhance_edges: Apply edge enhancement to make cell boundaries clearer
+        """
+        self.center_crop_ratio = center_crop_ratio
+        self.apply_clahe = apply_clahe
+        self.enhance_edges = enhance_edges
+    
+    def __call__(self, img):
+        """Apply cell-focused preprocessing to PIL Image"""
+        # Convert to numpy for processing
+        img_array = np.array(img)
+        
+        # Apply CLAHE for better contrast on cell structures
+        if self.apply_clahe:
+            img_array = self._apply_clahe(img_array)
+        
+        # Convert back to PIL
+        img = Image.fromarray(img_array)
+        
+        # Apply circular mask to focus on center cell
+        img = self._apply_circular_focus(img, self.center_crop_ratio)
+        
+        # Enhance edges to make cell boundaries more prominent
+        if self.enhance_edges:
+            img = self._enhance_cell_edges(img)
+        
+        return img
+    
+    def _apply_clahe(self, img_array):
+        """Apply CLAHE to enhance cell structures"""
+        # Convert to LAB color space for better processing
+        lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
+        l, a, b = cv2.split(lab)
+        
+        # Apply CLAHE to L channel
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        l = clahe.apply(l)
+        
+        # Merge back and convert to RGB
+        lab = cv2.merge([l, a, b])
+        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+        
+        return enhanced
+    
+    def _apply_circular_focus(self, img, ratio):
+        """Apply circular mask to focus on center of image where cell typically is"""
+        width, height = img.size
+        
+        # Create circular mask
+        mask = Image.new('L', (width, height), 0)
+        draw = ImageDraw.Draw(mask)
+        
+        # Calculate circle dimensions (centered, with specified ratio)
+        center_x, center_y = width // 2, height // 2
+        radius = int(min(width, height) * ratio / 2)
+        
+        # Draw white circle (area to keep)
+        draw.ellipse(
+            [(center_x - radius, center_y - radius),
+             (center_x + radius, center_y + radius)],
+            fill=255
+        )
+        
+        # Apply Gaussian blur to mask for smooth transition
+        mask = mask.filter(ImageFilter.GaussianBlur(radius=5))
+        
+        # Create white/light background (matching training)
+        background = Image.new('RGB', (width, height), (240, 240, 240))
+        
+        # Composite: use mask to blend cell (img) with background
+        result = Image.composite(img, background, mask)
+        
+        return result
+    
+    def _enhance_cell_edges(self, img):
+        """Enhance cell edges and structures"""
+        # Enhance sharpness to make cell boundaries clearer
+        enhancer = ImageEnhance.Sharpness(img)
+        img = enhancer.enhance(1.5)
+        
+        # Enhance contrast
+        enhancer = ImageEnhance.Contrast(img)
+        img = enhancer.enhance(1.2)
+        
+        return img
+
+
+# Global preprocessor instance (matches training config)
+cell_preprocessor = CellFocusedPreprocessing(
+    center_crop_ratio=0.75,
+    apply_clahe=True,
+    enhance_edges=True
+)
 
 # Load environment variables from .env file
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
@@ -346,16 +454,22 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             normal_status = 'normal'
             normal_range = None
             
-            # Map classification names to differential keys
+            # Extract base cell type from new format "CellType: Condition"
+            # e.g., "Basophil: Normal" -> "Basophil", "Basophil: CML" -> "Basophil"
+            base_cell_type = cls_name.split(':')[0].strip() if ':' in cls_name else cls_name
+            
+            # Map classification names to differential keys (case-insensitive)
             diff_key_mapping = {
-                'Neutrophil': 'Neutrophil',
-                'Lymphocyte': 'Lymphocyte',
-                'Monocyte': 'Monocyte',
-                'Eosinophil': 'Eosinophil',
-                'Basophil': 'Basophil'
+                'neutrophil': 'Neutrophil',
+                'neutrophils': 'Neutrophil',  # Handle "Neutrophils: CML"
+                'lymphocyte': 'Lymphocyte',
+                'monocyte': 'Monocyte',
+                'eosinophil': 'Eosinophil',
+                'eosonophil': 'Eosinophil',  # Handle typo in model class
+                'basophil': 'Basophil'
             }
             
-            diff_key = diff_key_mapping.get(cls_name)
+            diff_key = diff_key_mapping.get(base_cell_type.lower())
             if diff_key and diff_key in NORMAL_WBC_DIFFERENTIAL:
                 normal_range = NORMAL_WBC_DIFFERENTIAL[diff_key]
                 if pct < normal_range['min']:
@@ -365,7 +479,7 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
                         'observed': pct,
                         'normal_range': f"{normal_range['min']}-{normal_range['max']}%",
                         'status': 'DECREASED',
-                        'note': f"{cls_name} below normal range"
+                        'note': f"{base_cell_type} below normal range"
                     })
                 elif pct > normal_range['max']:
                     normal_status = 'high'
@@ -374,7 +488,7 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
                         'observed': pct,
                         'normal_range': f"{normal_range['min']}-{normal_range['max']}%",
                         'status': 'INCREASED',
-                        'note': f"{cls_name} above normal range"
+                        'note': f"{base_cell_type} above normal range"
                     })
             
             wbc_differential[cls_name] = {
@@ -391,7 +505,9 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
         interpretation['differential_abnormalities'] = differential_abnormalities
         
         # Check for abnormal patterns
-        abnormal_count = sum(1 for w in wbc_classifications if w.get('classification', '') != 'Normal')
+        # Classes are now in format "CellType: Condition" (e.g., "Basophil: Normal", "Basophil: CML")
+        abnormal_count = sum(1 for w in wbc_classifications 
+                            if ': normal' not in w.get('classification', '').lower())
         abnormal_pct, abn_lower, abn_upper = calculate_confidence_interval(abnormal_count, total_wbc)
         
         interpretation['confidence_intervals']['abnormal_wbc'] = {
@@ -404,13 +520,21 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
         
         # ============================================================
         # DISEASE INTERPRETATION BASED ON THRESHOLDS (from About page)
+        # New model classes format: "CellType: Condition"
         # ============================================================
         leukemia_findings = []
         
+        # Helper function to count cells by disease type
+        def count_by_disease(classifications, disease_marker):
+            """Count classifications containing a specific disease marker (case-insensitive)"""
+            return sum(1 for w in classifications 
+                      if disease_marker.lower() in w.get('classification', '').lower())
+        
         # === AML/ALL Analysis (Blast Cells) ===
-        # Count blast cells (Acute Lymphoblastic Leukemia + Acute Myeloid Leukemia)
-        all_count = class_counts.get('Acute Lymphoblastic Leukemia', 0)
-        aml_count = class_counts.get('Acute Myeloid Leukemia', 0)
+        # Count ALL: classes like "B_lymphoblast: ALL"
+        all_count = count_by_disease(wbc_classifications, ': all')
+        # Count AML: classes like "Myeloblast: AML"  
+        aml_count = count_by_disease(wbc_classifications, ': aml')
         blast_count = all_count + aml_count
         blast_pct = (blast_count / total_wbc) * 100 if total_wbc > 0 else 0
         
@@ -456,90 +580,100 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             })
         
         # === CML Analysis (Granulocyte Percentage) ===
-        # Granulocytes = Basophil + Eosinophil + Neutrophil
-        # Also check for explicit CML classifications
-        cml_direct_count = class_counts.get('Chronic Myeloid Leukemia', 0)
-        granulocyte_count = (
-            class_counts.get('Basophil', 0) + 
-            class_counts.get('Eosinophil', 0) + 
-            class_counts.get('Neutrophil', 0) +
-            cml_direct_count  # Include direct CML classifications as granulocytes
+        # Count CML: classes like "Basophil: CML", "Neutrophils: CML", "Eosonophil: CML", "Myeloblast: CML"
+        cml_count = count_by_disease(wbc_classifications, ': cml')
+        
+        # Also count normal granulocytes (these are NOT CML)
+        # Normal granulocytes = Basophil: Normal + Eosinophil: Normal + Neutrophil: Normal
+        def count_normal_cell_type(classifications, cell_type):
+            """Count normal cells of a specific type"""
+            return sum(1 for w in classifications 
+                      if cell_type.lower() in w.get('classification', '').lower() 
+                      and ': normal' in w.get('classification', '').lower())
+        
+        normal_granulocyte_count = (
+            count_normal_cell_type(wbc_classifications, 'basophil') +
+            count_normal_cell_type(wbc_classifications, 'eosinophil') +
+            count_normal_cell_type(wbc_classifications, 'neutrophil')
         )
-        granulocyte_pct = (granulocyte_count / total_wbc) * 100 if total_wbc > 0 else 0
+        
+        # CML percentage is based on CML-classified cells, not total granulocytes
+        cml_pct = (cml_count / total_wbc) * 100 if total_wbc > 0 else 0
+        total_granulocyte_pct = ((cml_count + normal_granulocyte_count) / total_wbc) * 100 if total_wbc > 0 else 0
         
         cml_thresholds = DISEASE_THRESHOLDS['cml']
         cml_interpretation = None
         cml_severity = None
         
-        if granulocyte_pct > 95:
+        # Use CML cell percentage for disease classification
+        if cml_pct > 50:  # More than half of cells are CML
             cml_interpretation = cml_thresholds['accelerated']['interpretation']
             cml_severity = 'HIGH'
-            cml_condition = '> 95% granulocytes'
-        elif granulocyte_pct >= 90:
+            cml_condition = f'> 50% CML cells ({cml_count} cells)'
+        elif cml_pct >= 20:
             cml_interpretation = cml_thresholds['chronic_phase']['interpretation']
             cml_severity = 'MODERATE'
-            cml_condition = '90-95% granulocytes'
-        elif granulocyte_pct >= 76:
+            cml_condition = f'20-50% CML cells ({cml_count} cells)'
+        elif cml_pct >= 5:
             cml_interpretation = cml_thresholds['early_cml']['interpretation']
             cml_severity = 'LOW'
-            cml_condition = '76-89% granulocytes'
-        elif granulocyte_pct >= 60:
-            cml_interpretation = cml_thresholds['reactive']['interpretation']
+            cml_condition = f'5-19% CML cells ({cml_count} cells)'
+        elif cml_count > 0:
+            cml_interpretation = "Rare CML cells detected. Clinical correlation required."
             cml_severity = 'INFO'
-            cml_condition = '60-75% granulocytes'
+            cml_condition = f'< 5% CML cells ({cml_count} cells)'
         
         if cml_interpretation:
             leukemia_findings.append({
                 'type': 'CML Analysis',
-                'percentage': round(granulocyte_pct, 1),
+                'percentage': round(cml_pct, 1),
                 'interpretation': cml_interpretation,
                 'severity': cml_severity,
-                'granulocyte_count': granulocyte_count,
-                'cml_direct_count': cml_direct_count,
-                'breakdown': {
-                    'Basophil': class_counts.get('Basophil', 0),
-                    'Eosinophil': class_counts.get('Eosinophil', 0),
-                    'Neutrophil': class_counts.get('Neutrophil', 0),
-                    'CML_Direct': cml_direct_count
-                },
+                'cml_count': cml_count,
+                'normal_granulocyte_count': normal_granulocyte_count,
+                'total_granulocyte_pct': round(total_granulocyte_pct, 1),
                 'condition': cml_condition
             })
         
         # === CLL Analysis (Lymphocyte Percentage) ===
-        # Also check for explicit CLL classifications
-        cll_direct_count = class_counts.get('Chronic Lymphocytic Leukemia', 0)
-        lymphocyte_count = class_counts.get('Lymphocyte', 0) + cll_direct_count
-        lymphocyte_pct = (lymphocyte_count / total_wbc) * 100 if total_wbc > 0 else 0
+        # Count CLL: classes like "Lymphocyte: CLL"
+        cll_count = count_by_disease(wbc_classifications, ': cll')
+        normal_lymphocyte_count = count_normal_cell_type(wbc_classifications, 'lymphocyte')
+        
+        cll_pct = (cll_count / total_wbc) * 100 if total_wbc > 0 else 0
+        total_lymphocyte_pct = ((cll_count + normal_lymphocyte_count) / total_wbc) * 100 if total_wbc > 0 else 0
         
         cll_thresholds = DISEASE_THRESHOLDS['cll']
         cll_interpretation = None
         cll_severity = None
         
-        if lymphocyte_pct > 80:
+        # Use CLL cell percentage for disease classification
+        if cll_pct > 50:  # More than half of cells are CLL
             cll_interpretation = cll_thresholds['advanced_cll']['interpretation']
             cll_severity = 'HIGH'
-            cll_condition = '> 80% lymphocytes'
-        elif lymphocyte_pct >= 61:
+            cll_condition = f'> 50% CLL cells ({cll_count} cells)'
+        elif cll_pct >= 20:
             cll_interpretation = cll_thresholds['typical_cll']['interpretation']
             cll_severity = 'MODERATE'
-            cll_condition = '61-80% lymphocytes'
-        elif lymphocyte_pct >= 41:
+            cll_condition = f'20-50% CLL cells ({cll_count} cells)'
+        elif cll_pct >= 5:
             cll_interpretation = cll_thresholds['early_cll']['interpretation']
             cll_severity = 'LOW'
-            cll_condition = '41-60% lymphocytes'
-        elif lymphocyte_pct >= 20:
-            cll_interpretation = cll_thresholds['reactive']['interpretation']
+            cll_condition = f'5-19% CLL cells ({cll_count} cells)'
+        elif cll_count > 0:
+            cll_interpretation = "Rare CLL cells detected. Clinical correlation required."
             cll_severity = 'INFO'
-            cll_condition = '20-40% lymphocytes'
+            cll_condition = f'< 5% CLL cells ({cll_count} cells)'
         
         if cll_interpretation:
             leukemia_findings.append({
                 'type': 'CLL Analysis',
-                'percentage': round(lymphocyte_pct, 1),
+                'percentage': round(cll_pct, 1),
                 'interpretation': cll_interpretation,
                 'severity': cll_severity,
-                'lymphocyte_count': lymphocyte_count,
-                'cll_direct_count': cll_direct_count,
+                'cll_count': cll_count,
+                'normal_lymphocyte_count': normal_lymphocyte_count,
+                'total_lymphocyte_pct': round(total_lymphocyte_pct, 1),
                 'condition': cll_condition
             })
         
@@ -684,7 +818,7 @@ CLIENT = InferenceHTTPClient(
 )
 
 # Your Roboflow model ID
-MODEL_ID = "bloodcell-hema/5"
+MODEL_ID = "hemalens-6807i/2"
 
 
 # ============================================================
@@ -772,6 +906,9 @@ def classify_cell_crop(cell_crop_pil, cell_type='WBC'):
     """
     Classify a single cell crop using ConvNeXt
     
+    IMPORTANT: This function now applies the same CellFocusedPreprocessing
+    that was used during training to ensure consistent classification.
+    
     Args:
         cell_crop_pil: PIL Image of cell crop
         cell_type: 'WBC' or 'RBC'
@@ -783,8 +920,12 @@ def classify_cell_crop(cell_crop_pil, cell_type='WBC'):
         return None
     
     try:
-        # Apply transforms
-        cell_tensor = convnext_transform(cell_crop_pil).unsqueeze(0).to(device)
+        # CRITICAL: Apply same preprocessing used during training
+        # This includes: circular focus, CLAHE, and edge enhancement
+        preprocessed_img = cell_preprocessor(cell_crop_pil)
+        
+        # Apply transforms (resize, normalize)
+        cell_tensor = convnext_transform(preprocessed_img).unsqueeze(0).to(device)
         
         # Get prediction
         with torch.no_grad():
@@ -1015,15 +1156,32 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 if cell_type == 'Platelet' or cell_type == 'Unknown':
                     continue
                 
-                # Add padding (15% for better context)
-                h, w = image_rgb_clean.shape[:2]
-                pad_x = int((x2 - x1) * 0.15)
-                pad_y = int((y2 - y1) * 0.15)
+                # Calculate cell dimensions
+                cell_width = x2 - x1
+                cell_height = y2 - y1
+                cell_center_x = (x1 + x2) // 2
+                cell_center_y = (y1 + y2) // 2
                 
-                x1_padded = max(0, x1 - pad_x)
-                y1_padded = max(0, y1 - pad_y)
-                x2_padded = min(w, x2 + pad_x)
-                y2_padded = min(h, y2 + pad_y)
+                # Create SQUARE crop centered on cell with extra padding
+                # Use 25% padding to match training data better (was 15%)
+                max_dim = max(cell_width, cell_height)
+                crop_size = int(max_dim * 1.25)  # 25% extra on each side
+                
+                h, w = image_rgb_clean.shape[:2]
+                
+                # Calculate square crop bounds centered on cell
+                x1_padded = max(0, cell_center_x - crop_size // 2)
+                y1_padded = max(0, cell_center_y - crop_size // 2)
+                x2_padded = min(w, cell_center_x + crop_size // 2)
+                y2_padded = min(h, cell_center_y + crop_size // 2)
+                
+                # Adjust to maintain square aspect ratio if hitting image edges
+                actual_width = x2_padded - x1_padded
+                actual_height = y2_padded - y1_padded
+                if actual_width != actual_height:
+                    min_side = min(actual_width, actual_height)
+                    x2_padded = x1_padded + min_side
+                    y2_padded = y1_padded + min_side
                 
                 # Crop cell from CLEAN image (no bounding boxes)
                 cell_crop = image_rgb_clean[y1_padded:y2_padded, x1_padded:x2_padded]

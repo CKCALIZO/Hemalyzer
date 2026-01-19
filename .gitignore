@@ -8,6 +8,9 @@ pnpm-debug.log*
 lerna-debug.log*
 *.pth
 
+CML/ 
+Normal/
+
 .env
 .venv
 node_modules

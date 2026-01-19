@@ -29,37 +29,37 @@ export const CellClassifications = () => {
         return croppedCells;
     };
 
-    // Get color class based on classification
+    // Get color class based on classification - medical professional theme
     const getClassificationColor = (classification, cellType) => {
         if (cellType === 'RBC') {
-            return 'bg-red-100 border-red-500 text-red-800';
+            return 'bg-red-50 border-red-400 text-red-800';
         }
         if (classification === 'Normal') {
-            return 'bg-green-100 border-green-500 text-green-800';
+            return 'bg-green-50 border-green-400 text-green-800';
         }
         // Abnormal WBC (leukemia types)
-        return 'bg-orange-100 border-orange-500 text-orange-800';
+        return 'bg-amber-50 border-amber-400 text-amber-800';
     };
 
     // Get icon based on classification
     const getClassificationIcon = (classification, cellType) => {
-        if (cellType === 'RBC') return '🔴';
-        if (classification === 'Normal') return '✅';
-        return '⚠️';
+        if (cellType === 'RBC') return '●';
+        if (classification === 'Normal') return '✓';
+        return '!';
     };
 
     const filteredCells = getFilteredCells();
 
     return (
-        <div className="flex flex-col min-h-screen">
+        <div className="flex flex-col min-h-screen bg-red-50">
             <Header />
             <main className="flex grow flex-col p-8">
                 <div className="max-w-7xl mx-auto w-full">
                     {/* Header Section */}
                     <div className="flex justify-between items-center mb-6">
                         <div>
-                            <h1 className="text-3xl font-bold text-gray-800">Cell Classifications</h1>
-                            <p className="text-gray-600 mt-1">
+                            <h1 className="text-3xl font-bold text-red-900">Cell Classifications</h1>
+                            <p className="text-red-700 mt-1">
                                 ConvNeXt Model Classification Results
                             </p>
                         </div>
@@ -67,37 +67,38 @@ export const CellClassifications = () => {
                             onClick={() => navigate('/', {
                                 state: {
                                     results: location.state?.results,
-                                    previewUrl: location.state?.previewUrl
+                                    previewUrl: location.state?.previewUrl,
+                                    sessionState: location.state?.sessionState
                                 }
                             })}
-                            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-semibold"
+                            className="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-800 font-semibold"
                         >
-                            ← Back to Results
+                            Back to Results
                         </button>
                     </div>
 
                     {/* Summary Cards */}
                     {summary && (
                         <div className="grid grid-cols-4 gap-4 mb-6">
-                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-                                <p className="text-sm text-blue-600">Total Classified</p>
-                                <p className="text-2xl font-bold text-blue-800">{croppedCells.length}</p>
+                            <div className="bg-white p-4 rounded-lg border border-red-200">
+                                <p className="text-sm text-red-600">Total Classified</p>
+                                <p className="text-2xl font-bold text-red-800">{croppedCells.length}</p>
                             </div>
-                            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                                <p className="text-sm text-green-600">WBC Classifications</p>
-                                <p className="text-2xl font-bold text-green-800">
+                            <div className="bg-white p-4 rounded-lg border border-red-200">
+                                <p className="text-sm text-red-600">WBC Classifications</p>
+                                <p className="text-2xl font-bold text-red-800">
                                     {croppedCells.filter(c => c.cell_type === 'WBC').length}
                                 </p>
                             </div>
-                            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                            <div className="bg-white p-4 rounded-lg border border-red-200">
                                 <p className="text-sm text-red-600">Sickle Cells</p>
                                 <p className="text-2xl font-bold text-red-800">
                                     {summary.sickle_cell_count || 0}
                                 </p>
                             </div>
-                            <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
-                                <p className="text-sm text-orange-600">Abnormal WBCs</p>
-                                <p className="text-2xl font-bold text-orange-800">
+                            <div className="bg-white p-4 rounded-lg border border-red-200">
+                                <p className="text-sm text-red-600">Abnormal WBCs</p>
+                                <p className="text-2xl font-bold text-red-800">
                                     {summary.abnormal_wbc_count || 0}
                                 </p>
                             </div>
@@ -110,8 +111,8 @@ export const CellClassifications = () => {
                             onClick={() => setFilter('all')}
                             className={`px-4 py-2 rounded-lg font-medium transition-all ${
                                 filter === 'all' 
-                                    ? 'bg-blue-600 text-white' 
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-red-700 text-white' 
+                                    : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
                             }`}
                         >
                             All Cells ({croppedCells.length})
@@ -120,8 +121,8 @@ export const CellClassifications = () => {
                             onClick={() => setFilter('wbc')}
                             className={`px-4 py-2 rounded-lg font-medium transition-all ${
                                 filter === 'wbc' 
-                                    ? 'bg-green-600 text-white' 
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-red-600 text-white' 
+                                    : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
                             }`}
                         >
                             WBCs ({croppedCells.filter(c => c.cell_type === 'WBC').length})
@@ -130,8 +131,8 @@ export const CellClassifications = () => {
                             onClick={() => setFilter('rbc')}
                             className={`px-4 py-2 rounded-lg font-medium transition-all ${
                                 filter === 'rbc' 
-                                    ? 'bg-red-600 text-white' 
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-red-800 text-white' 
+                                    : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
                             }`}
                         >
                             Sickle Cells ({croppedCells.filter(c => c.cell_type === 'RBC').length})
@@ -140,8 +141,8 @@ export const CellClassifications = () => {
                             onClick={() => setFilter('abnormal')}
                             className={`px-4 py-2 rounded-lg font-medium transition-all ${
                                 filter === 'abnormal' 
-                                    ? 'bg-orange-600 text-white' 
-                                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                                    ? 'bg-red-900 text-white' 
+                                    : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
                             }`}
                         >
                             Abnormal Only ({croppedCells.filter(c => c.is_abnormal).length})
@@ -150,14 +151,14 @@ export const CellClassifications = () => {
 
                     {/* No Data Message */}
                     {croppedCells.length === 0 && (
-                        <div className="bg-gray-50 rounded-lg p-16 text-center">
-                            <p className="text-xl text-gray-500">No cell classifications available</p>
-                            <p className="text-sm text-gray-400 mt-2">
+                        <div className="bg-white rounded-lg p-16 text-center border border-red-200">
+                            <p className="text-xl text-red-600">No cell classifications available</p>
+                            <p className="text-sm text-red-400 mt-2">
                                 Analyze an image first to see cell classification results
                             </p>
                             <button
                                 onClick={() => navigate('/')}
-                                className="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                className="mt-4 px-6 py-2 bg-red-700 text-white rounded-lg hover:bg-red-800"
                             >
                                 Go to Analysis
                             </button>
@@ -170,12 +171,12 @@ export const CellClassifications = () => {
                             {filteredCells.map((cell, idx) => (
                                 <div 
                                     key={cell.id || idx}
-                                    className={`rounded-lg border-2 overflow-hidden shadow-md hover:shadow-lg transition-shadow ${
+                                    className={`rounded-lg border-2 overflow-hidden shadow-sm hover:shadow-md transition-shadow ${
                                         getClassificationColor(cell.classification, cell.cell_type)
                                     }`}
                                 >
                                     {/* Cell Image */}
-                                    <div className="aspect-square bg-gray-100">
+                                    <div className="aspect-square bg-slate-100">
                                         <img
                                             src={`data:image/png;base64,${cell.cropped_image}`}
                                             alt={`${cell.cell_type} - ${cell.classification}`}
@@ -189,7 +190,7 @@ export const CellClassifications = () => {
                                             <span className="text-xs font-semibold uppercase tracking-wide">
                                                 {cell.cell_type}
                                             </span>
-                                            <span className="text-lg">
+                                            <span className="w-5 h-5 rounded-full bg-current/10 flex items-center justify-center text-xs font-bold">
                                                 {getClassificationIcon(cell.classification, cell.cell_type)}
                                             </span>
                                         </div>
@@ -204,29 +205,29 @@ export const CellClassifications = () => {
 
                     {/* WBC Classification Summary Table */}
                     {wbcClassifications.length > 0 && (
-                        <div className="mt-8 bg-white rounded-lg border border-gray-200 p-6">
-                            <h2 className="text-xl font-bold mb-4">Detailed WBC Classifications</h2>
+                        <div className="mt-8 bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
+                            <h2 className="text-xl font-bold mb-4 text-slate-800">Detailed WBC Classifications</h2>
                             <div className="overflow-x-auto">
                                 <table className="w-full text-sm">
                                     <thead>
-                                        <tr className="bg-gray-50 border-b">
-                                            <th className="text-left p-3">ID</th>
-                                            <th className="text-left p-3">Classification</th>
-                                            <th className="text-left p-3">Status</th>
+                                        <tr className="bg-slate-50 border-b border-slate-200">
+                                            <th className="text-left p-3 text-slate-700">ID</th>
+                                            <th className="text-left p-3 text-slate-700">Classification</th>
+                                            <th className="text-left p-3 text-slate-700">Status</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         {wbcClassifications.map((wbc) => (
-                                            <tr key={wbc.wbc_id} className="border-b hover:bg-gray-50">
-                                                <td className="p-3 font-mono">WBC #{wbc.wbc_id}</td>
-                                                <td className="p-3 font-semibold">{wbc.classification}</td>
+                                            <tr key={wbc.wbc_id} className="border-b border-slate-100 hover:bg-slate-50">
+                                                <td className="p-3 font-mono text-slate-700">WBC #{wbc.wbc_id}</td>
+                                                <td className="p-3 font-semibold text-slate-800">{wbc.classification}</td>
                                                 <td className="p-3">
                                                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                                         wbc.classification === 'Normal'
                                                             ? 'bg-green-100 text-green-800'
-                                                            : 'bg-orange-100 text-orange-800'
+                                                            : 'bg-amber-100 text-amber-800'
                                                     }`}>
-                                                        {wbc.classification === 'Normal' ? '✓ Normal' : '⚠ Abnormal'}
+                                                        {wbc.classification === 'Normal' ? '✓ Normal' : '! Abnormal'}
                                                     </span>
                                                 </td>
                                             </tr>
@@ -238,9 +239,9 @@ export const CellClassifications = () => {
                     )}
 
                     {/* Clinical Note */}
-                    <div className="mt-6 bg-yellow-50 border border-yellow-200 p-4 rounded-lg">
-                        <p className="font-semibold text-yellow-800">⚠️ Clinical Note:</p>
-                        <p className="text-sm text-yellow-700 mt-1">
+                    <div className="mt-6 bg-slate-50 border border-slate-200 p-4 rounded-lg">
+                        <p className="font-semibold text-slate-700">Clinical Note:</p>
+                        <p className="text-sm text-slate-600 mt-1">
                             These classifications are generated by a ConvNeXt deep learning model for research 
                             and educational purposes. Results should be validated by trained hematologists 
                             and confirmed with additional diagnostic tests before any clinical decisions.
