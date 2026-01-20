@@ -10,141 +10,26 @@ from inference_sdk import InferenceHTTPClient
 from dotenv import load_dotenv
 import cv2
 import numpy as np
-from PIL import Image, ImageEnhance, ImageFilter, ImageDraw
+from PIL import Image
 import io
 import base64
 import os
 import traceback
-import torch
-import torch.nn as nn
-from torchvision import transforms
-from torchvision.models import convnext_base, ConvNeXt_Base_Weights
 
-
-# ============================================================
-# CELL-FOCUSED PREPROCESSING (Matches Training Pipeline)
-# ============================================================
-class CellFocusedPreprocessing:
-    """
-    Preprocessing to focus on central cell structure.
-    This MUST match the preprocessing used during ConvNeXt training.
-    """
-    
-    def __init__(self, center_crop_ratio=0.75, apply_clahe=True, enhance_edges=True):
-        """
-        Args:
-            center_crop_ratio: Ratio of image to keep from center (0.75 = keep center 75%)
-            apply_clahe: Apply Contrast Limited Adaptive Histogram Equalization
-            enhance_edges: Apply edge enhancement to make cell boundaries clearer
-        """
-        self.center_crop_ratio = center_crop_ratio
-        self.apply_clahe = apply_clahe
-        self.enhance_edges = enhance_edges
-    
-    def __call__(self, img):
-        """Apply cell-focused preprocessing to PIL Image"""
-        # Convert to numpy for processing
-        img_array = np.array(img)
-        
-        # Apply CLAHE for better contrast on cell structures
-        if self.apply_clahe:
-            img_array = self._apply_clahe(img_array)
-        
-        # Convert back to PIL
-        img = Image.fromarray(img_array)
-        
-        # Apply circular mask to focus on center cell
-        img = self._apply_circular_focus(img, self.center_crop_ratio)
-        
-        # Enhance edges to make cell boundaries more prominent
-        if self.enhance_edges:
-            img = self._enhance_cell_edges(img)
-        
-        return img
-    
-    def _apply_clahe(self, img_array):
-        """Apply CLAHE to enhance cell structures"""
-        # Convert to LAB color space for better processing
-        lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
-        l, a, b = cv2.split(lab)
-        
-        # Apply CLAHE to L channel
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-        l = clahe.apply(l)
-        
-        # Merge back and convert to RGB
-        lab = cv2.merge([l, a, b])
-        enhanced = cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
-        
-        return enhanced
-    
-    def _apply_circular_focus(self, img, ratio):
-        """Apply circular mask to focus on center of image where cell typically is"""
-        width, height = img.size
-        
-        # Create circular mask
-        mask = Image.new('L', (width, height), 0)
-        draw = ImageDraw.Draw(mask)
-        
-        # Calculate circle dimensions (centered, with specified ratio)
-        center_x, center_y = width // 2, height // 2
-        radius = int(min(width, height) * ratio / 2)
-        
-        # Draw white circle (area to keep)
-        draw.ellipse(
-            [(center_x - radius, center_y - radius),
-             (center_x + radius, center_y + radius)],
-            fill=255
-        )
-        
-        # Apply Gaussian blur to mask for smooth transition
-        mask = mask.filter(ImageFilter.GaussianBlur(radius=5))
-        
-        # Create white/light background (matching training)
-        background = Image.new('RGB', (width, height), (240, 240, 240))
-        
-        # Composite: use mask to blend cell (img) with background
-        result = Image.composite(img, background, mask)
-        
-        return result
-    
-    def _enhance_cell_edges(self, img):
-        """Enhance cell edges and structures"""
-        # Enhance sharpness to make cell boundaries clearer
-        enhancer = ImageEnhance.Sharpness(img)
-        img = enhancer.enhance(1.5)
-        
-        # Enhance contrast
-        enhancer = ImageEnhance.Contrast(img)
-        img = enhancer.enhance(1.2)
-        
-        return img
-
-
-# Global preprocessor instance (matches training config)
-cell_preprocessor = CellFocusedPreprocessing(
-    center_crop_ratio=0.75,
-    apply_clahe=True,
-    enhance_edges=True
+# Import ConvNeXt classification module
+from convnext_classifier import (
+    load_convnext_model,
+    classify_cell_crop,
+    get_classifier_info,
+    classifier
 )
+
 
 # Load environment variables from .env file
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for React frontend
-
-# ============================================================
-# GLOBAL VARIABLES FOR CONVNEXT
-# ============================================================
-convnext_model = None
-wbc_class_names = None
-sickle_cell_class_idx = None  # Index of Sickle Cell class for RBC detection
-device = None
-convnext_transform = None
-
-# Confidence threshold for Sickle Cell detection (95%)
-SICKLE_CELL_CONFIDENCE_THRESHOLD = 0.95
 
 # ============================================================
 # CLINICAL THRESHOLDS FOR 100x MAGNIFICATION
@@ -692,17 +577,16 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
                     'aml_count': aml_count
                 },
                 'granulocytes': {
-                    'percentage': round(granulocyte_pct, 1),
-                    'count': granulocyte_count,
-                    'breakdown': {
-                        'Basophil': class_counts.get('Basophil', 0),
-                        'Eosinophil': class_counts.get('Eosinophil', 0),
-                        'Neutrophil': class_counts.get('Neutrophil', 0)
-                    }
+                    'percentage': round(total_granulocyte_pct, 1),
+                    'count': cml_count + normal_granulocyte_count,
+                    'cml_count': cml_count,
+                    'normal_count': normal_granulocyte_count
                 },
                 'lymphocytes': {
-                    'percentage': round(lymphocyte_pct, 1),
-                    'count': lymphocyte_count
+                    'percentage': round(total_lymphocyte_pct, 1),
+                    'count': cll_count + normal_lymphocyte_count,
+                    'cll_count': cll_count,
+                    'normal_count': normal_lymphocyte_count
                 }
             }
         }
@@ -822,152 +706,12 @@ MODEL_ID = "hemalens-6807i/2"
 
 
 # ============================================================
-# CONVNEXT MODEL INITIALIZATION
+# CONVNEXT FUNCTIONS - Now in convnext_classifier.py module
+# Functions are imported at top of file:
+#   - load_convnext_model()
+#   - classify_cell_crop()
+#   - get_classifier_info()
 # ============================================================
-
-def load_convnext_model():
-    """Load ConvNeXt classification model for WBC and RBC classification"""
-    global convnext_model, wbc_class_names, rbc_class_names, device, convnext_transform
-    
-    try:
-        # Model path
-        model_path = os.path.join(os.path.dirname(__file__), 'best_leukemia_model.pth')
-        
-        if not os.path.exists(model_path):
-            print(f"ConvNeXt model not found at: {model_path}")
-            return False
-        
-        # Load checkpoint
-        checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
-        
-        # Get number of classes from checkpoint
-        if isinstance(checkpoint, dict) and 'num_classes' in checkpoint:
-            num_classes = checkpoint['num_classes']
-            wbc_class_names = checkpoint.get('class_names', [])
-        else:
-            # Fallback classes matching training script 'Detailed' mode
-            num_classes = 6
-            wbc_class_names = [
-                'Normal',
-                'Acute Lymphoblastic Leukemia',
-                'Acute Myeloid Leukemia',
-                'Chronic Lymphocytic Leukemia',
-                'Chronic Myeloid Leukemia',
-                'Sickle Cell'
-            ]
-        
-        # Sickle Cell class index (for RBC classification with high confidence threshold)
-        global sickle_cell_class_idx
-        sickle_cell_class_idx = None
-        for idx, name in enumerate(wbc_class_names):
-            if 'sickle' in name.lower():
-                sickle_cell_class_idx = idx
-                break
-        print(f"   Sickle Cell class index: {sickle_cell_class_idx}")
-        
-        # Initialize model using torchvision's ConvNeXt
-        convnext_model = convnext_base(weights=None)
-        
-        # Modify classifier for the correct number of classes
-        in_features = 1024  # ConvNeXt Base has 1024 features
-        convnext_model.classifier[2] = nn.Linear(in_features, num_classes)
-        
-        # Load trained weights
-        if isinstance(checkpoint, dict) and 'model_state_dict' in checkpoint:
-            convnext_model.load_state_dict(checkpoint['model_state_dict'])
-            print(f"ConvNeXt loaded from epoch {checkpoint.get('epoch', 'unknown')}")
-        else:
-            convnext_model.load_state_dict(checkpoint)
-        
-        # Move to device and set eval mode
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        convnext_model = convnext_model.to(device)
-        convnext_model.eval()
-        
-        # Define transforms
-        convnext_transform = transforms.Compose([
-            transforms.Resize((384, 384)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        ])
-        
-        print(f"ConvNeXt model ready on {device}")
-        print(f"   Number of classes: {num_classes}")
-        print(f"   WBC Classes: {wbc_class_names}")
-        return True
-        
-    except Exception as e:
-        print(f"Error loading ConvNeXt model: {e}")
-        traceback.print_exc()
-        return False
-
-
-def classify_cell_crop(cell_crop_pil, cell_type='WBC'):
-    """
-    Classify a single cell crop using ConvNeXt
-    
-    IMPORTANT: This function now applies the same CellFocusedPreprocessing
-    that was used during training to ensure consistent classification.
-    
-    Args:
-        cell_crop_pil: PIL Image of cell crop
-        cell_type: 'WBC' or 'RBC'
-        
-    Returns:
-        dict: {class: str, confidence: float, probabilities: dict, is_sickle_cell: bool}
-    """
-    if convnext_model is None:
-        return None
-    
-    try:
-        # CRITICAL: Apply same preprocessing used during training
-        # This includes: circular focus, CLAHE, and edge enhancement
-        preprocessed_img = cell_preprocessor(cell_crop_pil)
-        
-        # Apply transforms (resize, normalize)
-        cell_tensor = convnext_transform(preprocessed_img).unsqueeze(0).to(device)
-        
-        # Get prediction
-        with torch.no_grad():
-            outputs = convnext_model(cell_tensor)
-            probabilities = torch.softmax(outputs, dim=1)
-            confidence, predicted_idx = torch.max(probabilities, 1)
-        
-        predicted_class = wbc_class_names[predicted_idx.item()]
-        confidence_score = float(confidence.item())
-        
-        # Get all class probabilities
-        probs_dict = {
-            cls_name: float(prob) 
-            for cls_name, prob in zip(wbc_class_names, probabilities[0].cpu().numpy())
-        }
-        
-        # For RBC: Check specifically for Sickle Cell with HIGH confidence threshold
-        is_sickle_cell = False
-        sickle_cell_confidence = 0.0
-        
-        if cell_type == 'RBC' and sickle_cell_class_idx is not None:
-            sickle_cell_confidence = float(probabilities[0][sickle_cell_class_idx].cpu().numpy())
-            # Only consider it a Sickle Cell if:
-            # 1. The predicted class IS Sickle Cell, AND
-            # 2. The confidence is >= 95%
-            is_sickle_cell = (
-                predicted_idx.item() == sickle_cell_class_idx and 
-                sickle_cell_confidence >= SICKLE_CELL_CONFIDENCE_THRESHOLD
-            )
-        
-        return {
-            'class': predicted_class,
-            'confidence': confidence_score,
-            'probabilities': probs_dict,
-            'is_sickle_cell': is_sickle_cell,
-            'sickle_cell_confidence': sickle_cell_confidence
-        }
-        
-    except Exception as e:
-        print(f"Error classifying cell: {e}")
-        traceback.print_exc()
-        return None
 
 
 # ============================================================
@@ -1142,7 +886,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         rbc_classifications = []
         cropped_cells = []  # Store cropped images for frontend
         
-        if convnext_model is not None:
+        if classifier.is_loaded():
             print(f"Starting ConvNeXt classification for detected cells...")
             
             wbc_idx = 0
@@ -1189,17 +933,15 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 if cell_crop.size == 0:
                     continue
                 
-                # Improve crop quality: resize with high-quality interpolation
+                # Convert to PIL Image WITHOUT any resizing
+                # Let ConvNeXt classifier handle ALL preprocessing to match training exactly
                 cell_crop_pil = Image.fromarray(cell_crop)
                 
-                # Resize to 384x384 to match ConvNeXt training resolution
-                # Use LANCZOS for best quality resampling
-                target_size = 384  # Match training image size for optimal classification
-                cell_crop_pil = cell_crop_pil.resize((target_size, target_size), Image.LANCZOS)
-                
-                # Convert crop to base64 for frontend with higher quality
+                # Convert crop to base64 for frontend
+                # Create a display version (384x384) for frontend only
+                display_crop = cell_crop_pil.resize((384, 384), Image.LANCZOS)
                 crop_buffer = io.BytesIO()
-                cell_crop_pil.save(crop_buffer, format='PNG')  # PNG for lossless quality
+                display_crop.save(crop_buffer, format='PNG')
                 crop_base64 = base64.b64encode(crop_buffer.getvalue()).decode('utf-8')
                 
                 # Classify WBC
@@ -1211,26 +953,34 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         wbc_class = classification['class']
                         wbc_confidence = classification['confidence']
                         
-                        # CRITICAL: Exclude Sickle Cell predictions for WBCs
-                        # Sickle Cell is an RBC condition, not WBC
-                        # If predicted as Sickle Cell, use the highest non-Sickle Cell class instead
-                        if 'sickle' in wbc_class.lower() and sickle_cell_class_idx is not None:
-                            print(f"   WBC #{wbc_idx} predicted as Sickle Cell - using next best WBC class")
+                        # CRITICAL: Exclude RBC and Sickle Cell predictions for WBCs
+                        # RBC classes should not appear in WBC detection results
+                        # If predicted as RBC or Sickle Cell, use the highest WBC class instead
+                        is_non_wbc_class = (
+                            'rbc' in wbc_class.lower() or 
+                            'sickle' in wbc_class.lower() or
+                            'platelet' in wbc_class.lower()
+                        )
+                        
+                        if is_non_wbc_class:
+                            print(f"   WBC #{wbc_idx} predicted as {wbc_class} (non-WBC class) - using next best WBC class")
                             
-                            # Get non-Sickle Cell probabilities and RE-NORMALIZE
+                            # Get only WBC probabilities (exclude RBC, Sickle, Platelet classes) and RE-NORMALIZE
                             probs = classification['probabilities']
-                            non_sickle_probs = {
+                            wbc_only_probs = {
                                 cls_name: prob 
                                 for cls_name, prob in probs.items() 
-                                if 'sickle' not in cls_name.lower()
+                                if 'rbc' not in cls_name.lower() 
+                                and 'sickle' not in cls_name.lower()
+                                and 'platelet' not in cls_name.lower()
                             }
                             
                             # Re-normalize probabilities to sum to 1.0 (100%)
-                            total_prob = sum(non_sickle_probs.values())
+                            total_prob = sum(wbc_only_probs.values())
                             if total_prob > 0:
                                 normalized_probs = {
                                     cls_name: prob / total_prob 
-                                    for cls_name, prob in non_sickle_probs.items()
+                                    for cls_name, prob in wbc_only_probs.items()
                                 }
                                 
                                 # Find highest probability after normalization
@@ -1240,8 +990,8 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                                 
                                 print(f"      → Using {wbc_class} (normalized confidence: {wbc_confidence:.3f})")
                             else:
-                                # Fallback to Normal if something goes wrong
-                                wbc_class = 'Normal'
+                                # Fallback to Neutrophil: Normal if something goes wrong
+                                wbc_class = 'Neutrophil: Normal'
                                 wbc_confidence = 1.0
                         
                         wbc_result = {
@@ -1403,7 +1153,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 'normal_wbc_differential': NORMAL_WBC_DIFFERENTIAL
             },
             'annotated_image': annotated_base64,
-            'convnext_loaded': convnext_model is not None,
+            'convnext_loaded': classifier.is_loaded(),
             'is_single_field': True,  # Flag for frontend to show multi-field recommendation
             'recommendations': adequacy['recommendations']
         }
@@ -1446,8 +1196,8 @@ def health_check():
         'status': 'healthy',
         'model': MODEL_ID,
         'api_configured': bool(API_KEY),
-        'convnext_loaded': convnext_model is not None,
-        'device': str(device) if device else 'cpu'
+        'convnext_loaded': classifier.is_loaded(),
+        'device': classifier.get_device()
     })
 
 
@@ -1504,11 +1254,18 @@ def analyze_blood_smear():
 @app.route('/api/models/info', methods=['GET'])
 def models_info():
     """Get information about the model"""
+    classifier_info = get_classifier_info()
     return jsonify({
         'model': {
             'id': MODEL_ID,
             'provider': 'Roboflow',
             'api_configured': bool(API_KEY)
+        },
+        'convnext': {
+            'loaded': classifier_info['loaded'],
+            'class_names': classifier_info['class_names'],
+            'device': classifier_info['device'],
+            'num_classes': classifier_info['num_classes']
         },
         'default_params': {
             'conf_threshold': 0.15,
@@ -1661,7 +1418,7 @@ def test_endpoint():
 
 if __name__ == '__main__':
     print("\n" + "="*60)
-    print("HEMALYZER BACKEND - Roboflow + ConvNeXt")
+    print("HEMALYZER BACKEND - Yolov8NAS + ConvNeXt")
     print("="*60)
     print(f"Detection Model: {MODEL_ID}")
     print(f"API Key configured: {'Yes' if API_KEY else 'No'}")
