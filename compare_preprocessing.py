@@ -3,10 +3,15 @@ Diagnostic script to compare preprocessing pipelines
 Shows the difference between test_convnext.py and app.py preprocessing
 """
 import sys
+import os
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 import matplotlib.pyplot as plt
-sys.path.insert(0, 'backend')
+
+# Add backend directory to path
+backend_dir = os.path.join(os.path.dirname(__file__), 'backend')
+sys.path.insert(0, backend_dir)
+
 from convnext_classifier import load_convnext_model, classifier
 
 
@@ -21,7 +26,8 @@ def visualize_preprocessing_stages(image_path):
     
     # Load model
     print("\nLoading ConvNeXt model...")
-    if not load_convnext_model('backend/best_leukemia_model.pth'):
+    model_path = os.path.join(backend_dir, 'best_leukemia_model.pth')
+    if not load_convnext_model(model_path):
         print("Failed to load model!")
         return
     
@@ -116,7 +122,7 @@ if __name__ == '__main__':
     if len(sys.argv) < 2:
         print("Usage: python compare_preprocessing.py <image_path>")
         print("\nExample:")
-        print("  python compare_preprocessing.py Normal/BAS_47.jpg")
+        print("  python compare_preprocessing.py")
         sys.exit(1)
     
     image_path = sys.argv[1]

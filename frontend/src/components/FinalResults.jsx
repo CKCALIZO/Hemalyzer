@@ -5,7 +5,7 @@ import autoTable from "jspdf-autotable";
 
 /**
  * FinalResults Component
- * Displays final diagnosis when 100 WBCs threshold is met
+ * Displays final diagnosis when 10 images threshold is met
  * Includes printable PDF report functionality
  * Includes scrollable WBC examination section for manual review
  */
@@ -357,7 +357,7 @@ export const FinalResults = ({
                             Final Analysis Report
                         </h2>
                         <p className="text-slate-300 text-sm mt-1">
-                            Threshold of 100 WBCs has been met
+                            Analysis complete - 10 images processed
                         </p>
                     </div>
                     <div className="text-right">

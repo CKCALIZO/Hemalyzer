@@ -9,8 +9,8 @@ import { ProcessedImagesThumbnails } from "../components/ProcessedImagesThumbnai
 
 const API_URL = 'http://localhost:5000';
 
-// Target WBC count for reliable diagnosis (per hematology manual)
-const TARGET_WBC_COUNT = 100;
+// Target image count for reliable diagnosis (10 images = 5 recommended fields x 2)
+const TARGET_IMAGE_COUNT = 10;
 
 // WBC Normal Differential Ranges (for final calculation)
 const WBC_NORMAL_RANGES = {
@@ -424,8 +424,8 @@ const Homepage = () => {
                 setAggregatedRBCClassifications(newRBCClassifications);
                 setCurrentResults(data);
 
-                // Check if threshold is met
-                if (newCounts.wbc >= TARGET_WBC_COUNT) {
+                // Check if threshold is met (10 images analyzed)
+                if (newProcessedImages.length >= TARGET_IMAGE_COUNT) {
                     setThresholdMet(true);
                     const finalCalc = calculateFinalResults(newClassifications, newProcessedImages, newCounts, newRBCClassifications);
                     setFinalResults(finalCalc);
@@ -482,9 +482,9 @@ const Homepage = () => {
         navigate('/reports');
     };
 
-    // Calculate progress
-    const progress = Math.min(100, (aggregatedCounts.wbc / TARGET_WBC_COUNT) * 100);
-    const remainingWBC = Math.max(0, TARGET_WBC_COUNT - aggregatedCounts.wbc);
+    // Calculate progress based on image count
+    const progress = Math.min(100, (processedImages.length / TARGET_IMAGE_COUNT) * 100);
+    const remainingImages = Math.max(0, TARGET_IMAGE_COUNT - processedImages.length);
 
     // Legacy compatibility - unused but keeping structure
     const renderWBCClassifications = () => {
@@ -492,15 +492,15 @@ const Homepage = () => {
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-red-50">
+        <div className="flex flex-col min-h-screen bg-rose-50">
             <Header />
             <main className="flex-1 p-6">
                 <div className="max-w-7xl mx-auto">
                     {/* Page Title */}
                     <div className="mb-6">
-                        <h1 className="text-2xl font-bold text-red-900">Blood Smear Analysis</h1>
-                        <p className="text-red-700 text-sm mt-1">
-                            Upload blood smear images until 100 WBCs are detected for accurate differential count
+                        <h1 className="text-2xl font-bold text-rose-800">Blood Smear Analysis</h1>
+                        <p className="text-rose-600 text-sm mt-1">
+                            Upload 10 blood smear images for accurate differential count and disease assessment
                         </p>
                     </div>
 
@@ -508,8 +508,8 @@ const Homepage = () => {
                     {processedImages.length > 0 && (
                         <ProcessedImagesThumbnails
                             processedImages={processedImages}
-                            currentWBCCount={aggregatedCounts.wbc}
-                            targetWBCCount={TARGET_WBC_COUNT}
+                            currentImageCount={processedImages.length}
+                            targetImageCount={TARGET_IMAGE_COUNT}
                         />
                     )}
 
@@ -528,37 +528,37 @@ const Homepage = () => {
                     {!thresholdMet && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             {/* Upload Section */}
-                            <div className="bg-white rounded-lg border border-red-200 shadow-sm">
-                                <div className="px-6 py-4 border-b border-red-200 bg-red-50">
-                                    <h2 className="text-lg font-semibold text-red-900">
+                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm">
+                                <div className="px-6 py-4 border-b border-rose-200 bg-rose-50">
+                                    <h2 className="text-lg font-semibold text-rose-800">
                                         Upload Blood Smear Image
                                     </h2>
-                                    <p className="text-sm text-red-600 mt-1">
-                                        Continue uploading images to reach 100 WBC threshold
+                                    <p className="text-sm text-rose-600 mt-1">
+                                        {processedImages.length} / {TARGET_IMAGE_COUNT} images analyzed
                                     </p>
                                 </div>
                                 
                                 <div className="p-6">
                                     {/* Progress Indicator */}
-                                    <div className="mb-6 bg-red-50 rounded-lg p-4 border border-red-100">
+                                    <div className="mb-6 bg-rose-50 rounded-lg p-4 border border-rose-100">
                                         <div className="flex justify-between items-center mb-2">
-                                            <span className="text-sm font-medium text-red-800">Analysis Progress</span>
-                                            <span className="text-sm text-red-700">
-                                                {aggregatedCounts.wbc} / {TARGET_WBC_COUNT} WBCs
+                                            <span className="text-sm font-medium text-rose-700">Analysis Progress</span>
+                                            <span className="text-sm text-rose-600">
+                                                {processedImages.length} / {TARGET_IMAGE_COUNT} Images
                                             </span>
                                         </div>
-                                        <div className="w-full h-3 bg-red-200 rounded-full overflow-hidden">
+                                        <div className="w-full h-3 bg-rose-200 rounded-full overflow-hidden">
                                             <div 
-                                                className="h-full bg-red-600 transition-all duration-500"
+                                                className="h-full bg-rose-500 transition-all duration-500"
                                                 style={{ width: `${progress}%` }}
                                             />
                                         </div>
-                                        {remainingWBC > 0 ? (
-                                            <p className="text-xs text-red-600 mt-2">
-                                                Need approximately {remainingWBC} more WBCs for reliable differential
+                                        {remainingImages > 0 ? (
+                                            <p className="text-xs text-rose-600 mt-2">
+                                                Need {remainingImages} more image{remainingImages > 1 ? 's' : ''} for reliable differential
                                             </p>
                                         ) : (
-                                            <p className="text-xs text-green-600 mt-2 font-medium">
+                                            <p className="text-xs text-emerald-600 mt-2 font-medium">
                                                 Threshold met! Processing final results...
                                             </p>
                                         )}
@@ -570,7 +570,7 @@ const Homepage = () => {
                                             <img 
                                                 src={previewUrl} 
                                                 alt="Preview" 
-                                                className="w-full h-64 object-contain bg-red-50"
+                                                className="w-full h-64 object-contain bg-rose-50"
                                             />
                                         </div>
                                     )}
@@ -578,9 +578,9 @@ const Homepage = () => {
                                     {/* File Input */}
                                     <div className="mb-4">
                                         <input 
-                                            className="block w-full text-sm text-red-800 border border-red-300 
+                                            className="block w-full text-sm text-rose-700 border border-rose-300 
                                             rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 
-                                            focus:ring-red-500 p-2"
+                                            focus:ring-rose-400 p-2"
                                             id="pbs-upload" 
                                             type="file" 
                                             accept="image/*"
@@ -594,7 +594,7 @@ const Homepage = () => {
                                         onClick={handleAnalyze}
                                         disabled={!selectedFile || loading || thresholdMet}
                                         className={`w-full flex items-center justify-center gap-2 text-white 
-                                        bg-red-700 hover:bg-red-600 transition-colors font-semibold 
+                                        bg-rose-600 hover:bg-rose-500 transition-colors font-semibold 
                                         rounded-lg text-base px-6 py-3
                                         ${(!selectedFile || loading || thresholdMet) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                                     >
@@ -618,7 +618,7 @@ const Homepage = () => {
 
                                     {/* Error Display */}
                                     {error && (
-                                        <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
+                                        <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg">
                                             <p className="font-semibold text-sm">Error</p>
                                             <p className="text-sm">{error}</p>
                                         </div>
@@ -626,22 +626,22 @@ const Homepage = () => {
 
                                     {/* Aggregated Stats */}
                                     {processedImages.length > 0 && (
-                                        <div className="mt-6 pt-6 border-t border-red-200">
-                                            <h3 className="text-sm font-semibold text-red-800 mb-3">
+                                        <div className="mt-6 pt-6 border-t border-rose-200">
+                                            <h3 className="text-sm font-semibold text-rose-700 mb-3">
                                                 Session Totals ({processedImages.length} images)
                                             </h3>
                                             <div className="grid grid-cols-3 gap-3">
-                                                <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
-                                                    <p className="text-xl font-bold text-red-800">{aggregatedCounts.wbc}</p>
-                                                    <p className="text-xs text-red-600">WBC</p>
+                                                <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
+                                                    <p className="text-xl font-bold text-rose-700">{aggregatedCounts.wbc}</p>
+                                                    <p className="text-xs text-rose-600">WBC</p>
                                                 </div>
-                                                <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
-                                                    <p className="text-xl font-bold text-red-700">{aggregatedCounts.rbc}</p>
-                                                    <p className="text-xs text-red-600">RBC</p>
+                                                <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
+                                                    <p className="text-xl font-bold text-rose-600">{aggregatedCounts.rbc}</p>
+                                                    <p className="text-xs text-rose-600">RBC</p>
                                                 </div>
-                                                <div className="bg-red-50 rounded-lg p-3 text-center border border-red-100">
-                                                    <p className="text-xl font-bold text-red-600">{aggregatedCounts.platelets}</p>
-                                                    <p className="text-xs text-red-600">Platelets</p>
+                                                <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
+                                                    <p className="text-xl font-bold text-rose-500">{aggregatedCounts.platelets}</p>
+                                                    <p className="text-xs text-rose-600">Platelets</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -651,8 +651,8 @@ const Homepage = () => {
                                     {processedImages.length > 0 && (
                                         <button
                                             onClick={handleReset}
-                                            className="w-full mt-4 px-4 py-2 bg-white border border-red-300 text-red-700 
-                                            rounded-lg hover:bg-red-50 transition-colors text-sm font-medium"
+                                            className="w-full mt-4 px-4 py-2 bg-white border border-rose-300 text-rose-600 
+                                            rounded-lg hover:bg-rose-50 transition-colors text-sm font-medium"
                                         >
                                             Reset Analysis Session
                                         </button>
@@ -661,20 +661,20 @@ const Homepage = () => {
                             </div>
 
                             {/* Results Section */}
-                            <div className="bg-white rounded-lg border border-red-200 shadow-sm">
-                                <div className="px-6 py-4 border-b border-red-200 bg-red-50 flex items-center justify-between">
+                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm">
+                                <div className="px-6 py-4 border-b border-rose-200 bg-rose-50 flex items-center justify-between">
                                     <div>
-                                        <h2 className="text-lg font-semibold text-red-900">
+                                        <h2 className="text-lg font-semibold text-rose-800">
                                             Current Image Results
                                         </h2>
-                                        <p className="text-sm text-red-600 mt-1">
+                                        <p className="text-sm text-rose-600 mt-1">
                                             Analysis of the most recently uploaded image
                                         </p>
                                     </div>
                                     {currentResults && (
                                         <button
                                             onClick={() => setShowCurrentResults(!showCurrentResults)}
-                                            className="text-sm text-red-700 hover:text-red-900"
+                                            className="text-sm text-rose-600 hover:text-rose-800"
                                         >
                                             {showCurrentResults ? 'Hide' : 'Show'}
                                         </button>
@@ -684,10 +684,10 @@ const Homepage = () => {
                                 <div className="p-6 max-h-[70vh] overflow-y-auto">
                                     {!currentResults && !loading && (
                                         <div className="text-center py-12">
-                                            <svg className="w-16 h-16 mx-auto text-red-200 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <svg className="w-16 h-16 mx-auto text-rose-200 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>
-                                            <p className="text-red-500">
+                                            <p className="text-rose-400">
                                                 Upload an image and click "Analyze" to see results
                                             </p>
                                         </div>
@@ -716,9 +716,9 @@ const Homepage = () => {
                                                             }
                                                         }
                                                     })}
-                                                    className="w-full px-4 py-3 bg-red-50 text-red-700 rounded-lg 
-                                                    hover:bg-slate-200 font-medium flex items-center justify-center gap-2 
-                                                    border border-slate-200 transition-colors"
+                                                    className="w-full px-4 py-3 bg-rose-50 text-rose-600 rounded-lg 
+                                                    hover:bg-rose-100 font-medium flex items-center justify-center gap-2 
+                                                    border border-rose-200 transition-colors"
                                                 >
                                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -749,7 +749,7 @@ const Homepage = () => {
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="text-slate-600">RBC:</span>
-                                                        <span className="font-semibold text-red-600">{currentResults.stage1_detection?.counts?.RBC || 0}</span>
+                                                        <span className="font-semibold text-rose-600">{currentResults.stage1_detection?.counts?.RBC || 0}</span>
                                                     </div>
                                                     <div className="flex justify-between">
                                                         <span className="text-slate-600">WBC:</span>
@@ -786,7 +786,7 @@ const Homepage = () => {
                                             <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm">
                                                 <p className="font-semibold text-slate-700">Note:</p>
                                                 <p className="text-xs mt-1 text-slate-600">
-                                                    Continue uploading images until 100 WBCs are detected for 
+                                                    Continue uploading images until 10 images are analyzed for 
                                                     a reliable differential count and disease assessment.
                                                 </p>
                                             </div>

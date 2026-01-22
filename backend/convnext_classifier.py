@@ -66,8 +66,8 @@ class CellFocusedPreprocessing:
         lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
         l, a, b = cv2.split(lab)
         
-        # Apply CLAHE to L channel
-        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        # Apply CLAHE to L channel with higher clip limit for quality normalization
+        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         l = clahe.apply(l)
         
         # Merge back and convert to RGB
@@ -222,9 +222,10 @@ class ConvNeXtClassifier:
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
             
-            # Initialize preprocessor (matches training config)
+            # Initialize preprocessor (adjusted for real-world YOLO crops)
+            # Using 0.85 ratio to be more forgiving of off-center cells
             self.preprocessor = CellFocusedPreprocessing(
-                center_crop_ratio=0.75,
+                center_crop_ratio=0.85,
                 apply_clahe=True,
                 enhance_edges=True
             )
