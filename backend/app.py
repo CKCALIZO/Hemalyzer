@@ -837,15 +837,16 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         }
                         wbc_classifications.append(wbc_result)
                         
-                        # Add to cropped cells for display
-                        cropped_cells.append({
-                            'id': f'WBC_{wbc_idx}',
-                            'cell_type': 'WBC',
-                            'classification': wbc_class,
-                            'confidence': wbc_confidence,
-                            'cropped_image': crop_base64,
-                            'is_abnormal': wbc_class != 'Normal'
-                        })
+                        # Add to cropped cells for display - ONLY ABNORMAL WBCs (filter out Normal)
+                        if wbc_class != 'Normal':
+                            cropped_cells.append({
+                                'id': f'WBC_{wbc_idx}',
+                                'cell_type': 'WBC',
+                                'classification': wbc_class,
+                                'confidence': wbc_confidence,
+                                'cropped_image': crop_base64,
+                                'is_abnormal': True
+                            })
                 
                 # Classify RBC - only show if it's a Sickle Cell with HIGH confidence (>=95%)
                 elif cell_type == 'RBC':
@@ -905,6 +906,9 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         sickle_cell_count = sum(1 for r in rbc_classifications if r.get('is_sickle_cell', False))
         
         # ========== DISEASE INTERPRETATION WITH THRESHOLDS ==========
+        # NOTE: Disease interpretation is calculated here for terminal logging,
+        # but NOT sent to frontend for single-image analysis.
+        # Frontend will calculate final interpretation after 10 images are collected.
         disease_interpretation = interpret_disease_classification(
             wbc_classifications,
             rbc_classifications,
@@ -976,7 +980,10 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 }
             },
             
-            'disease_interpretation': disease_interpretation,  # Clinical interpretation based on ConvNeXt classifications
+            # NOTE: disease_interpretation is NOT included in single-image response.
+            # Frontend will aggregate multiple images and calculate final interpretation
+            # when 10 images threshold is met.
+            # 'disease_interpretation': disease_interpretation,  # REMOVED - only for multi-image analysis
             'clinical_thresholds': {
                 'sickle_cell': DISEASE_THRESHOLDS['sickle_cell'],
                 'acute_leukemia': DISEASE_THRESHOLDS['acute_leukemia'],
@@ -1432,27 +1439,40 @@ def compare_models():
         
         enhanced_counts = enhanced_results['stage1_detection']['counts']
         enhanced_wbc_classifications = enhanced_results.get('stage2_classification', [])
+        enhanced_rbc_classifications = enhanced_results.get('rbc_classifications', [])
         
-        # Analyze WBC classifications from ConvNeXt
+        # Analyze WBC classifications from ConvNeXt (exclude RBC entries)
         enhanced_wbc_breakdown = {}
         enhanced_disease_count = 0
         
         for wbc in enhanced_wbc_classifications:
             cls = wbc.get('classification', 'Unknown')
+            
+            # Skip RBC entries - they shouldn't be in WBC classification
+            if 'rbc' in cls.lower():
+                continue
+                
             enhanced_wbc_breakdown[cls] = enhanced_wbc_breakdown.get(cls, 0) + 1
             
-            # Count disease cells (anything not "Normal")
+            # Count disease cells (anything with disease marker like :CML, :ALL, :AML, :CLL)
             cls_lower = cls.lower()
-            if any(disease in cls_lower for disease in ['aml', 'all', 'cml', 'cll', 'blast']):
+            if any(disease in cls_lower for disease in [': aml', ': all', ': cml', ': cll', 'blast']):
                 enhanced_disease_count += 1
         
-        # Calculate average confidence - handle both dict and object formats
+        # Calculate average confidence - use classification_confidence field from process_blood_smear
         enhanced_confidences = []
         for w in enhanced_wbc_classifications:
-            conf = w.get('confidence', w.get('conf', 0)) if isinstance(w, dict) else getattr(w, 'confidence', 0)
-            if conf > 0:
+            # Skip RBC entries
+            if 'rbc' in w.get('classification', '').lower():
+                continue
+            # Use classification_confidence (the actual ConvNeXt confidence)
+            conf = w.get('classification_confidence', w.get('confidence', 0))
+            if isinstance(conf, (int, float)) and conf > 0:
                 enhanced_confidences.append(conf)
         enhanced_avg_conf = np.mean(enhanced_confidences) if enhanced_confidences else 0
+        
+        # Count sickle cells from RBC classifications
+        enhanced_sickle_count = sum(1 for r in enhanced_rbc_classifications if r.get('is_sickle_cell', False))
         
         # ============================================================
         # RUN BASELINE MODEL (Standard YOLO + Same ConvNeXt)
@@ -1512,20 +1532,43 @@ def compare_models():
                             wbc_class = classification_result['class']
                             wbc_conf = classification_result['confidence']
                             
+                            # Skip RBC entries - they shouldn't be in WBC classification
+                            if 'rbc' in wbc_class.lower():
+                                continue
+                            
                             baseline_wbc_classifications.append({
                                 'classification': wbc_class,
                                 'confidence': wbc_conf,
+                                'classification_confidence': wbc_conf,
                                 'wbc_id': len(baseline_wbc_classifications)
                             })
                             
                             baseline_wbc_breakdown[wbc_class] = baseline_wbc_breakdown.get(wbc_class, 0) + 1
                             
                             cls_lower = wbc_class.lower()
-                            if any(disease in cls_lower for disease in ['aml', 'all', 'cml', 'cll', 'blast']):
+                            if any(disease in cls_lower for disease in [': aml', ': all', ': cml', ': cll', 'blast']):
                                 baseline_disease_count += 1
         
         baseline_avg_conf = np.mean([w['confidence'] for w in baseline_wbc_classifications]) if baseline_wbc_classifications else 0
         baseline_time = time.time() - baseline_start
+        
+        # ============================================================
+        # DISEASE INTERPRETATION FOR BOTH MODELS
+        # ============================================================
+        
+        # Run disease interpretation for Enhanced model
+        enhanced_disease_interpretation = interpret_disease_classification(
+            enhanced_wbc_classifications,
+            enhanced_results.get('rbc_classifications', []),
+            enhanced_counts
+        )
+        
+        # Run disease interpretation for Baseline model  
+        baseline_disease_interpretation = interpret_disease_classification(
+            baseline_wbc_classifications,
+            [],  # Baseline doesn't re-classify RBCs in simulation
+            baseline_counts
+        )
         
         # ============================================================
         # COMPARISON METRICS
@@ -1555,23 +1598,32 @@ def compare_models():
                     'inference_time_ms': round(enhanced_time * 1000, 2)
                 },
                 'wbc_classification': {
-                    'total_classified': len(enhanced_wbc_classifications),
+                    'total_classified': len([w for w in enhanced_wbc_classifications if 'rbc' not in w.get('classification', '').lower()]),
                     'cell_types_detected': len(enhanced_wbc_breakdown),
                     'disease_cells': enhanced_disease_count,
                     'avg_confidence': round(enhanced_avg_conf * 100, 1),
-                    'breakdown': enhanced_wbc_breakdown
+                    'breakdown': enhanced_wbc_breakdown,
+                    'differential': enhanced_disease_interpretation.get('wbc_differential', {}),
+                    'leukemia_analysis': enhanced_disease_interpretation.get('leukemia_analysis'),
+                    'disease_interpretation': enhanced_disease_interpretation
+                },
+                'rbc_analysis': {
+                    'total_rbc': enhanced_counts.get('RBC', 0),
+                    'sickle_cells_detected': enhanced_sickle_count,
+                    'sickle_cell_analysis': enhanced_disease_interpretation.get('sickle_cell_analysis')
                 },
                 'capabilities': [
-                    'Detects tiny cells via P2 head',
-                    'Multi-scale feature extraction',
-                    'Attention mechanism (CBAM)',
-                    'Detailed WBC classification',
-                    'Disease detection capability'
+                    'P2 Detection Head - Detects tiny cells (platelets, small WBCs)',
+                    'Multi-scale Kernels (3x3, 5x5, 7x7) - Better morphological features',
+                    'CBAM Attention - Focused feature extraction on cell regions',
+                    'Enhanced FPN - Better multi-scale feature fusion',
+                    'Full Roboflow API Integration - Real-time cloud inference',
+                    'Complete RBC Analysis - Sickle cell detection with 95% threshold'
                 ]
             },
             'baseline_model': {
                 'name': 'Standard YOLOv8 + ConvNeXt',
-                'description': '3-scale detection with fixed kernels, same classification',
+                'description': '3-scale detection with fixed kernels (Simulated baseline)',
                 'architecture': {
                     'detection': 'YOLOv8',
                     'scales': 'P3, P4, P5 (3 scales)',
@@ -1582,20 +1634,32 @@ def compare_models():
                 'detection_results': {
                     'counts': baseline_counts,
                     'total_detected': baseline_total,
-                    'inference_time_ms': round(baseline_time * 1000, 2)
+                    'inference_time_ms': round(baseline_time * 1000, 2),
+                    'detection_rate': f'{baseline_detection_rate * 100:.1f}% of Enhanced'
                 },
                 'wbc_classification': {
                     'total_classified': len(baseline_wbc_classifications),
                     'cell_types_detected': len(baseline_wbc_breakdown),
                     'disease_cells': baseline_disease_count,
                     'avg_confidence': round(baseline_avg_conf * 100, 1),
-                    'breakdown': baseline_wbc_breakdown
+                    'breakdown': baseline_wbc_breakdown,
+                    'differential': baseline_disease_interpretation.get('wbc_differential', {}),
+                    'leukemia_analysis': baseline_disease_interpretation.get('leukemia_analysis'),
+                    'disease_interpretation': baseline_disease_interpretation
+                },
+                'rbc_analysis': {
+                    'total_rbc': baseline_counts.get('RBC', 0),
+                    'sickle_cells_detected': 0,  # Baseline doesn't re-analyze RBCs
+                    'sickle_cell_analysis': baseline_disease_interpretation.get('sickle_cell_analysis'),
+                    'note': 'RBC analysis not performed in baseline simulation'
                 },
                 'limitations': [
-                    'No P2 head (misses tiny cells)',
-                    'Single-scale features',
-                    'No attention mechanism',
-                    'Fewer cells detected overall'
+                    'No P2 Head - Misses tiny cells like platelets and small WBCs',
+                    'Single-scale Kernels (3x3) - Limited morphological features',
+                    'No Attention Mechanism - Equal focus on all regions',
+                    'Standard FPN - Less effective feature fusion',
+                    'Fewer Total Cells Detected - Lower sensitivity',
+                    'No Independent RBC Analysis - Uses shared detection only'
                 ]
             },
             'comparison': {

@@ -133,7 +133,7 @@ class ConvNeXtClassifier:
         self.pre_transform = None  # Pre-preprocessor transforms
         self.transform = None  # Post-preprocessor transforms
         self.preprocessor = None
-        self.sickle_cell_confidence_threshold = 0.95  # 95% confidence threshold
+        self.sickle_cell_confidence_threshold = 0.80  # 80% confidence threshold for sickle cell detection
     
     def load_model(self, model_path='best_leukemia_model.pth'):
         """
@@ -173,13 +173,14 @@ class ConvNeXtClassifier:
                     'Sickle Cell'
                 ]
             
-            # Find Sickle Cell class index (for RBC classification with high confidence threshold)
+            # Find Sickle Cell class index (for RBC classification with confidence threshold)
             self.sickle_cell_class_idx = None
             for idx, name in enumerate(self.class_names):
                 if 'sickle' in name.lower():
                     self.sickle_cell_class_idx = idx
                     break
             print(f"   Sickle Cell class index: {self.sickle_cell_class_idx}")
+            print(f"   Sickle Cell confidence threshold: {self.sickle_cell_confidence_threshold * 100}%")
             
             # Initialize model using torchvision's ConvNeXt
             self.model = convnext_base(weights=None)

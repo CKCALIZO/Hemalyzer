@@ -30,6 +30,9 @@ export const ProcessedImagesThumbnails = ({
     }
 
     const progress = Math.min(100, (currentImageCount / targetImageCount) * 100);
+    
+    // Calculate total WBC count from all processed images
+    const currentWBCCount = processedImages.reduce((sum, img) => sum + (img.wbcCount || 0), 0);
 
     // Calculate WBC breakdown for a single image
     const getWBCBreakdown = (classifications) => {
@@ -273,24 +276,24 @@ export const ProcessedImagesThumbnails = ({
                         )}
                     </div>
 
-                    {/* WBC Progress */}
+                    {/* Image Progress */}
                     <div className="flex items-center gap-3">
                         <div className="text-right">
-                            <p className="text-xs text-red-200">WBC Count</p>
-                            <p className={`text-sm font-bold ${currentWBCCount >= targetWBCCount ? 'text-green-300' : 'text-white'}`}>
-                                {currentWBCCount} / {targetWBCCount}
+                            <p className="text-xs text-red-200">Total WBC</p>
+                            <p className="text-sm font-bold text-white">
+                                {currentWBCCount} cells
                             </p>
                         </div>
                         <div className="w-24 h-2 bg-red-900 rounded-full overflow-hidden">
                             <div 
                                 className={`h-full transition-all duration-500 ${
-                                    currentWBCCount >= targetWBCCount ? 'bg-green-400' : 'bg-white'
+                                    progress >= 100 ? 'bg-green-400' : 'bg-white'
                                 }`}
                                 style={{ width: `${progress}%` }}
                             />
                         </div>
-                        {currentWBCCount >= targetWBCCount && (
-                            <span className="text-green-300 text-lg font-bold">OK</span>
+                        {progress >= 100 && (
+                            <span className="text-green-300 text-lg font-bold">✓</span>
                         )}
                     </div>
                 </div>
@@ -345,8 +348,8 @@ export const ProcessedImagesThumbnails = ({
                                 </p>
                             </div>
                             <div>
-                                <p className="text-red-200 text-xs">WBC Progress</p>
-                                <p className={`font-bold ${currentWBCCount >= targetWBCCount ? 'text-green-300' : 'text-yellow-300'}`}>
+                                <p className="text-red-200 text-xs">Image Progress</p>
+                                <p className={`font-bold ${progress >= 100 ? 'text-green-300' : 'text-yellow-300'}`}>
                                     {progress.toFixed(0)}%
                                 </p>
                             </div>

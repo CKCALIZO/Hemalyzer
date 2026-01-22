@@ -324,9 +324,9 @@ export function Simulation() {
                     <p className="text-gray-600 text-sm mb-4">{comparisonResults.enhanced_model.description}</p>
                     
                     {/* Architecture Details */}
-                    <div className="mb-4 p-3 bg-gray-50 rounded">
-                      <h4 className="font-medium text-gray-800 mb-2 text-sm">Architecture</h4>
-                      <div className="space-y-1 text-xs text-gray-600">
+                    <div className="mb-4 p-3 bg-blue-50 rounded border border-blue-200">
+                      <h4 className="font-medium text-blue-800 mb-2 text-sm">Architecture Details</h4>
+                      <div className="space-y-1 text-xs text-gray-700">
                         <div><span className="font-semibold">Detection:</span> {comparisonResults.enhanced_model.architecture.detection}</div>
                         <div><span className="font-semibold">Scales:</span> {comparisonResults.enhanced_model.architecture.scales}</div>
                         <div><span className="font-semibold">Kernels:</span> {comparisonResults.enhanced_model.architecture.kernels}</div>
@@ -368,20 +368,82 @@ export function Simulation() {
                           <span className="font-bold">{comparisonResults.enhanced_model.wbc_classification.avg_confidence}%</span>
                         </div>
                       </div>
+
+                      {/* WBC Differential Breakdown */}
+                      {comparisonResults.enhanced_model.wbc_classification.differential && 
+                       Object.keys(comparisonResults.enhanced_model.wbc_classification.differential).length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="text-xs font-semibold text-gray-700 mb-2">WBC Differential:</div>
+                          {Object.entries(comparisonResults.enhanced_model.wbc_classification.differential).map(([type, data]) => (
+                            <div key={type} className="flex justify-between text-xs mb-1">
+                              <span className="text-gray-600">{type}:</span>
+                              <span className={`font-medium ${
+                                data.status === 'high' ? 'text-red-600' : 
+                                data.status === 'low' ? 'text-amber-600' : 
+                                'text-green-600'
+                              }`}>
+                                {data.percentage?.toFixed(1)}% ({data.count})
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Capabilities */}
-                    <div className="mt-4 pt-4 border-t">
-                      <h4 className="font-medium text-gray-800 mb-2 text-sm">Capabilities</h4>
-                      <ul className="text-xs text-gray-600 space-y-1">
-                        {comparisonResults.enhanced_model.capabilities.map((cap, i) => (
-                          <li key={i}>• {cap}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    {/* RBC/Sickle Cell Analysis - Only show if sickle cells detected or has valid analysis */}
+                    {comparisonResults.enhanced_model.rbc_analysis?.sickle_cell_analysis && (
+                      <div className={`mb-4 p-3 rounded border ${
+                        comparisonResults.enhanced_model.rbc_analysis.sickle_cells_detected > 0 
+                          ? 'bg-red-50 border-red-200' 
+                          : 'bg-green-50 border-green-200'
+                      }`}>
+                        <h4 className={`font-medium mb-2 text-sm ${
+                          comparisonResults.enhanced_model.rbc_analysis.sickle_cells_detected > 0 
+                            ? 'text-red-800' 
+                            : 'text-green-800'
+                        }`}>RBC Analysis (Sickle Cell Detection)</h4>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Total RBCs Analyzed:</span>
+                            <span className="font-bold">
+                              {comparisonResults.enhanced_model.rbc_analysis.sickle_cell_analysis.total_rbc_analyzed}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Sickle Cells Detected:</span>
+                            <span className={`font-bold ${
+                              comparisonResults.enhanced_model.rbc_analysis.sickle_cells_detected > 0 
+                                ? 'text-red-700' 
+                                : 'text-green-700'
+                            }`}>
+                              {comparisonResults.enhanced_model.rbc_analysis.sickle_cell_analysis.sickle_cell_count}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Sickle Cell %:</span>
+                            <span className="font-bold">
+                              {comparisonResults.enhanced_model.rbc_analysis.sickle_cell_analysis.percentage}%
+                            </span>
+                          </div>
+                          <div className={`mt-2 pt-2 border-t ${
+                            comparisonResults.enhanced_model.rbc_analysis.sickle_cells_detected > 0 
+                              ? 'border-red-200' 
+                              : 'border-green-200'
+                          }`}>
+                            <p className={`font-medium ${
+                              comparisonResults.enhanced_model.rbc_analysis.sickle_cells_detected > 0 
+                                ? 'text-red-800' 
+                                : 'text-green-800'
+                            }`}>
+                              {comparisonResults.enhanced_model.rbc_analysis.sickle_cell_analysis.interpretation}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Baseline Model */}
+                  {/* Baseline Model */
                   <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-gray-400">
                     <div className="mb-4">
                       <span className="bg-gray-100 text-gray-700 px-3 py-1 rounded text-sm font-medium">
@@ -392,8 +454,8 @@ export function Simulation() {
                     <p className="text-gray-600 text-sm mb-4">{comparisonResults.baseline_model.description}</p>
                     
                     {/* Architecture Details */}
-                    <div className="mb-4 p-3 bg-gray-50 rounded">
-                      <h4 className="font-medium text-gray-800 mb-2 text-sm">Architecture</h4>
+                    <div className="mb-4 p-3 bg-gray-100 rounded border border-gray-300">
+                      <h4 className="font-medium text-gray-700 mb-2 text-sm">Architecture Details</h4>
                       <div className="space-y-1 text-xs text-gray-600">
                         <div><span className="font-semibold">Detection:</span> {comparisonResults.baseline_model.architecture.detection}</div>
                         <div><span className="font-semibold">Scales:</span> {comparisonResults.baseline_model.architecture.scales}</div>
@@ -436,20 +498,66 @@ export function Simulation() {
                           <span className="font-bold">{comparisonResults.baseline_model.wbc_classification.avg_confidence}%</span>
                         </div>
                       </div>
+
+                      {/* WBC Differential Breakdown */}
+                      {comparisonResults.baseline_model.wbc_classification.differential && 
+                       Object.keys(comparisonResults.baseline_model.wbc_classification.differential).length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <div className="text-xs font-semibold text-gray-700 mb-2">WBC Differential:</div>
+                          {Object.entries(comparisonResults.baseline_model.wbc_classification.differential).map(([type, data]) => (
+                            <div key={type} className="flex justify-between text-xs mb-1">
+                              <span className="text-gray-600">{type}:</span>
+                              <span className={`font-medium ${
+                                data.status === 'high' ? 'text-red-600' : 
+                                data.status === 'low' ? 'text-amber-600' : 
+                                'text-green-600'
+                              }`}>
+                                {data.percentage?.toFixed(1)}% ({data.count})
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    {/* Limitations */}
-                    <div className="mt-4 pt-4 border-t">
-                      <h4 className="font-medium text-gray-800 mb-2 text-sm">Limitations</h4>
-                      <ul className="text-xs text-gray-600 space-y-1">
-                        {comparisonResults.baseline_model.limitations.map((lim, i) => (
-                          <li key={i}>• {lim}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    {/* RBC/Sickle Cell Analysis - Baseline */}
+                    {comparisonResults.baseline_model.rbc_analysis?.sickle_cell_analysis && (
+                      <div className="mb-4 p-3 bg-gray-100 rounded border border-gray-300">
+                        <h4 className="font-medium text-gray-700 mb-2 text-sm">RBC Analysis (Sickle Cell Detection)</h4>
+                        <div className="space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Total RBCs Analyzed:</span>
+                            <span className="font-bold">
+                              {comparisonResults.baseline_model.rbc_analysis.sickle_cell_analysis.total_rbc_analyzed}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Sickle Cells Detected:</span>
+                            <span className="font-bold text-gray-700">
+                              {comparisonResults.baseline_model.rbc_analysis.sickle_cell_analysis.sickle_cell_count}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-gray-600">Sickle Cell %:</span>
+                            <span className="font-bold">
+                              {comparisonResults.baseline_model.rbc_analysis.sickle_cell_analysis.percentage}%
+                            </span>
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-gray-300">
+                            <p className="text-gray-700 font-medium">
+                              {comparisonResults.baseline_model.rbc_analysis.sickle_cell_analysis.interpretation}
+                            </p>
+                            {comparisonResults.baseline_model.rbc_analysis.note && (
+                              <p className="text-gray-500 text-xs mt-1 italic">
+                                Note: {comparisonResults.baseline_model.rbc_analysis.note}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-
+                }</div>
                 {/* Performance Summary */}
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <h3 className="text-lg font-semibold mb-4">Performance Comparison</h3>

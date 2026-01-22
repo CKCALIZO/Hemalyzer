@@ -31,6 +31,13 @@ const Homepage = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     
+    // Progress tracking
+    const [analysisProgress, setAnalysisProgress] = useState({
+        stage: '',
+        percentage: 0,
+        message: ''
+    });
+    
     // Multi-image session state
     const [processedImages, setProcessedImages] = useState([]);
     const [aggregatedCounts, setAggregatedCounts] = useState({
@@ -341,6 +348,7 @@ const Homepage = () => {
 
         setLoading(true);
         setError(null);
+        setAnalysisProgress({ stage: 'upload', percentage: 10, message: 'Uploading image...' });
         setShowCurrentResults(true);
 
         try {
@@ -349,12 +357,18 @@ const Homepage = () => {
             formData.append('conf_threshold', '0.2');
             formData.append('iou_threshold', '0.2');
             
+            setAnalysisProgress({ stage: 'detection', percentage: 30, message: 'Detecting cells with YOLOv8...' });
+            
             const response = await fetch(`${API_URL}/api/analyze`, {
                 method: 'POST',
                 body: formData,
             });
+            
+            setAnalysisProgress({ stage: 'classification', percentage: 60, message: 'Classifying cells with ConvNeXt...' });
 
             const data = await response.json();
+            
+            setAnalysisProgress({ stage: 'analysis', percentage: 85, message: 'Analyzing results...' });
 
             if (data.success) {
                 // Extract counts from this image
@@ -362,11 +376,8 @@ const Homepage = () => {
                 const rbcCount = data.stage1_detection?.counts?.RBC || 0;
                 const plateletCount = data.stage1_detection?.counts?.Platelets || 0;
                 
-                // Extract sickle cell count if available
-                let sickleCount = 0;
-                if (data.disease_interpretation?.sickle_cell_analysis) {
-                    sickleCount = data.disease_interpretation.sickle_cell_analysis.sickle_cell_count || 0;
-                }
+                // Extract sickle cell count from summary (not disease_interpretation)
+                const sickleCount = data.summary?.sickle_cell_count || 0;
 
                 // Create processed image record
                 const processedImage = {
@@ -416,34 +427,49 @@ const Homepage = () => {
                     ...rbcCells
                 ];
 
-                // Update state
-                const newProcessedImages = [...processedImages, processedImage];
-                setProcessedImages(newProcessedImages);
-                setAggregatedCounts(newCounts);
-                setAggregatedClassifications(newClassifications);
-                setAggregatedRBCClassifications(newRBCClassifications);
-                setCurrentResults(data);
+                // Update state with error handling
+                try {
+                    const newProcessedImages = [...processedImages, processedImage];
+                    console.log('Setting processed images:', newProcessedImages.length);
+                    setProcessedImages(newProcessedImages);
+                    setAggregatedCounts(newCounts);
+                    setAggregatedClassifications(newClassifications);
+                    setAggregatedRBCClassifications(newRBCClassifications);
+                    setCurrentResults(data);
+                    console.log('State update complete, currentResults set');
 
-                // Check if threshold is met (10 images analyzed)
-                if (newProcessedImages.length >= TARGET_IMAGE_COUNT) {
-                    setThresholdMet(true);
-                    const finalCalc = calculateFinalResults(newClassifications, newProcessedImages, newCounts, newRBCClassifications);
-                    setFinalResults(finalCalc);
+                    // Check if threshold is met (10 images analyzed)
+                    if (newProcessedImages.length >= TARGET_IMAGE_COUNT) {
+                        setThresholdMet(true);
+                        const finalCalc = calculateFinalResults(newClassifications, newProcessedImages, newCounts, newRBCClassifications);
+                        setFinalResults(finalCalc);
+                    }
+                } catch (stateError) {
+                    console.error('Error updating state:', stateError);
+                    setError(`State update error: ${stateError.message}`);
                 }
 
-                // Clear file selection for next upload
+                // Clear file selection for next upload BUT keep preview of last analyzed image
                 setSelectedFile(null);
-                setPreviewUrl(null);
+                // DON'T clear previewUrl - keep showing the last analyzed image
+                // setPreviewUrl(null); // Removed - keep the image visible
                 
-                // Reset file input
+                // Reset file input for next upload
                 const fileInput = document.getElementById('pbs-upload');
                 if (fileInput) fileInput.value = '';
+                
+                setAnalysisProgress({ stage: 'complete', percentage: 100, message: 'Analysis complete!' });
+                setTimeout(() => {
+                    setAnalysisProgress({ stage: '', percentage: 0, message: '' });
+                }, 2000);
 
             } else {
                 setError(data.error || 'Analysis failed');
+                setAnalysisProgress({ stage: '', percentage: 0, message: '' });
             }
         } catch (err) {
             setError(`Failed to connect to backend: ${err.message}`);
+            setAnalysisProgress({ stage: '', percentage: 0, message: '' });
         } finally {
             setLoading(false);
         }
@@ -588,6 +614,84 @@ const Homepage = () => {
                                             disabled={loading || thresholdMet}
                                         />
                                     </div>
+
+                                    {/* Analysis Progress Bar - Shows during image processing AND for 2s after completion */}
+                                    {analysisProgress.stage && (
+                                        <div className={`mb-4 p-4 rounded-lg border ${
+                                            analysisProgress.stage === 'complete' 
+                                                ? 'bg-emerald-50 border-emerald-300' 
+                                                : 'bg-rose-50 border-rose-300'
+                                        }`}>
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className={`text-sm font-medium ${
+                                                    analysisProgress.stage === 'complete' 
+                                                        ? 'text-emerald-800' 
+                                                        : 'text-rose-800'
+                                                }`}>
+                                                    {analysisProgress.message}
+                                                </span>
+                                                <span className={`text-sm font-semibold ${
+                                                    analysisProgress.stage === 'complete' 
+                                                        ? 'text-emerald-600' 
+                                                        : 'text-rose-600'
+                                                }`}>
+                                                    {analysisProgress.percentage}%
+                                                </span>
+                                            </div>
+                                            <div className={`w-full h-2.5 rounded-full overflow-hidden ${
+                                                analysisProgress.stage === 'complete' 
+                                                    ? 'bg-emerald-200' 
+                                                    : 'bg-rose-200'
+                                            }`}>
+                                                <div 
+                                                    className={`h-full transition-all duration-300 ease-out ${
+                                                        analysisProgress.stage === 'complete' 
+                                                            ? 'bg-emerald-500' 
+                                                            : 'bg-rose-500'
+                                                    }`}
+                                                    style={{ width: `${analysisProgress.percentage}%` }}
+                                                />
+                                            </div>
+                                            <div className={`mt-3 flex items-center justify-between text-xs ${
+                                                analysisProgress.stage === 'complete' 
+                                                    ? 'text-emerald-700' 
+                                                    : 'text-rose-700'
+                                            }`}>
+                                                <div className={`flex items-center gap-1 ${
+                                                    analysisProgress.percentage >= 10 ? 'font-semibold' : 'opacity-50'
+                                                }`}>
+                                                    <span className={analysisProgress.percentage >= 10 ? 'text-emerald-500' : ''}>
+                                                        {analysisProgress.percentage >= 10 ? '✓' : '○'}
+                                                    </span>
+                                                    <span>Upload</span>
+                                                </div>
+                                                <div className={`flex items-center gap-1 ${
+                                                    analysisProgress.percentage >= 30 ? 'font-semibold' : 'opacity-50'
+                                                }`}>
+                                                    <span className={analysisProgress.percentage >= 30 ? 'text-emerald-500' : ''}>
+                                                        {analysisProgress.percentage >= 30 ? '✓' : '○'}
+                                                    </span>
+                                                    <span>Detection</span>
+                                                </div>
+                                                <div className={`flex items-center gap-1 ${
+                                                    analysisProgress.percentage >= 60 ? 'font-semibold' : 'opacity-50'
+                                                }`}>
+                                                    <span className={analysisProgress.percentage >= 60 ? 'text-emerald-500' : ''}>
+                                                        {analysisProgress.percentage >= 60 ? '✓' : '○'}
+                                                    </span>
+                                                    <span>Classification</span>
+                                                </div>
+                                                <div className={`flex items-center gap-1 ${
+                                                    analysisProgress.percentage >= 85 ? 'font-semibold' : 'opacity-50'
+                                                }`}>
+                                                    <span className={analysisProgress.percentage >= 85 ? 'text-emerald-500' : ''}>
+                                                        {analysisProgress.percentage >= 85 ? '✓' : '○'}
+                                                    </span>
+                                                    <span>Analysis</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Analyze Button */}
                                     <button 

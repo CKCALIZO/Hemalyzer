@@ -20,14 +20,8 @@ export const CellClassifications = () => {
         }
     }, [location.state]);
 
-    // Filter cells based on selected filter
-    const getFilteredCells = () => {
-        if (filter === 'all') return croppedCells;
-        if (filter === 'wbc') return croppedCells.filter(c => c.cell_type === 'WBC');
-        if (filter === 'rbc') return croppedCells.filter(c => c.cell_type === 'RBC');
-        if (filter === 'abnormal') return croppedCells.filter(c => c.is_abnormal);
-        return croppedCells;
-    };
+    // No filtering needed - backend only sends abnormal cells
+    const getFilteredCells = () => croppedCells;
 
     // Get color class based on classification - medical professional theme
     const getClassificationColor = (classification, cellType) => {
@@ -47,8 +41,6 @@ export const CellClassifications = () => {
         if (classification === 'Normal') return '✓';
         return '!';
     };
-
-    const filteredCells = getFilteredCells();
 
     return (
         <div className="flex flex-col min-h-screen bg-red-50">
@@ -77,76 +69,38 @@ export const CellClassifications = () => {
                         </button>
                     </div>
 
-                    {/* Summary Cards */}
-                    {summary && (
-                        <div className="grid grid-cols-4 gap-4 mb-6">
-                            <div className="bg-white p-4 rounded-lg border border-red-200">
-                                <p className="text-sm text-red-600">Total Classified</p>
-                                <p className="text-2xl font-bold text-red-800">{croppedCells.length}</p>
-                            </div>
-                            <div className="bg-white p-4 rounded-lg border border-red-200">
-                                <p className="text-sm text-red-600">WBC Classifications</p>
-                                <p className="text-2xl font-bold text-red-800">
-                                    {croppedCells.filter(c => c.cell_type === 'WBC').length}
-                                </p>
-                            </div>
-                            <div className="bg-white p-4 rounded-lg border border-red-200">
-                                <p className="text-sm text-red-600">Sickle Cells</p>
-                                <p className="text-2xl font-bold text-red-800">
-                                    {summary.sickle_cell_count || 0}
-                                </p>
-                            </div>
-                            <div className="bg-white p-4 rounded-lg border border-red-200">
-                                <p className="text-sm text-red-600">Abnormal WBCs</p>
-                                <p className="text-2xl font-bold text-red-800">
-                                    {summary.abnormal_wbc_count || 0}
+                    {/* Summary removed - stats now shown in Quick Stats section below */}
+
+                    {/* Info Banner - Only Abnormal Cells Displayed */}
+                    <div className="mb-6 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg">
+                        <div className="flex items-start gap-3">
+                            <svg className="w-6 h-6 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                            </svg>
+                            <div>
+                                <h3 className="font-semibold text-amber-800 mb-1">Abnormal Cells Only</h3>
+                                <p className="text-sm text-amber-700">
+                                    This page displays only abnormal/diseased cells detected by the ConvNeXt model. Normal WBCs, RBCs, and Platelets are automatically filtered out. 
+                                    Showing: <span className="font-semibold">Abnormal WBCs</span> and <span className="font-semibold">Sickle Cells</span> (≥80% confidence).
                                 </p>
                             </div>
                         </div>
-                    )}
+                    </div>
 
-                    {/* Filter Buttons */}
-                    <div className="flex gap-2 mb-6">
-                        <button
-                            onClick={() => setFilter('all')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                                filter === 'all' 
-                                    ? 'bg-red-700 text-white' 
-                                    : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
-                            }`}
-                        >
-                            All Cells ({croppedCells.length})
-                        </button>
-                        <button
-                            onClick={() => setFilter('wbc')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                                filter === 'wbc' 
-                                    ? 'bg-red-600 text-white' 
-                                    : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
-                            }`}
-                        >
-                            WBCs ({croppedCells.filter(c => c.cell_type === 'WBC').length})
-                        </button>
-                        <button
-                            onClick={() => setFilter('rbc')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                                filter === 'rbc' 
-                                    ? 'bg-red-800 text-white' 
-                                    : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
-                            }`}
-                        >
-                            Sickle Cells ({croppedCells.filter(c => c.cell_type === 'RBC').length})
-                        </button>
-                        <button
-                            onClick={() => setFilter('abnormal')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                                filter === 'abnormal' 
-                                    ? 'bg-red-900 text-white' 
-                                    : 'bg-white text-red-700 border border-red-200 hover:bg-red-50'
-                            }`}
-                        >
-                            Abnormal Only ({croppedCells.filter(c => c.is_abnormal).length})
-                        </button>
+                    {/* Quick Stats */}
+                    <div className="mb-6 grid grid-cols-3 gap-4">
+                        <div className="bg-white p-4 rounded-lg border-l-4 border-rose-500">
+                            <p className="text-sm text-rose-600 font-medium">Total Abnormal</p>
+                            <p className="text-2xl font-bold text-rose-800">{croppedCells.length}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border-l-4 border-blue-500">
+                            <p className="text-sm text-blue-600 font-medium">Abnormal WBCs</p>
+                            <p className="text-2xl font-bold text-blue-800">{croppedCells.filter(c => c.cell_type === 'WBC').length}</p>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border-l-4 border-red-600">
+                            <p className="text-sm text-red-600 font-medium">Sickle Cells</p>
+                            <p className="text-2xl font-bold text-red-800">{croppedCells.filter(c => c.cell_type === 'RBC').length}</p>
+                        </div>
                     </div>
 
                     {/* No Data Message */}
@@ -165,10 +119,10 @@ export const CellClassifications = () => {
                         </div>
                     )}
 
-                    {/* Cell Grid */}
-                    {filteredCells.length > 0 && (
+                    {/* Cell Grid - All Abnormal Cells */}
+                    {croppedCells.length > 0 && (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                            {filteredCells.map((cell, idx) => (
+                            {croppedCells.map((cell, idx) => (
                                 <div 
                                     key={cell.id || idx}
                                     className={`rounded-lg border-2 overflow-hidden shadow-sm hover:shadow-md transition-shadow ${
