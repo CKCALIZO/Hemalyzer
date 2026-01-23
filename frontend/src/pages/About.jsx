@@ -255,29 +255,24 @@ export const About = () => {
                                     </thead>
                                     <tbody>
                                         <tr className="hover:bg-slate-50 transition-colors">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">0% - 3%</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Normal blood, no sickling observed</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Normal</td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">&lt; 3%</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Normal blood, no clinically significant sickling observed. May include smudge cells or artifacts.</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Normal / Smudge Cells</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors bg-slate-50/50">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">0.4% - 0.6%</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Minimal sickling, often due to external stress, dehydration, or lab artifact</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">May be normal or carrier</td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">3% - 10%</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Mild sickling present; individual typically asymptomatic or has mild symptoms under stress.</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Mild Sickling - Heterozygous HbAS condition (Sickle Cell Trait)</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">0.7% - 1%</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Moderate number of sickled cells</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Sickle Cell Trait (heterozygous, HbAS) — usually mild or asymptomatic</td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">10% - 30%</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Moderate proportion of sickled cells; may correlate with symptoms, stress, or hypoxic conditions.</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Moderate Sickling (possible HbSS)</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors bg-slate-50/50">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">1.1% - 1.5%</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">High proportion of sickled cells</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Sickle Cell Disease — symptomatic, chronic anemia</td>
-                                        </tr>
-                                        <tr className="hover:bg-slate-50 transition-colors">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">&gt; 1.6%</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Almost all RBCs are sickled</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Severe sickle cell anemia (advanced HbSS)</td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">&gt; 30%</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Severe sickling with majority of RBCs showing sickle morphology; indicative of homozygous sickle cell disease.</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Severe Sickling - suggestive of Sickle Cell Disease (HbSS)</td>
                                         </tr>
                                     </tbody>
                                 </table>

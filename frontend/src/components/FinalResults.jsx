@@ -8,6 +8,17 @@ import autoTable from "jspdf-autotable";
  * Displays final diagnosis when 10 images threshold is met
  * Includes printable PDF report functionality
  * Includes scrollable WBC examination section for manual review
+ * 
+ * Cell Count Formulas:
+ * - RBC count: (Avg RBC in 10 images) x 200,000
+ * - WBC count: (Overall WBC count / 10) x 2,000
+ * 
+ * WBC Differential - 5 Main Categories with Normal Ranges:
+ * - Neutrophil: 45% - 65%
+ * - Lymphocyte: 20% - 35%
+ * - Monocyte: 2% - 6%
+ * - Eosinophil: 2% - 4%
+ * - Basophil: 0% - 1%
  */
 export const FinalResults = ({ 
     aggregatedResults, 
@@ -17,6 +28,7 @@ export const FinalResults = ({
     const navigate = useNavigate();
     const [showWBCExamination, setShowWBCExamination] = useState(false);
     const [showRBCExamination, setShowRBCExamination] = useState(false);
+    const [showAbnormalWBCs, setShowAbnormalWBCs] = useState(false);
     const [wbcFilter, setWbcFilter] = useState('all');
     const [rbcFilter, setRbcFilter] = useState('all');
     
@@ -28,7 +40,11 @@ export const FinalResults = ({
         totalWBC, 
         totalRBC, 
         totalPlatelets,
+        estimatedWBCCount,
+        estimatedRBCCount,
+        avgRBCPerField,
         wbcClassifications,
+        abnormalWBCs,
         diseaseFindings,
         wbcDifferential,
         sickleCell,
@@ -214,26 +230,26 @@ export const FinalResults = ({
 
         autoTable(doc, {
             startY: yPos,
-            head: [['Cell Type', 'Count', 'Status']],
+            head: [['Cell Type', 'Detected', 'Estimated Count', 'Formula']],
             body: [
-                ['White Blood Cells (WBC)', totalWBC.toString(), totalWBC >= 100 ? 'Threshold Met' : 'Below Threshold'],
-                ['Red Blood Cells (RBC)', totalRBC.toString(), '-'],
-                ['Platelets', totalPlatelets.toString(), '-']
+                ['White Blood Cells (WBC)', totalWBC.toString(), `${estimatedWBCCount?.toLocaleString() || 0}/µL`, `(${totalWBC}/10) × 2,000`],
+                ['Red Blood Cells (RBC)', totalRBC.toString(), `${estimatedRBCCount?.toLocaleString() || 0}/µL`, `(${avgRBCPerField?.toFixed(1) || 0} avg) × 200,000`],
+                ['Platelets', totalPlatelets.toString(), '-', '-']
             ],
             theme: 'striped',
             headStyles: { fillColor: [30, 58, 95], textColor: 255 },
-            styles: { fontSize: 10, cellPadding: 4 },
+            styles: { fontSize: 9, cellPadding: 4 },
             margin: { left: margin, right: margin }
         });
 
         yPos = doc.lastAutoTable.finalY + 15;
 
-        // WBC Differential
+        // WBC Differential - 5 Main Categories
         if (wbcDifferential && Object.keys(wbcDifferential).length > 0) {
             doc.setTextColor(30, 58, 95);
             doc.setFontSize(12);
             doc.setFont("helvetica", "bold");
-            doc.text("WBC Differential Count", margin, yPos);
+            doc.text("WBC Differential (5 Main Categories)", margin, yPos);
             yPos += 8;
 
             const diffData = Object.entries(wbcDifferential).map(([name, data]) => [
@@ -241,7 +257,7 @@ export const FinalResults = ({
                 `${data.count}`,
                 `${data.percentage.toFixed(1)}%`,
                 data.normalRange || '-',
-                data.status || '-'
+                data.status === 'normal' ? 'Normal' : data.status === 'high' ? 'HIGH' : 'LOW'
             ]);
 
             autoTable(doc, {
@@ -251,7 +267,20 @@ export const FinalResults = ({
                 theme: 'striped',
                 headStyles: { fillColor: [30, 58, 95], textColor: 255 },
                 styles: { fontSize: 9, cellPadding: 3 },
-                margin: { left: margin, right: margin }
+                margin: { left: margin, right: margin },
+                didDrawCell: (data) => {
+                    // Color code status column
+                    if (data.column.index === 4 && data.section === 'body') {
+                        const status = data.cell.text[0];
+                        if (status === 'HIGH') {
+                            doc.setFillColor(254, 226, 226);
+                        } else if (status === 'LOW') {
+                            doc.setFillColor(219, 234, 254);
+                        } else {
+                            doc.setFillColor(220, 252, 231);
+                        }
+                    }
+                }
             });
 
             yPos = doc.lastAutoTable.finalY + 15;
@@ -387,18 +416,48 @@ export const FinalResults = ({
             {/* Cell Counts Summary */}
             <div className="px-6 py-4 border-b border-slate-200">
                 <h3 className="text-lg font-semibold text-slate-700 mb-3">Cell Count Summary</h3>
-                <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-slate-50 rounded-lg p-4 text-center">
-                        <p className="text-3xl font-bold text-slate-800">{totalWBC}</p>
-                        <p className="text-sm text-slate-600">WBC</p>
+                
+                {/* Raw Detection Counts */}
+                <div className="mb-4">
+                    <p className="text-sm text-slate-500 mb-2">Cells Detected (across 10 images)</p>
+                    <div className="grid grid-cols-3 gap-4">
+                        <div className="bg-slate-50 rounded-lg p-4 text-center">
+                            <p className="text-2xl font-bold text-slate-800">{totalWBC}</p>
+                            <p className="text-sm text-slate-600">WBC Detected</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-4 text-center">
+                            <p className="text-2xl font-bold text-red-600">{totalRBC}</p>
+                            <p className="text-sm text-slate-600">RBC Detected</p>
+                        </div>
+                        <div className="bg-slate-50 rounded-lg p-4 text-center">
+                            <p className="text-2xl font-bold text-amber-600">{totalPlatelets}</p>
+                            <p className="text-sm text-slate-600">Platelets</p>
+                        </div>
                     </div>
-                    <div className="bg-slate-50 rounded-lg p-4 text-center">
-                        <p className="text-3xl font-bold text-red-600">{totalRBC}</p>
-                        <p className="text-sm text-slate-600">RBC</p>
-                    </div>
-                    <div className="bg-slate-50 rounded-lg p-4 text-center">
-                        <p className="text-3xl font-bold text-amber-600">{totalPlatelets}</p>
-                        <p className="text-sm text-slate-600">Platelets</p>
+                </div>
+
+                {/* Estimated Cell Counts */}
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                    <p className="text-sm font-medium text-blue-800 mb-3">Estimated Cell Counts (per µL)</p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-white rounded-lg p-3 border border-blue-100">
+                            <p className="text-2xl font-bold text-blue-700">
+                                {estimatedWBCCount?.toLocaleString() || 0}
+                            </p>
+                            <p className="text-sm text-blue-600">WBC/µL</p>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Formula: ({totalWBC} / 10) × 2,000
+                            </p>
+                        </div>
+                        <div className="bg-white rounded-lg p-3 border border-blue-100">
+                            <p className="text-2xl font-bold text-red-600">
+                                {estimatedRBCCount?.toLocaleString() || 0}
+                            </p>
+                            <p className="text-sm text-red-500">RBC/µL</p>
+                            <p className="text-xs text-slate-500 mt-1">
+                                Formula: ({avgRBCPerField?.toFixed(1) || 0} avg) × 200,000
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -433,10 +492,13 @@ export const FinalResults = ({
                 </div>
             )}
 
-            {/* WBC Differential */}
+            {/* WBC Differential - 5 Main Categories */}
             {wbcDifferential && Object.keys(wbcDifferential).length > 0 && (
                 <div className="px-6 py-4 border-b border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-3">WBC Differential</h3>
+                    <h3 className="text-lg font-semibold text-slate-700 mb-2">WBC Differential (5 Main Categories)</h3>
+                    <p className="text-xs text-slate-500 mb-3">
+                        Cells are categorized by type regardless of condition (e.g., "Basophil: CML" counts as Basophil)
+                    </p>
                     <div className="space-y-3">
                         {Object.entries(wbcDifferential).map(([name, data]) => (
                             <div key={name} className="flex items-center gap-4">
@@ -445,18 +507,19 @@ export const FinalResults = ({
                                     <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
                                         <div 
                                             className={`h-full transition-all duration-500 ${
-                                                data.status === 'high' ? 'bg-amber-500' :
+                                                data.status === 'high' ? 'bg-red-500' :
                                                 data.status === 'low' ? 'bg-blue-500' :
-                                                'bg-slate-600'
+                                                'bg-green-500'
                                             }`}
                                             style={{ width: `${Math.min(100, data.percentage)}%` }}
                                         />
                                     </div>
                                 </div>
+                                <div className="w-12 text-right font-mono text-sm font-bold">{data.count}</div>
                                 <div className="w-16 text-right font-mono text-sm">{data.percentage.toFixed(1)}%</div>
                                 <div className="w-20 text-right text-xs text-slate-500">{data.normalRange}</div>
-                                <div className={`w-16 text-center text-xs px-2 py-1 rounded ${
-                                    data.status === 'high' ? 'bg-amber-100 text-amber-700' :
+                                <div className={`w-16 text-center text-xs px-2 py-1 rounded font-medium ${
+                                    data.status === 'high' ? 'bg-red-100 text-red-700' :
                                     data.status === 'low' ? 'bg-blue-100 text-blue-700' :
                                     'bg-green-100 text-green-700'
                                 }`}>
@@ -464,6 +527,17 @@ export const FinalResults = ({
                                 </div>
                             </div>
                         ))}
+                    </div>
+                    {/* Normal Value Reference */}
+                    <div className="mt-4 p-3 bg-slate-50 rounded-lg">
+                        <p className="text-xs font-medium text-slate-600 mb-2">Normal Value Thresholds:</p>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Neutrophil: 45-65%</span>
+                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Lymphocyte: 20-35%</span>
+                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Monocyte: 2-6%</span>
+                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Eosinophil: 2-4%</span>
+                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Basophil: 0-1%</span>
+                        </div>
                     </div>
                 </div>
             )}
@@ -508,8 +582,9 @@ export const FinalResults = ({
                 <div className="px-6 py-4 border-b border-slate-200">
                     <h3 className="text-lg font-semibold text-slate-700 mb-3">Sickle Cell Analysis</h3>
                     <div className={`p-4 rounded-lg border-l-4 ${
-                        sickleCell.percentage > 1.5 ? 'bg-red-50 border-red-500' :
-                        sickleCell.percentage > 0.6 ? 'bg-amber-50 border-amber-500' :
+                        sickleCell.percentage > 30 ? 'bg-red-50 border-red-500' :
+                        sickleCell.percentage >= 10 ? 'bg-amber-50 border-amber-500' :
+                        sickleCell.percentage >= 3 ? 'bg-yellow-50 border-yellow-500' :
                         'bg-green-50 border-green-500'
                     }`}>
                         <div className="flex justify-between items-center">
@@ -518,6 +593,12 @@ export const FinalResults = ({
                                 <p className="text-sm text-slate-600">
                                     {sickleCell.count} sickle cells / {sickleCell.totalRBC} RBCs analyzed
                                 </p>
+                                <p className={`text-xs mt-1 px-2 py-1 rounded inline-block ${
+                                    sickleCell.severity === 'SEVERE' ? 'bg-red-200 text-red-800' :
+                                    sickleCell.severity === 'MODERATE' ? 'bg-amber-200 text-amber-800' :
+                                    sickleCell.severity === 'MILD' ? 'bg-yellow-200 text-yellow-800' :
+                                    'bg-green-200 text-green-800'
+                                }`}>{sickleCell.severity || 'NORMAL'}</p>
                             </div>
                             <p className="text-2xl font-bold">{sickleCell.percentage?.toFixed(2)}%</p>
                         </div>
@@ -545,6 +626,18 @@ export const FinalResults = ({
                     </svg>
                     Save Report
                 </button>
+                {/* Abnormal WBCs Button - Shows WBCs with disease markers (CML, CLL, ALL, AML) */}
+                {abnormalWBCs && abnormalWBCs.length > 0 && (
+                    <button
+                        onClick={() => setShowAbnormalWBCs(!showAbnormalWBCs)}
+                        className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-semibold"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        {showAbnormalWBCs ? 'Hide' : 'Show'} Abnormal WBCs ({abnormalWBCs.length})
+                    </button>
+                )}
                 <button
                     onClick={() => setShowWBCExamination(!showWBCExamination)}
                     className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-red-800 text-white rounded-lg hover:bg-red-900 transition-colors font-semibold"
@@ -708,6 +801,75 @@ export const FinalResults = ({
                             <span className="px-2 py-1 bg-red-100 text-red-800 rounded">CML: Granulocytes (60% or more = CML indicators)</span>
                             <span className="px-2 py-1 bg-red-100 text-red-800 rounded">CLL: Lymphocytes (40% or more = CLL indicators)</span>
                             <span className="px-2 py-1 bg-green-100 text-green-800 rounded">Normal: Healthy WBC types</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Abnormal WBCs Examination Section - WBCs with disease markers not in 5 main categories */}
+            {showAbnormalWBCs && abnormalWBCs && abnormalWBCs.length > 0 && (
+                <div className="border-t border-amber-200">
+                    <div className="px-6 py-4 bg-amber-50">
+                        <div className="flex items-center justify-between mb-3">
+                            <h3 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                                Abnormal WBCs for Review
+                            </h3>
+                            <p className="text-sm text-amber-700">
+                                {abnormalWBCs.length} abnormal cells detected (non-Normal classifications)
+                            </p>
+                        </div>
+                        <p className="text-xs text-amber-700 mb-3">
+                            These WBCs have been classified with disease markers (CML, CLL, ALL, AML) and require further review.
+                        </p>
+                    </div>
+                    
+                    {/* Abnormal WBCs Grid */}
+                    <div className="px-6 py-4 max-h-96 overflow-y-auto bg-white">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                            {abnormalWBCs.map((wbc, idx) => {
+                                const catInfo = getClassificationCategory(wbc.classification);
+                                return (
+                                    <div 
+                                        key={wbc.wbc_id || `abnormal-${idx}`}
+                                        className={`rounded-lg border-2 overflow-hidden ${catInfo.color}`}
+                                    >
+                                        {/* Cell Image */}
+                                        {wbc.cropped_image && (
+                                            <div className="aspect-square bg-slate-100">
+                                                <img
+                                                    src={`data:image/png;base64,${wbc.cropped_image}`}
+                                                    alt={wbc.classification}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                        )}
+                                        
+                                        {/* Classification Label */}
+                                        <div className="p-2 text-center">
+                                            <p className="text-xs font-bold truncate" title={wbc.classification}>
+                                                {wbc.classification}
+                                            </p>
+                                            <p className="text-xs opacity-75">
+                                                {(wbc.confidence * 100).toFixed(0)}% conf
+                                            </p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                    
+                    {/* Abnormal WBCs Legend */}
+                    <div className="px-6 py-3 bg-amber-50 border-t border-amber-200">
+                        <p className="text-xs text-amber-700 font-medium mb-2">Disease Markers Detected:</p>
+                        <div className="flex flex-wrap gap-2 text-xs">
+                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">AML: Acute Myeloid Leukemia</span>
+                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">ALL: Acute Lymphoblastic Leukemia</span>
+                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded">CML: Chronic Myeloid Leukemia</span>
+                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded">CLL: Chronic Lymphocytic Leukemia</span>
                         </div>
                     </div>
                 </div>

@@ -13,13 +13,21 @@ const API_URL = 'http://localhost:5000';
 const TARGET_IMAGE_COUNT = 10;
 
 // WBC Normal Differential Ranges (for final calculation)
+// Based on standard hematology reference values
 const WBC_NORMAL_RANGES = {
-    'Neutrophil': { min: 50, max: 70 },
-    'Lymphocyte': { min: 18, max: 42 },
-    'Monocyte': { min: 2, max: 11 },
-    'Eosinophil': { min: 1, max: 3 },
-    'Basophil': { min: 0, max: 2 }
+    'Neutrophil': { min: 45, max: 65 },
+    'Lymphocyte': { min: 20, max: 35 },
+    'Monocyte': { min: 2, max: 6 },
+    'Eosinophil': { min: 2, max: 4 },
+    'Basophil': { min: 0, max: 1 }
 };
+
+// Cell count calculation constants
+// RBC count: Avg RBC in 10 images / 10 x 200,000
+// WBC count: Overall WBC count / 10 x 2000
+const RBC_MULTIPLIER = 200000;
+const WBC_MULTIPLIER = 2000;
+const NUM_FIELDS = 10;
 
 const Homepage = () => {
     const navigate = useNavigate();
@@ -87,29 +95,74 @@ const Homepage = () => {
     // Calculate aggregated results when threshold is met
     const calculateFinalResults = useCallback((allClassifications, allProcessedImages, counts, allRBCClassifications = []) => {
         // Count WBC types from ConvNeXt classifications
+        // NEW MODEL FORMAT: "CellType: Condition" (e.g., "Basophil: Normal", "Basophil: CML")
         const wbcTypeCounts = {};
         
-        // Normal WBC types (for differential)
-        const normalWBCTypes = ['Neutrophil', 'Lymphocyte', 'Monocyte', 'Eosinophil', 'Basophil'];
+        // 5 main WBC categories (for differential) - count regardless of condition
+        const mainWBCCategories = ['Neutrophil', 'Lymphocyte', 'Monocyte', 'Eosinophil', 'Basophil'];
         
-        // Disease-indicating types from ConvNeXt
-        // AML/ALL indicators: Acute Myeloid Leukemia, Acute Lymphoblastic Leukemia, Myeloblast
-        // CML indicators: Granulocytes (Basophil, Eosinophil, Neutrophil) + Chronic Myeloid Leukemia
-        // CLL indicators: Lymphocyte + Chronic Lymphocytic Leukemia
+        // Initialize differential counts for 5 main categories
+        const differentialCounts = {
+            'Neutrophil': 0,
+            'Lymphocyte': 0,
+            'Monocyte': 0,
+            'Eosinophil': 0,
+            'Basophil': 0
+        };
+        
+        // Disease counts
+        let cmlCount = 0;
+        let cllCount = 0;
+        let allCount = 0;
+        let amlCount = 0;
+        
+        // Track abnormal WBCs (for Abnormal WBCs button)
+        const abnormalWBCs = [];
         
         allClassifications.forEach(cls => {
-            const type = cls.classification;
-            wbcTypeCounts[type] = (wbcTypeCounts[type] || 0) + 1;
+            const classification = cls.classification || '';
+            wbcTypeCounts[classification] = (wbcTypeCounts[classification] || 0) + 1;
+            
+            // Extract cell type from new format "CellType: Condition"
+            const cellTypePart = classification.split(':')[0]?.trim() || '';
+            const conditionPart = classification.split(':')[1]?.trim()?.toLowerCase() || '';
+            
+            // Count for 5 main WBC differential categories
+            // Map cell types to the 5 main categories regardless of condition
+            mainWBCCategories.forEach(category => {
+                if (cellTypePart.toLowerCase().includes(category.toLowerCase())) {
+                    differentialCounts[category]++;
+                }
+            });
+            
+            // Track abnormal WBCs (condition is not "normal")
+            if (conditionPart && conditionPart !== 'normal') {
+                abnormalWBCs.push(cls);
+            }
+            
+            // Count disease markers
+            if (conditionPart === 'cml') cmlCount++;
+            if (conditionPart === 'cll') cllCount++;
+            if (conditionPart === 'all') allCount++;
+            if (conditionPart === 'aml') amlCount++;
         });
+        
+        // Calculate estimated cell counts using standard formulas
+        // RBC count: (Avg RBC in 10 images) x 200,000
+        // WBC count: (Overall WBC count / 10) x 2000
+        const avgRBCPerField = counts.rbc / NUM_FIELDS;
+        const estimatedRBCCount = Math.round(avgRBCPerField * RBC_MULTIPLIER);
+        const estimatedWBCCount = Math.round((counts.wbc / NUM_FIELDS) * WBC_MULTIPLIER);
 
-        // Calculate differential percentages
+        // Calculate differential percentages based on 5 main WBC categories
         const totalWBC = counts.wbc;
         const wbcDifferential = {};
         
-        normalWBCTypes.forEach(type => {
-            const count = wbcTypeCounts[type] || 0;
+        // Calculate percentage for each of the 5 main WBC categories
+        mainWBCCategories.forEach(category => {
+            const count = differentialCounts[category];
             const percentage = totalWBC > 0 ? (count / totalWBC) * 100 : 0;
-            const normalRange = WBC_NORMAL_RANGES[type];
+            const normalRange = WBC_NORMAL_RANGES[category];
             let status = 'normal';
             
             if (normalRange) {
@@ -117,7 +170,7 @@ const Homepage = () => {
                 else if (percentage < normalRange.min) status = 'low';
             }
             
-            wbcDifferential[type] = {
+            wbcDifferential[category] = {
                 count,
                 percentage,
                 normalRange: normalRange ? `${normalRange.min}-${normalRange.max}%` : '-',
@@ -126,30 +179,20 @@ const Homepage = () => {
         });
 
         // Calculate disease percentages based on About page thresholds
+        // Using disease counts extracted from "CellType: Condition" format
         
         // === AML/ALL ANALYSIS (Blast Cells) ===
-        // Blast cells = Acute Myeloid Leukemia + Acute Lymphoblastic Leukemia + Myeloblast
-        const amlCount = wbcTypeCounts['Acute Myeloid Leukemia'] || 0;
-        const allCount = wbcTypeCounts['Acute Lymphoblastic Leukemia'] || 0;
-        const myeloblastCount = wbcTypeCounts['Myeloblast'] || 0;
-        const blastCount = amlCount + allCount + myeloblastCount;
+        // Count cells with ": all" or ": aml" in their classification
+        const blastCount = amlCount + allCount;
         const blastPercentage = totalWBC > 0 ? (blastCount / totalWBC) * 100 : 0;
         
-        // === CML ANALYSIS (Granulocytes) ===
-        // Granulocytes = Basophil + Eosinophil + Neutrophil + Myeloblast + Chronic Myeloid Leukemia
-        const cmlDirectCount = wbcTypeCounts['Chronic Myeloid Leukemia'] || 0;
-        const granulocyteCount = (wbcTypeCounts['Neutrophil'] || 0) + 
-                                (wbcTypeCounts['Eosinophil'] || 0) + 
-                                (wbcTypeCounts['Basophil'] || 0) +
-                                myeloblastCount +
-                                cmlDirectCount;
-        const granulocytePercentage = totalWBC > 0 ? (granulocyteCount / totalWBC) * 100 : 0;
+        // === CML ANALYSIS ===
+        // Count cells classified as CML (e.g., "Basophil: CML", "Neutrophils: CML")
+        const cmlPercentage = totalWBC > 0 ? (cmlCount / totalWBC) * 100 : 0;
         
-        // === CLL ANALYSIS (Lymphocytes) ===
-        // Lymphocytes = Lymphocyte + Chronic Lymphocytic Leukemia
-        const cllDirectCount = wbcTypeCounts['Chronic Lymphocytic Leukemia'] || 0;
-        const lymphocyteCount = (wbcTypeCounts['Lymphocyte'] || 0) + cllDirectCount;
-        const lymphocytePercentage = totalWBC > 0 ? (lymphocyteCount / totalWBC) * 100 : 0;
+        // === CLL ANALYSIS ===
+        // Count cells classified as CLL (e.g., "Lymphocyte: CLL")
+        const cllPercentage = totalWBC > 0 ? (cllCount / totalWBC) * 100 : 0;
 
         // Calculate disease findings based on About page thresholds
         const diseaseFindings = [];
@@ -163,14 +206,14 @@ const Homepage = () => {
             
             if (blastPercentage >= 20) {
                 // Determine if it's more likely AML or ALL based on cell types
-                if (amlCount + myeloblastCount > allCount) {
-                    interpretation = 'Diagnostic level for Acute Myeloid Leukemia (AML) - Higher myeloblast percentage';
+                if (amlCount > allCount) {
+                    interpretation = 'Diagnostic level for Acute Myeloid Leukemia (AML)';
                     condition = 'Acute Myeloid Leukemia (AML)';
-                } else if (allCount > amlCount + myeloblastCount) {
-                    interpretation = 'Diagnostic level for Acute Lymphoblastic Leukemia (ALL) - Higher lymphoblast percentage';
+                } else if (allCount > amlCount) {
+                    interpretation = 'Diagnostic level for Acute Lymphoblastic Leukemia (ALL)';
                     condition = 'Acute Lymphoblastic Leukemia (ALL)';
                 } else {
-                    interpretation = 'Diagnostic level for Acute Leukemia (>= 20% blasts) - Mixed blast population';
+                    interpretation = 'Diagnostic level for Acute Leukemia (>= 20% blasts)';
                     condition = 'Acute Leukemia (AML/ALL)';
                 }
                 severity = 'HIGH';
@@ -197,94 +240,89 @@ const Homepage = () => {
                 breakdown: {
                     amlCount,
                     allCount,
-                    myeloblastCount,
                     total: blastCount
                 }
             });
         }
 
-        // CML Analysis (based on granulocyte percentage thresholds from About page)
-        // < 60% = Normal, 60-75% = Reactive, 76-89% = Early CML, 90-95% = Chronic Phase, > 95% = Accelerated
-        if (granulocytePercentage >= 60) {
+        // CML Analysis - based on CML-classified cells percentage
+        // Only show if there are CML-classified cells
+        if (cmlCount > 0) {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
             
-            if (granulocytePercentage > 95) {
-                interpretation = 'Accelerated Phase CML - extreme granulocytic proliferation with increasing blast count';
-                condition = 'Accelerated Phase CML';
+            if (cmlPercentage > 50) {
+                interpretation = 'Significant CML cell population detected';
+                condition = 'Chronic Myeloid Leukemia (CML)';
                 severity = 'HIGH';
-            } else if (granulocytePercentage >= 90) {
-                interpretation = 'Typical Chronic Phase CML - granulocytes dominate differential; significant left shift';
-                condition = 'Typical Chronic Phase CML';
+            } else if (cmlPercentage >= 20) {
+                interpretation = 'Moderate CML cell population - suggestive of CML';
+                condition = 'Suspicious for CML';
                 severity = 'MODERATE';
-            } else if (granulocytePercentage >= 76) {
-                interpretation = 'Suspicious for Early Chronic Myeloid Leukemia (CML - Chronic Phase) - marked granulocytic proliferation';
-                condition = 'Suspicious for Early CML';
-                severity = 'MODERATE';
-            } else {
-                interpretation = 'Reactive / Secondary Leukocytosis - mild granulocytic predominance; may reflect infection or stress';
-                condition = 'Reactive Leukocytosis';
+            } else if (cmlPercentage >= 5) {
+                interpretation = 'Low CML cell percentage - monitor closely';
+                condition = 'Low CML markers';
                 severity = 'LOW';
+            } else {
+                interpretation = 'Minimal CML markers detected';
+                condition = 'Minimal CML markers';
+                severity = 'INFO';
             }
             
             diseaseFindings.push({
                 type: 'CML Analysis',
-                percentage: granulocytePercentage,
+                percentage: cmlPercentage,
                 interpretation,
                 severity,
                 condition,
                 breakdown: {
-                    neutrophil: wbcTypeCounts['Neutrophil'] || 0,
-                    eosinophil: wbcTypeCounts['Eosinophil'] || 0,
-                    basophil: wbcTypeCounts['Basophil'] || 0,
-                    myeloblast: myeloblastCount,
-                    cmlDirect: cmlDirectCount,
-                    total: granulocyteCount
+                    cmlCells: cmlCount,
+                    totalWBC: totalWBC
                 }
             });
         }
 
-        // CLL Analysis (based on lymphocyte percentage thresholds from About page)
-        // < 20% = Normal, 20-40% = Reactive, 41-60% = Early CLL, 61-80% = Typical CLL, > 80% = Advanced CLL
-        if (lymphocytePercentage >= 40) {
+        // CLL Analysis - based on CLL-classified cells percentage
+        // Only show if there are CLL-classified cells
+        if (cllCount > 0) {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
             
-            if (lymphocytePercentage > 80) {
-                interpretation = 'Advanced / Progressive CLL - lymphocytes dominate smear completely';
-                condition = 'Advanced/Progressive CLL';
+            if (cllPercentage > 50) {
+                interpretation = 'Significant CLL cell population detected';
+                condition = 'Chronic Lymphocytic Leukemia (CLL)';
                 severity = 'HIGH';
-            } else if (lymphocytePercentage >= 61) {
-                interpretation = 'Typical Chronic Lymphocytic Leukemia (CLL) - significant lymphocyte predominance';
-                condition = 'Typical CLL';
+            } else if (cllPercentage >= 20) {
+                interpretation = 'Moderate CLL cell population - suggestive of CLL';
+                condition = 'Suspicious for CLL';
                 severity = 'MODERATE';
-            } else if (lymphocytePercentage >= 41) {
-                interpretation = 'Suspicious for Early / Smoldering CLL - elevated lymphocyte percentage';
-                condition = 'Suspicious for Early CLL';
+            } else if (cllPercentage >= 5) {
+                interpretation = 'Low CLL cell percentage - monitor closely';
+                condition = 'Low CLL markers';
                 severity = 'LOW';
             } else {
-                interpretation = 'Reactive / Secondary Lymphocytosis - may occur with viral infections';
-                condition = 'Reactive Lymphocytosis';
-                severity = 'LOW';
+                interpretation = 'Minimal CLL markers detected';
+                condition = 'Minimal CLL markers';
+                severity = 'INFO';
             }
             
             diseaseFindings.push({
                 type: 'CLL Analysis',
-                percentage: lymphocytePercentage,
+                percentage: cllPercentage,
                 interpretation,
                 severity,
                 condition,
                 breakdown: {
-                    lymphocyte: wbcTypeCounts['Lymphocyte'] || 0,
-                    cllDirect: cllDirectCount,
-                    total: lymphocyteCount
+                    cllCells: cllCount,
+                    totalWBC: totalWBC
                 }
             });
         }
 
-        // Sickle Cell Analysis
+        // Sickle Cell Analysis - using updated thresholds from About page
+        // < 3% = Normal, 3-10% = Mild (HbAS), 10-30% = Moderate, > 30% = Severe (HbSS)
         let sickleCount = 0;
         allProcessedImages.forEach(img => {
             if (img.sickleCount) sickleCount += img.sickleCount;
@@ -292,14 +330,19 @@ const Homepage = () => {
         const sicklePercentage = counts.rbc > 0 ? (sickleCount / counts.rbc) * 100 : 0;
         
         let sickleInterpretation = 'Normal blood, no sickling observed';
-        if (sicklePercentage >= 1.6) {
-            sickleInterpretation = 'Severe Sickle Cell Anemia (advanced HbSS)';
-        } else if (sicklePercentage >= 1.1) {
-            sickleInterpretation = 'Sickle Cell Disease - symptomatic, chronic anemia';
-        } else if (sicklePercentage >= 0.7) {
-            sickleInterpretation = 'Sickle Cell Trait (HbAS) - usually mild or asymptomatic';
-        } else if (sicklePercentage >= 0.4) {
-            sickleInterpretation = 'Minimal sickling - may be normal or carrier';
+        let sickleSeverity = 'NORMAL';
+        if (sicklePercentage > 30) {
+            sickleInterpretation = 'Severe Sickle Cell Anemia (HbSS) - significant sickling detected';
+            sickleSeverity = 'SEVERE';
+        } else if (sicklePercentage >= 10) {
+            sickleInterpretation = 'Moderate Sickling - symptomatic, chronic anemia';
+            sickleSeverity = 'MODERATE';
+        } else if (sicklePercentage >= 3) {
+            sickleInterpretation = 'Mild Sickling (HbAS) - sickle cell trait, usually asymptomatic';
+            sickleSeverity = 'MILD';
+        } else if (sicklePercentage > 0) {
+            sickleInterpretation = 'Normal blood with minimal sickling (< 3%)';
+            sickleSeverity = 'NORMAL';
         }
 
         // Determine overall patient status
@@ -307,9 +350,9 @@ const Homepage = () => {
         const hasCritical = diseaseFindings.some(f => f.severity === 'HIGH');
         const hasAbnormal = diseaseFindings.some(f => f.severity === 'MODERATE' || f.severity === 'LOW');
         
-        if (hasCritical || sicklePercentage >= 1.1) {
+        if (hasCritical || sicklePercentage > 30) {
             patientStatus = 'Critical';
-        } else if (hasAbnormal || sicklePercentage >= 0.4) {
+        } else if (hasAbnormal || sicklePercentage >= 3) {
             patientStatus = 'Abnormal';
         }
 
@@ -318,8 +361,15 @@ const Homepage = () => {
             totalWBC: counts.wbc,
             totalRBC: counts.rbc,
             totalPlatelets: counts.platelets,
+            // Estimated counts using standard formulas
+            // RBC: (Avg RBC / 10) x 200,000
+            // WBC: (Total WBC / 10) x 2,000
+            estimatedWBCCount,
+            estimatedRBCCount,
+            avgRBCPerField,
             wbcClassifications: allClassifications,
             rbcClassifications: allRBCClassifications, // Add RBC classifications
+            abnormalWBCs, // WBCs with non-normal conditions (e.g., CML, ALL, AML, CLL)
             wbcDifferential,
             diseaseFindings,
             classificationCounts: wbcTypeCounts, // All ConvNeXt classification counts
@@ -327,7 +377,8 @@ const Homepage = () => {
                 count: sickleCount,
                 totalRBC: counts.rbc,
                 percentage: sicklePercentage,
-                interpretation: sickleInterpretation
+                interpretation: sickleInterpretation,
+                severity: sickleSeverity
             },
             patientStatus
         };
@@ -552,9 +603,9 @@ const Homepage = () => {
 
                     {/* Main Content Grid */}
                     {!thresholdMet && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                             {/* Upload Section */}
-                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm">
+                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm h-fit">
                                 <div className="px-6 py-4 border-b border-rose-200 bg-rose-50">
                                     <h2 className="text-lg font-semibold text-rose-800">
                                         Upload Blood Smear Image
@@ -575,7 +626,7 @@ const Homepage = () => {
                                         </div>
                                         <div className="w-full h-3 bg-rose-200 rounded-full overflow-hidden">
                                             <div 
-                                                className="h-full bg-rose-500 transition-all duration-500"
+                                                className="h-full bg-gradient-to-r from-rose-400 to-rose-600 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
                                                 style={{ width: `${progress}%` }}
                                             />
                                         </div>
@@ -644,10 +695,10 @@ const Homepage = () => {
                                                     : 'bg-rose-200'
                                             }`}>
                                                 <div 
-                                                    className={`h-full transition-all duration-300 ease-out ${
+                                                    className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
                                                         analysisProgress.stage === 'complete' 
                                                             ? 'bg-emerald-500' 
-                                                            : 'bg-rose-500'
+                                                            : 'bg-gradient-to-r from-rose-400 to-rose-600'
                                                     }`}
                                                     style={{ width: `${analysisProgress.percentage}%` }}
                                                 />
@@ -657,34 +708,34 @@ const Homepage = () => {
                                                     ? 'text-emerald-700' 
                                                     : 'text-rose-700'
                                             }`}>
-                                                <div className={`flex items-center gap-1 ${
-                                                    analysisProgress.percentage >= 10 ? 'font-semibold' : 'opacity-50'
+                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
+                                                    analysisProgress.percentage >= 10 ? 'font-semibold scale-105' : 'opacity-50'
                                                 }`}>
-                                                    <span className={analysisProgress.percentage >= 10 ? 'text-emerald-500' : ''}>
+                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 10 ? 'text-emerald-500' : ''}`}>
                                                         {analysisProgress.percentage >= 10 ? '✓' : '○'}
                                                     </span>
                                                     <span>Upload</span>
                                                 </div>
-                                                <div className={`flex items-center gap-1 ${
-                                                    analysisProgress.percentage >= 30 ? 'font-semibold' : 'opacity-50'
+                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
+                                                    analysisProgress.percentage >= 30 ? 'font-semibold scale-105' : 'opacity-50'
                                                 }`}>
-                                                    <span className={analysisProgress.percentage >= 30 ? 'text-emerald-500' : ''}>
+                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 30 ? 'text-emerald-500' : ''}`}>
                                                         {analysisProgress.percentage >= 30 ? '✓' : '○'}
                                                     </span>
                                                     <span>Detection</span>
                                                 </div>
-                                                <div className={`flex items-center gap-1 ${
-                                                    analysisProgress.percentage >= 60 ? 'font-semibold' : 'opacity-50'
+                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
+                                                    analysisProgress.percentage >= 60 ? 'font-semibold scale-105' : 'opacity-50'
                                                 }`}>
-                                                    <span className={analysisProgress.percentage >= 60 ? 'text-emerald-500' : ''}>
+                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 60 ? 'text-emerald-500' : ''}`}>
                                                         {analysisProgress.percentage >= 60 ? '✓' : '○'}
                                                     </span>
                                                     <span>Classification</span>
                                                 </div>
-                                                <div className={`flex items-center gap-1 ${
-                                                    analysisProgress.percentage >= 85 ? 'font-semibold' : 'opacity-50'
+                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
+                                                    analysisProgress.percentage >= 85 ? 'font-semibold scale-105' : 'opacity-50'
                                                 }`}>
-                                                    <span className={analysisProgress.percentage >= 85 ? 'text-emerald-500' : ''}>
+                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 85 ? 'text-emerald-500' : ''}`}>
                                                         {analysisProgress.percentage >= 85 ? '✓' : '○'}
                                                     </span>
                                                     <span>Analysis</span>
@@ -765,8 +816,8 @@ const Homepage = () => {
                             </div>
 
                             {/* Results Section */}
-                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm">
-                                <div className="px-6 py-4 border-b border-rose-200 bg-rose-50 flex items-center justify-between">
+                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm flex flex-col max-h-[calc(100vh-200px)]">
+                                <div className="px-6 py-4 border-b border-rose-200 bg-rose-50 flex items-center justify-between flex-shrink-0">
                                     <div>
                                         <h2 className="text-lg font-semibold text-rose-800">
                                             Current Image Results
@@ -785,9 +836,9 @@ const Homepage = () => {
                                     )}
                                 </div>
                                 
-                                <div className="p-6 max-h-[70vh] overflow-y-auto">
+                                <div className="p-6 overflow-y-auto flex-1">
                                     {!currentResults && !loading && (
-                                        <div className="text-center py-12">
+                                        <div className="text-center py-8">
                                             <svg className="w-16 h-16 mx-auto text-rose-200 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                             </svg>

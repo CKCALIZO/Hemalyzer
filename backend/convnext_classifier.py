@@ -66,8 +66,8 @@ class CellFocusedPreprocessing:
         lab = cv2.cvtColor(img_array, cv2.COLOR_RGB2LAB)
         l, a, b = cv2.split(lab)
         
-        # Apply CLAHE to L channel with higher clip limit for quality normalization
-        clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+        # Apply CLAHE to L channel - MUST match training (clipLimit=2.0)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         l = clahe.apply(l)
         
         # Merge back and convert to RGB
@@ -133,7 +133,7 @@ class ConvNeXtClassifier:
         self.pre_transform = None  # Pre-preprocessor transforms
         self.transform = None  # Post-preprocessor transforms
         self.preprocessor = None
-        self.sickle_cell_confidence_threshold = 0.80  # 80% confidence threshold for sickle cell detection
+        self.sickle_cell_confidence_threshold = 0.90  # 90% confidence threshold for sickle cell detection
     
     def load_model(self, model_path='best_leukemia_model.pth'):
         """
@@ -223,10 +223,10 @@ class ConvNeXtClassifier:
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
             
-            # Initialize preprocessor (adjusted for real-world YOLO crops)
-            # Using 0.85 ratio to be more forgiving of off-center cells
+            # Initialize preprocessor - MUST MATCH training script exactly
+            # Training uses center_crop_ratio=0.75 for circular focus
             self.preprocessor = CellFocusedPreprocessing(
-                center_crop_ratio=0.85,
+                center_crop_ratio=0.75,
                 apply_clahe=True,
                 enhance_edges=True
             )

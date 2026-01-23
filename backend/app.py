@@ -111,30 +111,27 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             'positive_cells': sickle_count
         }
         
-        # Determine sickle cell interpretation based on percentage thresholds (from About page)
+        # Determine sickle cell interpretation based on percentage thresholds
+        # Calculation: (Total Sickled Cells / Total RBCs) × 100
         thresholds = DISEASE_THRESHOLDS['sickle_cell']
         sickle_severity = 'NORMAL'
         
-        if sickle_pct <= 0.3:
+        if sickle_pct < 3.0:
             sickle_interpretation = thresholds['normal']['interpretation']
             sickle_severity = 'NORMAL'
-            sickle_condition = '0% - 0.3%'
-        elif sickle_pct <= 0.6:
-            sickle_interpretation = thresholds['minimal']['interpretation']
-            sickle_severity = 'INFO'
-            sickle_condition = '0.4% - 0.6%'
-        elif sickle_pct <= 1.0:
-            sickle_interpretation = thresholds['trait']['interpretation']
+            sickle_condition = '< 3%'
+        elif sickle_pct < 10.0:
+            sickle_interpretation = thresholds['mild']['interpretation']
             sickle_severity = 'LOW'
-            sickle_condition = '0.7% - 1.0%'
-        elif sickle_pct <= 1.5:
-            sickle_interpretation = thresholds['disease']['interpretation']
+            sickle_condition = '3% - 10%'
+        elif sickle_pct < 30.0:
+            sickle_interpretation = thresholds['moderate']['interpretation']
             sickle_severity = 'MODERATE'
-            sickle_condition = '1.1% - 1.5%'
+            sickle_condition = '10% - 30%'
         else:
             sickle_interpretation = thresholds['severe']['interpretation']
             sickle_severity = 'HIGH'
-            sickle_condition = '> 1.6%'
+            sickle_condition = '> 30%'
         
         interpretation['sickle_cell_analysis'] = {
             'sickle_cell_count': sickle_count,
@@ -144,7 +141,8 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             'interpretation': sickle_interpretation,
             'severity': sickle_severity,
             'condition': sickle_condition,
-            'note': "Finding even 1-2 sickled cells per field is clinically significant" if sickle_count > 0 else None
+            'calculation_method': f"({sickle_count} sickled cells / {total_rbc} total RBCs) × 100 = {sickle_pct:.2f}%",
+            'note': "Percentage calculated across all analyzed fields for accurate diagnosis" if fields_analyzed > 1 else None
         }
     
     # === WBC DIFFERENTIAL & LEUKEMIA ANALYSIS ===
@@ -500,10 +498,14 @@ def aggregate_multi_field_analysis(field_results_list, session_id=None):
     }
     
     # Get disease interpretation with larger sample
+    # IMPORTANT: Sickle cell percentage is calculated as:
+    # (Total Sickled Cells across ALL images / Total RBCs across ALL images) × 100
+    # This provides accurate percentage across all 10 uploaded fields
     disease_interpretation = interpret_disease_classification(
         all_wbc_classifications,
         all_rbc_classifications,
-        aggregated_counts
+        aggregated_counts,
+        fields_analyzed=len(field_results_list)
     )
     
     return {
@@ -737,11 +739,12 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 cell_center_x = (x1 + x2) // 2
                 cell_center_y = (y1 + y2) // 2
                 
-                # Create SQUARE crop centered on cell with extra padding
-                # Use 2.0x padding to ensure cell is well-centered and has context
-                # This matches the training data where cells have surrounding context
+                # Create SQUARE crop centered on cell with optimal padding
+                # Use 1.5x padding for better cell centering without excessive background
+                # Training data has single cells with minimal surrounding context
+                # Too much padding (2.0x) can include neighboring cells and introduce noise
                 max_dim = max(cell_width, cell_height)
-                crop_size = int(max_dim * 2.0)  # 2x cell size for proper centering
+                crop_size = int(max_dim * 1.5)  # 1.5x cell size for optimal centering
                 
                 h, w = image_rgb_clean.shape[:2]
                 
@@ -769,6 +772,19 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 # Let ConvNeXt classifier handle ALL preprocessing to match training exactly
                 cell_crop_pil = Image.fromarray(cell_crop)
                 
+                # MINIMUM CROP SIZE CHECK
+                # Very small crops (<60px) can cause misclassification due to loss of cell detail
+                # If crop is too small, skip classification or resize up
+                MIN_CROP_SIZE = 60
+                crop_w, crop_h = cell_crop_pil.size
+                if min(crop_w, crop_h) < MIN_CROP_SIZE:
+                    print(f"   Warning: Small crop ({crop_w}x{crop_h}) - upscaling for better classification")
+                    # Upscale to minimum size while maintaining aspect ratio
+                    scale = MIN_CROP_SIZE / min(crop_w, crop_h)
+                    new_w = int(crop_w * scale)
+                    new_h = int(crop_h * scale)
+                    cell_crop_pil = cell_crop_pil.resize((new_w, new_h), Image.LANCZOS)
+                
                 # Convert crop to base64 for frontend
                 # Create a display version (384x384) for frontend only
                 display_crop = cell_crop_pil.resize((384, 384), Image.LANCZOS)
@@ -779,11 +795,16 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 # Classify WBC
                 if cell_type == 'WBC':
                     wbc_idx += 1
+                    
+                    # Debug: Log crop dimensions for analysis
+                    print(f"   WBC #{wbc_idx}: crop size {cell_crop_pil.size}, bbox={cell_width}x{cell_height}")
+                    
                     classification = classify_cell_crop(cell_crop_pil, 'WBC')
                     
                     if classification:
                         wbc_class = classification['class']
                         wbc_confidence = classification['confidence']
+                        probs = classification['probabilities']
                         
                         # CRITICAL: Exclude RBC and Sickle Cell predictions for WBCs
                         # RBC classes should not appear in WBC detection results
@@ -798,7 +819,6 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                             print(f"   WBC #{wbc_idx} predicted as {wbc_class} (non-WBC class) - using next best WBC class")
                             
                             # Get only WBC probabilities (exclude RBC, Sickle, Platelet classes) and RE-NORMALIZE
-                            probs = classification['probabilities']
                             wbc_only_probs = {
                                 cls_name: prob 
                                 for cls_name, prob in probs.items() 
@@ -826,6 +846,43 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                                 wbc_class = 'Neutrophil: Normal'
                                 wbc_confidence = 1.0
                         
+                        # CONFIDENCE-BASED DISEASE FILTERING
+                        # If model predicts a disease type (ALL, AML, CLL, CML) with confidence < threshold,
+                        # default to the corresponding normal cell type instead
+                        # This prevents false positives from low-confidence disease predictions
+                        # 
+                        # THRESHOLD CALIBRATION NOTE:
+                        # The ConvNeXt model typically outputs confidence scores around 90-93% for correct predictions
+                        # Setting threshold at 85% allows correct disease predictions while filtering noise
+                        # Previous 95% threshold was too strict and reclassified all disease predictions to Normal
+                        DISEASE_CONFIDENCE_THRESHOLD = 0.85
+                        
+                        is_disease_prediction = ': normal' not in wbc_class.lower()
+                        
+                        if is_disease_prediction and wbc_confidence < DISEASE_CONFIDENCE_THRESHOLD:
+                            print(f"   WBC #{wbc_idx} predicted as {wbc_class} with low confidence ({wbc_confidence:.3f})")
+                            print(f"      → Applying {DISEASE_CONFIDENCE_THRESHOLD*100:.0f}% confidence threshold - defaulting to normal cell type")
+                            
+                            # Extract cell type (e.g., "Basophil: CML" -> "Basophil")
+                            cell_type_name = wbc_class.split(':')[0].strip() if ':' in wbc_class else wbc_class
+                            
+                            # Find the corresponding ': Normal' class in probabilities
+                            normal_variant = f"{cell_type_name}: Normal"
+                            
+                            # Check if this normal variant exists in our class probabilities
+                            if normal_variant in probs:
+                                wbc_class = normal_variant
+                                wbc_confidence = probs[normal_variant]
+                                print(f"      → Reclassified as {wbc_class} (confidence: {wbc_confidence:.3f})")
+                            else:
+                                # If no exact match, find any normal class for this cell type
+                                normal_classes = {k: v for k, v in probs.items() if cell_type_name.lower() in k.lower() and ': normal' in k.lower()}
+                                if normal_classes:
+                                    best_normal = max(normal_classes.items(), key=lambda x: x[1])
+                                    wbc_class = best_normal[0]
+                                    wbc_confidence = best_normal[1]
+                                    print(f"      → Reclassified as {wbc_class} (confidence: {wbc_confidence:.3f})")
+                        
                         wbc_result = {
                             'wbc_id': wbc_idx,
                             'bbox': detection['bbox'],
@@ -837,8 +894,11 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         }
                         wbc_classifications.append(wbc_result)
                         
-                        # Add to cropped cells for display - ONLY ABNORMAL WBCs (filter out Normal)
-                        if wbc_class != 'Normal':
+                        # Add to cropped cells for display - ONLY ABNORMAL WBCs
+                        # Check if classification contains ': Normal' suffix (not just != 'Normal')
+                        is_normal_cell = ': normal' in wbc_class.lower()
+                        
+                        if not is_normal_cell:
                             cropped_cells.append({
                                 'id': f'WBC_{wbc_idx}',
                                 'cell_type': 'WBC',

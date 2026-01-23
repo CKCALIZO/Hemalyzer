@@ -286,8 +286,8 @@ export const ProcessedImagesThumbnails = ({
                         </div>
                         <div className="w-24 h-2 bg-red-900 rounded-full overflow-hidden">
                             <div 
-                                className={`h-full transition-all duration-500 ${
-                                    progress >= 100 ? 'bg-green-400' : 'bg-white'
+                                className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+                                    progress >= 100 ? 'bg-green-400' : 'bg-gradient-to-r from-white/80 to-white'
                                 }`}
                                 style={{ width: `${progress}%` }}
                             />
@@ -298,35 +298,101 @@ export const ProcessedImagesThumbnails = ({
                     </div>
                 </div>
 
-                {/* Expanded thumbnail grid */}
+                {/* Expanded thumbnail grid with per-image results */}
                 {isExpanded && (
                     <div className="px-4 pb-4 border-t border-red-600">
-                        <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2 mt-3">
-                            {processedImages.map((img, idx) => (
-                                <div 
-                                    key={idx}
-                                    className="relative group cursor-pointer"
-                                    onClick={() => handleImageClick(img, idx)}
-                                >
-                                    <div className="aspect-square rounded-lg overflow-hidden border-2 border-red-500 hover:border-white transition-colors">
-                                        <img 
-                                            src={img.preview || `data:image/jpeg;base64,${img.annotated}`}
-                                            alt={`Image ${idx + 1}`}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </div>
-                                    {/* Overlay with WBC count */}
-                                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                                        <div className="text-center">
-                                            <p className="text-white text-xs font-bold">{img.wbcCount || 0} WBC</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-3">
+                            {processedImages.map((img, idx) => {
+                                const breakdown = getWBCBreakdown(img.classifications);
+                                return (
+                                    <div 
+                                        key={idx}
+                                        className="bg-red-800 rounded-lg p-3 cursor-pointer hover:bg-red-700 transition-colors"
+                                        onClick={() => handleImageClick(img, idx)}
+                                    >
+                                        {/* Image header with thumbnail */}
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <div className="relative">
+                                                <div className="w-14 h-14 rounded-lg overflow-hidden border-2 border-red-400">
+                                                    <img 
+                                                        src={img.preview || `data:image/jpeg;base64,${img.annotated}`}
+                                                        alt={`Image ${idx + 1}`}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                </div>
+                                                {/* Image number badge */}
+                                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow">
+                                                    <span className="text-red-700 text-xs font-bold">{idx + 1}</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="text-white font-semibold text-sm truncate">{img.fileName || `Image ${idx + 1}`}</p>
+                                                <p className="text-red-200 text-xs">Blood Smear Analysis</p>
+                                            </div>
                                         </div>
+                                        
+                                        {/* Cell counts row */}
+                                        <div className="grid grid-cols-2 gap-2 mb-3">
+                                            <div className="bg-red-900/50 rounded px-2 py-1.5 text-center">
+                                                <p className="text-red-200 text-xs">RBC</p>
+                                                <p className="text-white font-bold text-sm">{img.rbcCount || 0}</p>
+                                            </div>
+                                            <div className="bg-red-900/50 rounded px-2 py-1.5 text-center">
+                                                <p className="text-red-200 text-xs">WBC</p>
+                                                <p className="text-white font-bold text-sm">{img.wbcCount || 0}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        {/* 5 WBC Categories */}
+                                        {breakdown && breakdown.totalWBC > 0 && (
+                                            <div className="bg-red-900/30 rounded-lg p-2">
+                                                <p className="text-red-200 text-xs mb-2 font-medium">WBC Distribution</p>
+                                                <div className="space-y-1">
+                                                    {[
+                                                        { name: 'Neu', count: breakdown.neutrophil, color: 'bg-blue-500' },
+                                                        { name: 'Lym', count: breakdown.lymphocyte, color: 'bg-green-500' },
+                                                        { name: 'Mon', count: breakdown.monocyte, color: 'bg-yellow-500' },
+                                                        { name: 'Eos', count: breakdown.eosinophil, color: 'bg-orange-500' },
+                                                        { name: 'Bas', count: breakdown.basophil, color: 'bg-purple-500' }
+                                                    ].map((wbc, i) => {
+                                                        const pct = breakdown.totalWBC > 0 ? (wbc.count / breakdown.totalWBC) * 100 : 0;
+                                                        return (
+                                                            <div key={i} className="flex items-center gap-2">
+                                                                <span className="text-red-200 text-xs w-8">{wbc.name}</span>
+                                                                <div className="flex-1 h-2 bg-red-900 rounded-full overflow-hidden">
+                                                                    <div 
+                                                                        className={`h-full ${wbc.color} transition-all duration-500`}
+                                                                        style={{ width: `${pct}%` }}
+                                                                    />
+                                                                </div>
+                                                                <span className="text-white text-xs font-medium w-12 text-right">
+                                                                    {wbc.count} <span className="text-red-300">({pct.toFixed(0)}%)</span>
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                                {/* Abnormal indicator */}
+                                                {breakdown.abnormalWBCs.length > 0 && (
+                                                    <div className="mt-2 pt-2 border-t border-red-700">
+                                                        <div className="flex items-center gap-1 text-amber-400 text-xs">
+                                                            <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                            </svg>
+                                                            <span>{breakdown.abnormalWBCs.reduce((s, a) => s + a.count, 0)} Abnormal WBC(s)</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                        
+                                        {/* Click hint */}
+                                        <p className="text-red-300 text-xs text-center mt-2 opacity-70">
+                                            Click for detailed view
+                                        </p>
                                     </div>
-                                    {/* Image number badge */}
-                                    <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-900 rounded-full flex items-center justify-center">
-                                        <span className="text-white text-xs font-bold">{idx + 1}</span>
-                                    </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
 
                         {/* Summary stats */}

@@ -37,13 +37,13 @@ NORMAL_WBC_DIFFERENTIAL = {
 # Disease Classification Thresholds (Based on About page reference tables)
 DISEASE_THRESHOLDS = {
     # Sickle Cell Anemia - RBC Analysis
-    # Reference: Sickle Cell Anemia Classification table
+    # Reference: Updated Sickle Cell Anemia Classification table
+    # Percentage calculated as: (Total Sickled Cells / Total RBCs) × 100
     'sickle_cell': {
-        'normal': {'max_percent': 0.3, 'interpretation': 'Normal blood, no sickling observed'},
-        'minimal': {'min_percent': 0.4, 'max_percent': 0.6, 'interpretation': 'Minimal sickling - may be normal or carrier'},
-        'trait': {'min_percent': 0.7, 'max_percent': 1.0, 'interpretation': 'Sickle Cell Trait (HbAS) - usually mild or asymptomatic'},
-        'disease': {'min_percent': 1.1, 'max_percent': 1.5, 'interpretation': 'Sickle Cell Disease - symptomatic, chronic anemia'},
-        'severe': {'min_percent': 1.6, 'interpretation': 'Severe Sickle Cell Anemia (advanced HbSS)'}
+        'normal': {'max_percent': 3.0, 'interpretation': 'Normal / Smudge Cells - no clinical sickling observed'},
+        'mild': {'min_percent': 3.0, 'max_percent': 10.0, 'interpretation': 'Mild Sickling - Heterozygous HbAS condition (Sickle Cell Trait)'},
+        'moderate': {'min_percent': 10.0, 'max_percent': 30.0, 'interpretation': 'Moderate Sickling - may correlate with symptoms or stress (possible HbSS)'},
+        'severe': {'min_percent': 30.0, 'interpretation': 'Severe Sickling - suggestive of Sickle Cell Disease (HbSS)'}
     },
     
     # Acute Leukemia (AML/ALL) - Blast Cell Analysis
