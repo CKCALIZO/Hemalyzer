@@ -127,13 +127,27 @@ const Homepage = () => {
             const cellTypePart = classification.split(':')[0]?.trim() || '';
             const conditionPart = classification.split(':')[1]?.trim()?.toLowerCase() || '';
             
-            // Count for 5 main WBC differential categories
-            // Map cell types to the 5 main categories regardless of condition
-            mainWBCCategories.forEach(category => {
-                if (cellTypePart.toLowerCase().includes(category.toLowerCase())) {
-                    differentialCounts[category]++;
-                }
-            });
+            // Enhanced mapping for 20-class model to 5 main WBC categories
+            const cellTypeLower = cellTypePart.toLowerCase();
+            
+            // Map detailed cell types to main categories
+            if (cellTypeLower.includes('neutrophil') || cellTypeLower.includes('neutrophils')) {
+                differentialCounts['Neutrophil']++;
+            } else if (cellTypeLower.includes('lymphocyte') || cellTypeLower.includes('b_lymphoblast')) {
+                differentialCounts['Lymphocyte']++;
+            } else if (cellTypeLower.includes('monocyte')) {
+                differentialCounts['Monocyte']++;
+            } else if (cellTypeLower.includes('eosinophil') || cellTypeLower.includes('eosonophil')) {
+                differentialCounts['Eosinophil']++;
+            } else if (cellTypeLower.includes('basophil')) {
+                differentialCounts['Basophil']++;
+            } else if (cellTypeLower.includes('myeloblast') || cellTypeLower.includes('myelocyte') || 
+                      cellTypeLower.includes('metamyelocyte') || cellTypeLower.includes('promyelocyte')) {
+                // Immature granulocytes - count as Neutrophils
+                differentialCounts['Neutrophil']++;
+            } else if (cellTypeLower.includes('erythroblast')) {
+                // Nucleated RBC - don't count in WBC differential
+            }
             
             // Track abnormal WBCs (condition is not "normal")
             if (conditionPart && conditionPart !== 'normal') {

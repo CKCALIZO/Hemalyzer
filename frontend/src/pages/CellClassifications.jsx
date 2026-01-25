@@ -28,17 +28,39 @@ export const CellClassifications = () => {
         if (cellType === 'RBC') {
             return 'bg-red-50 border-red-400 text-red-800';
         }
-        if (classification === 'Normal') {
+        
+        // Check for normal condition in new format "CellType: Normal"
+        if (classification && classification.toLowerCase().includes(': normal')) {
             return 'bg-green-50 border-green-400 text-green-800';
         }
-        // Abnormal WBC (leukemia types)
+        
+        // Check for specific disease conditions with appropriate colors
+        const classLower = classification ? classification.toLowerCase() : '';
+        if (classLower.includes(': cml') || classLower.includes(': aml')) {
+            return 'bg-red-50 border-red-500 text-red-800'; // High severity
+        }
+        if (classLower.includes(': cll') || classLower.includes(': all')) {
+            return 'bg-orange-50 border-orange-500 text-orange-800'; // Moderate severity
+        }
+        
+        // Default for other abnormal classifications
         return 'bg-amber-50 border-amber-400 text-amber-800';
     };
 
     // Get icon based on classification
     const getClassificationIcon = (classification, cellType) => {
         if (cellType === 'RBC') return '●';
-        if (classification === 'Normal') return '✓';
+        
+        // Check for normal condition in new format
+        if (classification && classification.toLowerCase().includes(': normal')) {
+            return '✓';
+        }
+        
+        // Disease-specific icons
+        const classLower = classification ? classification.toLowerCase() : '';
+        if (classLower.includes(': cml') || classLower.includes(': aml')) return '⚠';
+        if (classLower.includes(': cll') || classLower.includes(': all')) return '!';
+        
         return '!';
     };
 

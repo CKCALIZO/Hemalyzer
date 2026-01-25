@@ -1,0 +1,42 @@
+[
+  {
+    "file": "BAS_0001.png",
+    "class": "Basophil: CML",
+    "confidence": 0.8731257319450378
+  },
+  {
+    "file": "BAS_0002.png",
+    "class": "Basophil: CML",
+    "confidence": 0.8734440207481384
+  },
+  {
+    "file": "BAS_0003.png",
+    "class": "Basophil: CML",
+    "confidence": 0.8737990260124207
+  },
+  {
+    "file": "BAS_0004.png",
+    "class": "Basophil: CML",
+    "confidence": 0.8729860186576843
+  },
+  {
+    "file": "BAS_0001.png",
+    "class": "Basophil: CML",
+    "confidence": 0.8731257319450378
+  },
+  {
+    "file": "BAS_0002.png",
+    "class": "Basophil: CML",
+    "confidence": 0.8734440207481384
+  },
+  {
+    "file": "BAS_0003.png",
+    "class": "Basophil: CML",
+    "confidence": 0.8737990260124207
+  },
+  {
+    "file": "BAS_0004.png",
+    "class": "Basophil: CML",
+    "confidence": 0.8729860186576843
+  }
+]

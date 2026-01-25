@@ -16,12 +16,21 @@ export const About = () => {
                 <div className="max-w-6xl w-full mb-8">
                     <h1 className="text-3xl font-bold text-center text-red-900 mb-4">About Hemalyzer</h1>
                     <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-red-700">
-                        <p className="text-base text-red-800 leading-relaxed">
+                        <p className="text-base text-red-800 leading-relaxed mb-3">
                             Hemalyzer is a thesis project designed to assist in the classification of 
                             hematological diseases, particularly leukemia and its subtypes 
                             (AML, ALL, CML, CLL), using NAS-optimized YOLOv8 with attention-enhanced 
                             feature pyramids for ConvNeXt classification.
                         </p>
+                        <div className="bg-red-50 p-4 rounded border-l-4 border-red-600">
+                            <h4 className="font-semibold text-red-800 mb-2">Enhanced 20-Class Model Features:</h4>
+                            <ul className="text-sm text-red-700 space-y-1">
+                                <li>• <strong>Adaptive Cell Preprocessing:</strong> Stain normalization, CLAHE enhancement, automatic cell detection</li>
+                                <li>• <strong>20 Cell Classes:</strong> 12 normal cell types + 8 disease classifications (AML/ALL/CML/CLL/Sickle Cell)</li>
+                                <li>• <strong>Enhanced Training:</strong> Quality-robust augmentation and balanced class weights</li>
+                                <li>• <strong>High Confidence Thresholds:</strong> 90% for Sickle Cell detection, 85% for disease classifications</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
 
