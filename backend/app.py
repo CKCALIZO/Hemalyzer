@@ -598,14 +598,50 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         print(f"IoU threshold: {iou_threshold}")
         print(f"Model: {MODEL_ID}")
         
-        # Convert image to base64 for Roboflow API
+        # Convert image to base64 for direct API call
         _, buffer = cv2.imencode('.jpg', image)
         image_base64 = base64.b64encode(buffer).decode('utf-8')
         
-        # Run inference using Roboflow
-        # Note: Roboflow SDK doesn't support runtime threshold parameters
-        # We'll filter results manually based on conf_threshold and iou_threshold
-        result = CLIENT.infer(image_base64, model_id=MODEL_ID)
+        # Run inference using direct HTTP request (bypasses SDK's Content-Type bug)
+        import time
+        import requests
+        max_retries = 3
+        result = None
+        last_error = None
+        
+        # Roboflow inference API endpoint
+        api_url = f"https://detect.roboflow.com/{MODEL_ID}"
+        
+        for attempt in range(max_retries):
+            try:
+                # Direct POST request with proper headers
+                response = requests.post(
+                    api_url,
+                    params={"api_key": API_KEY},
+                    data=image_base64,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                )
+                response.raise_for_status()
+                result = response.json()
+                break  # Success - exit retry loop
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                # Check if it's a network/DNS error that might be transient
+                if 'nameresolution' in error_str or 'connection' in error_str or 'timeout' in error_str or 'getaddrinfo' in error_str:
+                    wait_time = (2 ** attempt) * 0.5  # 0.5s, 1s, 2s
+                    print(f"   ⚠️ Network error (attempt {attempt + 1}/{max_retries}): {e}")
+                    print(f"   Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    # Non-network error - don't retry
+                    raise e
+        
+        if result is None:
+            # All retries failed
+            error_msg = f"Roboflow connection failed after {max_retries} attempts: {last_error}"
+            print(f"   ✗ {error_msg}")
+            return {'success': False, 'error': str(last_error)}
         
         print(f"Roboflow response received")
         print(f"Raw response keys: {result.keys() if isinstance(result, dict) else type(result)}")
@@ -755,19 +791,19 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 # - Contrast variations (adaptive histogram equalization)
                 # 
                 # Padding strategy:
-                # - Use 1.8x for WBC (larger cells with important nuclear features)
+                # - Use 2.5x for WBC (larger cells need more context to avoid Platelet misclassification)
                 # - Use 1.5x for RBC (smaller, more uniform cells)
                 # This ensures the cell is well-centered with sufficient context
                 max_dim = max(cell_width, cell_height)
                 
                 if cell_type == 'WBC':
-                    crop_size = int(max_dim * 1.8)  # More padding for WBC nuclear detail
+                    crop_size = int(max_dim * 2.5)  # Increased from 1.8x - more context for WBC
                 else:
                     crop_size = int(max_dim * 1.5)  # Standard padding for RBC
                 
                 # Ensure minimum crop size for quality preprocessing
-                # Based on baseline analysis, crops smaller than 120px can cause issues
-                MIN_CROP_DIM = 120  # Increased from 100 for better quality and consistency
+                # Crops smaller than 180px can cause Platelet misclassification
+                MIN_CROP_DIM = 180  # Increased from 120px for better quality and consistency
                 crop_size = max(crop_size, MIN_CROP_DIM)
                 
                 h, w = image_rgb_clean.shape[:2]

@@ -11,6 +11,8 @@ lerna-debug.log*
 CML/ 
 Normal/
 
+# Virtual environment
+venv/
 .env
 .venv
 node_modules
@@ -19,7 +21,7 @@ dist-ssr
 *.local
 testing-grounds
 models
-
+ConvNeXt Single-Cell Classification/
 
 # Editor directories and files
 .vscode/*

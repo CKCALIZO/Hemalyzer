@@ -26,142 +26,45 @@ import traceback
 
 # ============================================================
 # ADAPTIVE CELL PREPROCESSING (Matches Training Pipeline EXACTLY)
-# From train_convnext_leukemia_classifier_NEW.py
+# From train_convnext_leukemia_classifier.py
 # ============================================================
 class AdaptiveCellPreprocessing:
     """
-    Enhanced preprocessing with baseline normalization for consistent results.
-    Uses Normal/BAS_47.jpg as reference baseline for color/contrast consistency.
+    Adaptive preprocessing that works across quality variations.
+    MATCHES TRAINING SCRIPT EXACTLY (no extra baseline normalization).
     
     Pipeline:
-    1. Resize to target size
-    2. Baseline color normalization (match BAS_47.jpg characteristics)
-    3. Stain normalization (OD space normalization for H&E staining)
-    4. CLAHE in YUV space (clipLimit=3.0, tileGridSize=8x8)
-    5. Cell detection and centering (Otsu thresholding + contour detection)
-    6. Final baseline adjustment for consistency
+    1. Resize to target size (if needed)
+    2. Stain normalization (OD space normalization)
+    3. CLAHE in YUV space (clipLimit=3.0, tileGridSize=8x8)
+    4. Cell detection and centering (Otsu thresholding + contour detection)
     """
     
-    def __init__(self, target_size=384, baseline_image_path=None):
+    def __init__(self, target_size=384):
         """
         Args:
             target_size: Output image size (384 for ConvNeXt)
-            baseline_image_path: Path to baseline reference image
         """
         self.target_size = target_size
-        
-        # Try to find baseline image
-        if baseline_image_path is None:
-            # Try different possible paths for BAS_47.jpg
-            possible_paths = [
-                "Normal/BAS_47.jpg",
-                "../Normal/BAS_47.jpg",
-                os.path.join(os.path.dirname(__file__), "..", "Normal", "BAS_47.jpg")
-            ]
-            
-            baseline_image_path = None
-            for path in possible_paths:
-                if os.path.exists(path):
-                    baseline_image_path = path
-                    break
-        
-        self.baseline_image_path = baseline_image_path
-        self._load_baseline_reference()
-    
-    def _load_baseline_reference(self):
-        """Load baseline image and extract reference parameters"""
-        try:
-            if self.baseline_image_path and os.path.exists(self.baseline_image_path):
-                baseline_img = Image.open(self.baseline_image_path).convert('RGB')
-                baseline_array = np.array(baseline_img)
-                
-                # Store original baseline characteristics
-                self.baseline_mean = np.mean(baseline_array, axis=(0,1))
-                self.baseline_std = np.std(baseline_array, axis=(0,1))
-                
-                # Process baseline through standard pipeline to get target characteristics
-                baseline_processed = self._standard_preprocessing(baseline_array)
-                self.target_mean = np.mean(baseline_processed, axis=(0,1))
-                self.target_std = np.std(baseline_processed, axis=(0,1))
-                
-                print(f"Baseline reference loaded: {self.baseline_image_path}")
-                print(f"  Baseline mean RGB: {self.baseline_mean}")
-                
-            else:
-                print(f"Warning: Baseline image not found, using default values")
-                # Use default values based on BAS_47.jpg analysis
-                self.baseline_mean = np.array([223.7, 194.2, 184.6])
-                self.baseline_std = np.array([48.1, 53.9, 22.6])
-                self.target_mean = np.array([195.7, 191.3, 143.8])
-                self.target_std = np.array([35.0, 40.0, 30.0])
-                
-        except Exception as e:
-            print(f"Error loading baseline reference: {e}")
-            # Use default values
-            self.baseline_mean = np.array([223.7, 194.2, 184.6])
-            self.baseline_std = np.array([48.1, 53.9, 22.6])
-            self.target_mean = np.array([195.7, 191.3, 143.8])
-            self.target_std = np.array([35.0, 40.0, 30.0])
     
     def __call__(self, img):
-        """Apply baseline-normalized preprocessing to PIL Image"""
+        """Apply preprocessing to PIL Image"""
         img_array = np.array(img)
         
-        # 1. Resize to target size first for consistency
+        # 1. Resize to target size first for consistency 
+        # (Training does this via transforms, we do it here to ensure consistent input size)
         img_resized = cv2.resize(img_array, (self.target_size, self.target_size))
         
-        # 2. Baseline color normalization (key improvement)
-        img_normalized = self._baseline_color_normalization(img_resized)
+        # 2. Stain normalization 
+        img_stain_norm = self._normalize_staining(img_resized)
         
-        # 3. Standard stain normalization 
-        img_stain_norm = self._normalize_staining(img_normalized)
-        
-        # 4. Adaptive histogram equalization
+        # 3. Adaptive histogram equalization
         img_enhanced = self._adaptive_histogram_equalization(img_stain_norm)
         
-        # 5. Cell detection and centering
+        # 4. Cell detection and centering
         img_centered = self._detect_and_center_cell(img_enhanced)
         
-        # 6. Final consistency check and adjustment
-        img_final = self._final_baseline_adjustment(img_centered)
-        
-        return Image.fromarray(img_final)
-    
-    def _baseline_color_normalization(self, img_array):
-        """
-        Normalize image colors to match baseline characteristics.
-        This is the key step for consistency across different image types.
-        """
-        # Convert to float for processing
-        img_float = img_array.astype(np.float32)
-        
-        # Calculate current image statistics
-        current_mean = np.mean(img_float, axis=(0,1))
-        current_std = np.std(img_float, axis=(0,1)) + 1e-6  # Avoid division by zero
-        
-        # Normalize to standard distribution then adjust to baseline
-        img_standardized = (img_float - current_mean) / current_std
-        
-        # Scale to match baseline distribution
-        img_baseline_matched = img_standardized * self.baseline_std + self.baseline_mean
-        
-        # Clip to valid range
-        img_baseline_matched = np.clip(img_baseline_matched, 0, 255)
-        
-        return img_baseline_matched.astype(np.uint8)
-    
-    def _standard_preprocessing(self, img_array):
-        """Standard preprocessing pipeline (for establishing baseline)"""
-        # Stain normalization
-        img_stain = self._normalize_staining(img_array)
-        
-        # CLAHE
-        img_clahe = self._adaptive_histogram_equalization(img_stain)
-        
-        # Cell detection and centering
-        img_centered = self._detect_and_center_cell(img_clahe)
-        
-        return img_centered
+        return Image.fromarray(img_centered)
     
     def _normalize_staining(self, img_array):
         """
@@ -190,7 +93,7 @@ class AdaptiveCellPreprocessing:
         """
         clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         
-        # Apply to luminance channel in YUV space (not LAB like before)
+        # Apply to luminance channel in YUV space
         img_yuv = cv2.cvtColor(img_array, cv2.COLOR_RGB2YUV)
         img_yuv[:, :, 0] = clahe.apply(img_yuv[:, :, 0])
         img_enhanced = cv2.cvtColor(img_yuv, cv2.COLOR_YUV2RGB)
@@ -242,36 +145,6 @@ class AdaptiveCellPreprocessing:
         
         # Fallback: just resize if no contours found
         return cv2.resize(img_array, (self.target_size, self.target_size))
-    
-    def _final_baseline_adjustment(self, img_array):
-        """
-        Final adjustment to ensure processed image matches baseline characteristics.
-        Provides gentle nudge towards consistent color/contrast.
-        """
-        # Convert to float for processing
-        img_float = img_array.astype(np.float32)
-        
-        # Calculate current statistics
-        current_mean = np.mean(img_float, axis=(0,1))
-        current_std = np.std(img_float, axis=(0,1)) + 1e-6
-        
-        # Gentle adjustment towards target (baseline processed) characteristics
-        adjustment_factor = 0.3  # Don't over-adjust, just nudge towards baseline
-        
-        # Calculate target adjustment
-        mean_diff = self.target_mean - current_mean
-        std_ratio = self.target_std / current_std
-        
-        # Apply gentle adjustment
-        img_adjusted = img_float + (mean_diff * adjustment_factor)
-        
-        # Slight contrast adjustment
-        img_adjusted = (img_adjusted - np.mean(img_adjusted, axis=(0,1))) * (1 + (std_ratio - 1) * adjustment_factor) + np.mean(img_adjusted, axis=(0,1))
-        
-        # Ensure valid range
-        img_adjusted = np.clip(img_adjusted, 0, 255)
-        
-        return img_adjusted.astype(np.uint8)
 
 
 # ============================================================
@@ -390,9 +263,10 @@ class ConvNeXtClassifier:
             
             # Initialize preprocessor with baseline normalization
             # Uses Normal/BAS_47.jpg as reference for consistent preprocessing
+            # Initialize preprocessor with baseline normalization
+            # Uses Normal/BAS_47.jpg as reference for consistent preprocessing
             self.preprocessor = AdaptiveCellPreprocessing(
-                target_size=384,
-                baseline_image_path=None  # Will auto-detect BAS_47.jpg
+                target_size=384
             )
             
             print(f"ConvNeXt model ready on {self.device}")
