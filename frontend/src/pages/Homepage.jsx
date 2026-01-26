@@ -23,8 +23,10 @@ const WBC_NORMAL_RANGES = {
 };
 
 // Cell count calculation constants
-// RBC count: Avg RBC in 10 images / 10 x 200,000
-// WBC count: Overall WBC count / 10 x 2000
+// RBC formula: (Average RBC per image ÷ 10) × 200,000
+// - Calculate average: (Total RBC across all images) ÷ (Number of images)
+// - Then: (Average ÷ 10) × 200,000 = Estimated RBC/μL
+// WBC count: (Total WBC ÷ 10) × 2,000
 const RBC_MULTIPLIER = 200000;
 const WBC_MULTIPLIER = 2000;
 const NUM_FIELDS = 10;
@@ -62,8 +64,9 @@ const Homepage = () => {
     const [thresholdMet, setThresholdMet] = useState(false);
     const [finalResults, setFinalResults] = useState(null);
 
-    // Restore state when navigating back from classifications
+    // Restore state when navigating back from classifications OR on page reload
     useEffect(() => {
+        // First try to restore from location.state (navigation)
         if (location.state?.results) {
             setCurrentResults(location.state.results);
             setPreviewUrl(location.state.previewUrl);
@@ -77,6 +80,25 @@ const Homepage = () => {
             if (session.aggregatedRBCClassifications) setAggregatedRBCClassifications(session.aggregatedRBCClassifications);
             if (session.thresholdMet !== undefined) setThresholdMet(session.thresholdMet);
             if (session.finalResults) setFinalResults(session.finalResults);
+        }
+        // If no location state, try to restore from localStorage (page reload)
+        else {
+            try {
+                const savedSession = localStorage.getItem('hemalyzer_current_session');
+                if (savedSession) {
+                    const session = JSON.parse(savedSession);
+                    console.log('Restoring session from localStorage:', session);
+                    if (session.processedImages) setProcessedImages(session.processedImages);
+                    if (session.aggregatedCounts) setAggregatedCounts(session.aggregatedCounts);
+                    if (session.aggregatedClassifications) setAggregatedClassifications(session.aggregatedClassifications);
+                    if (session.aggregatedRBCClassifications) setAggregatedRBCClassifications(session.aggregatedRBCClassifications);
+                    if (session.thresholdMet !== undefined) setThresholdMet(session.thresholdMet);
+                    if (session.finalResults) setFinalResults(session.finalResults);
+                    if (session.currentResults) setCurrentResults(session.currentResults);
+                }
+            } catch (error) {
+                console.log('No valid session to restore:', error);
+            }
         }
     }, [location.state]);
 
@@ -162,10 +184,19 @@ const Homepage = () => {
         });
         
         // Calculate estimated cell counts using standard formulas
-        // RBC count: (Avg RBC in 10 images) x 200,000
-        // WBC count: (Overall WBC count / 10) x 2000
-        const avgRBCPerField = counts.rbc / NUM_FIELDS;
-        const estimatedRBCCount = Math.round(avgRBCPerField * RBC_MULTIPLIER);
+        // RBC formula: 
+        // Step 1: Calculate average RBC per image (Total RBC ÷ Number of images)
+        // Step 2: Divide average by 10, then multiply by 200,000
+        // Formula: (Average RBC per image ÷ 10) × 200,000 = Estimated RBC/μL
+        // WBC count: (Total WBC ÷ 10) × 2,000
+        
+        const totalImagesProcessed = allProcessedImages.length;
+        
+        // Step 1: Calculate average RBC count per image
+        const averageRBCPerImage = totalImagesProcessed > 0 ? counts.rbc / totalImagesProcessed : 0;
+        
+        // Step 2: Divide average by 10, then multiply by 200,000
+        const estimatedRBCCount = Math.round((averageRBCPerImage / 10) * RBC_MULTIPLIER);
         const estimatedWBCCount = Math.round((counts.wbc / NUM_FIELDS) * WBC_MULTIPLIER);
 
         // Calculate differential percentages based on 5 main WBC categories
@@ -509,6 +540,21 @@ const Homepage = () => {
                         const finalCalc = calculateFinalResults(newClassifications, newProcessedImages, newCounts, newRBCClassifications);
                         setFinalResults(finalCalc);
                     }
+                    
+                    // Save session state to localStorage for persistence on reload
+                    const sessionState = {
+                        processedImages: newProcessedImages,
+                        aggregatedCounts: newCounts,
+                        aggregatedClassifications: newClassifications,
+                        aggregatedRBCClassifications: newRBCClassifications,
+                        thresholdMet: newProcessedImages.length >= TARGET_IMAGE_COUNT,
+                        finalResults: newProcessedImages.length >= TARGET_IMAGE_COUNT ? 
+                            calculateFinalResults(newClassifications, newProcessedImages, newCounts, newRBCClassifications) : null,
+                        currentResults: data,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('hemalyzer_current_session', JSON.stringify(sessionState));
+                    console.log('Session saved to localStorage:', sessionState);
                 } catch (stateError) {
                     console.error('Error updating state:', stateError);
                     setError(`State update error: ${stateError.message}`);
@@ -552,24 +598,60 @@ const Homepage = () => {
         setSelectedFile(null);
         setPreviewUrl(null);
         setError(null);
+        
+        // Clear saved session from localStorage
+        localStorage.removeItem('hemalyzer_current_session');
+        console.log('Session cleared from localStorage');
     };
 
-    // Save report to localStorage
+    // Save report to localStorage with complete analysis data
     const saveReport = () => {
-        if (!finalResults) return;
+        if (!finalResults) {
+            alert('No final results to save. Please complete the analysis first.');
+            return;
+        }
         
         const reports = JSON.parse(localStorage.getItem('hemalyzer_reports') || '[]');
         const newReport = {
             id: Date.now(),
             timestamp: new Date().toLocaleString(),
+            // Include complete analysis data
             data: finalResults,
+            // Add session metadata
+            sessionData: {
+                processedImages: processedImages,
+                aggregatedCounts: aggregatedCounts,
+                aggregatedClassifications: aggregatedClassifications,
+                aggregatedRBCClassifications: aggregatedRBCClassifications,
+                thresholdMet: thresholdMet,
+                totalImagesAnalyzed: processedImages.length,
+                analysisComplete: thresholdMet
+            },
+            // Add summary for quick display
+            summary: {
+                totalCells: aggregatedCounts.wbc + aggregatedCounts.rbc + aggregatedCounts.platelets,
+                wbcCount: aggregatedCounts.wbc,
+                rbcCount: aggregatedCounts.rbc,
+                plateletCount: aggregatedCounts.platelets,
+                imagesAnalyzed: processedImages.length,
+                // Include estimated counts
+                estimatedWBCCount: finalResults?.estimatedWBCCount || 0,
+                estimatedRBCCount: finalResults?.estimatedRBCCount || 0,
+                // Include disease findings
+                diseaseFindings: finalResults?.diseaseFindings || [],
+                sickleCount: finalResults?.sickleCount || 0
+            },
             imagesCount: processedImages.length
         };
         
         reports.unshift(newReport);
+        // Keep only last 50 reports to prevent localStorage overflow
+        if (reports.length > 50) {
+            reports.splice(50);
+        }
         localStorage.setItem('hemalyzer_reports', JSON.stringify(reports));
         
-        alert('Report saved successfully!');
+        alert(`Report saved successfully! \nImages analyzed: ${processedImages.length}\nTotal cells: ${newReport.summary.totalCells}`);
         navigate('/reports');
     };
 

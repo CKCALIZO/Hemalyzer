@@ -31,40 +31,48 @@ import traceback
 class AdaptiveCellPreprocessing:
     """
     Adaptive preprocessing that works across quality variations.
-    MATCHES TRAINING SCRIPT EXACTLY (no extra baseline normalization).
+    MATCHES TRAINING SCRIPT EXACTLY - no extra baseline normalization.
     
-    Pipeline:
-    1. Resize to target size (if needed)
-    2. Stain normalization (OD space normalization)
-    3. CLAHE in YUV space (clipLimit=3.0, tileGridSize=8x8)
-    4. Cell detection and centering (Otsu thresholding + contour detection)
+    Training Pipeline (from train_convnext_leukemia_classifier.py):
+    1. Stain normalization (OD space normalization)
+    2. CLAHE in YUV space (clipLimit=3.0, tileGridSize=8x8)  
+    3. Cell detection and centering (Otsu thresholding + contour detection)
+    
+    NOTE: The Resize step is handled separately by transforms.Resize() BEFORE this preprocessor,
+    matching the training val_transform pipeline exactly.
     """
     
-    def __init__(self, target_size=384):
+    def __init__(self, target_size=384, normalize_staining=True, detect_cell=True):
         """
         Args:
             target_size: Output image size (384 for ConvNeXt)
+            normalize_staining: Whether to apply stain normalization (default: True)
+            detect_cell: Whether to detect and center cell (default: True)
         """
         self.target_size = target_size
+        self.normalize_staining = normalize_staining
+        self.detect_cell = detect_cell
+        print(f"[AdaptiveCellPreprocessing] Initialized: target_size={target_size}, "
+              f"stain_norm={normalize_staining}, cell_detect={detect_cell}")
     
     def __call__(self, img):
-        """Apply preprocessing to PIL Image"""
+        """Apply preprocessing to PIL Image - matches training script exactly"""
         img_array = np.array(img)
         
-        # 1. Resize to target size first for consistency 
-        # (Training does this via transforms, we do it here to ensure consistent input size)
-        img_resized = cv2.resize(img_array, (self.target_size, self.target_size))
+        # Step 1: Stain normalization (critical for varying stain intensities)
+        if self.normalize_staining:
+            img_array = self._normalize_staining(img_array)
         
-        # 2. Stain normalization 
-        img_stain_norm = self._normalize_staining(img_resized)
+        # Step 2: Adaptive histogram equalization (handles varying contrast)
+        img_array = self._adaptive_histogram_equalization(img_array)
         
-        # 3. Adaptive histogram equalization
-        img_enhanced = self._adaptive_histogram_equalization(img_stain_norm)
+        # Step 3: Cell detection and centering (handles varying backgrounds)
+        if self.detect_cell:
+            img_array = self._detect_and_center_cell(img_array)
+        else:
+            img_array = cv2.resize(img_array, (self.target_size, self.target_size))
         
-        # 4. Cell detection and centering
-        img_centered = self._detect_and_center_cell(img_enhanced)
-        
-        return Image.fromarray(img_centered)
+        return Image.fromarray(img_array)
     
     def _normalize_staining(self, img_array):
         """
@@ -261,12 +269,17 @@ class ConvNeXtClassifier:
                 transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
             
-            # Initialize preprocessor with baseline normalization
-            # Uses Normal/BAS_47.jpg as reference for consistent preprocessing
-            # Initialize preprocessor with baseline normalization
-            # Uses Normal/BAS_47.jpg as reference for consistent preprocessing
+            # Initialize preprocessor - MUST MATCH TRAINING SCRIPT EXACTLY
+            # Training script uses:
+            #   adaptive_preprocessor = AdaptiveCellPreprocessing(
+            #       target_size=CONFIG['img_size'],  # 384
+            #       normalize_staining=True,
+            #       detect_cell=True
+            #   )
             self.preprocessor = AdaptiveCellPreprocessing(
-                target_size=384
+                target_size=384,
+                normalize_staining=True,
+                detect_cell=True
             )
             
             print(f"ConvNeXt model ready on {self.device}")
@@ -369,6 +382,20 @@ class ConvNeXtClassifier:
         """Get list of class names"""
         return self.class_names if self.class_names else []
     
+    def get_wbc_class_names(self):
+        """Get only WBC class names (exclude RBC and Platelet classes)"""
+        if not self.class_names:
+            return []
+        
+        # Define non-WBC classes that should be excluded when classifying WBCs
+        NON_WBC_CLASSES = {
+            'rbc: normal',
+            'platelet: normal', 
+            'rbc: sickle cell anemia'
+        }
+        
+        return [cls for cls in self.class_names if cls.lower() not in NON_WBC_CLASSES]
+    
     def get_device(self):
         """Get device (cpu/cuda) model is running on"""
         return str(self.device) if self.device else 'cpu'
@@ -421,7 +448,9 @@ def get_classifier_info():
     return {
         'loaded': classifier.is_loaded(),
         'class_names': classifier.get_class_names(),
+        'wbc_class_names': classifier.get_wbc_class_names(),
         'device': classifier.get_device(),
         'sickle_cell_class_idx': classifier.sickle_cell_class_idx,
-        'num_classes': len(classifier.get_class_names()) if classifier.is_loaded() else 0
+        'num_classes': len(classifier.get_class_names()) if classifier.is_loaded() else 0,
+        'num_wbc_classes': len(classifier.get_wbc_class_names()) if classifier.is_loaded() else 0
     }

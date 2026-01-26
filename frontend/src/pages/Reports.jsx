@@ -73,7 +73,25 @@ export const Reports = () => {
                                                     <p className="font-semibold text-sm text-red-800">Report #{report.id}</p>
                                                     <p className="text-xs text-red-500">{report.timestamp}</p>
                                                     <div className="mt-2 text-xs text-red-600">
-                                                        <span className="font-medium">Total: {report.data.stage1_detection?.total || 0} cells</span>
+                                                        <span className="font-medium">
+                                                            Total: {report.summary?.totalCells || report.data.stage1_detection?.total || 0} cells
+                                                        </span>
+                                                        {report.summary && (
+                                                            <div className="mt-1 space-y-1">
+                                                                <div>WBC: {report.summary.wbcCount}, RBC: {report.summary.rbcCount}</div>
+                                                                <div>Images: {report.summary.imagesAnalyzed || report.imagesCount}/10</div>
+                                                                {report.summary.estimatedWBCCount > 0 && (
+                                                                    <div className="text-blue-600 font-medium">
+                                                                        Est. WBC: {report.summary.estimatedWBCCount.toLocaleString()}/μL
+                                                                    </div>
+                                                                )}
+                                                                {report.summary.estimatedRBCCount > 0 && (
+                                                                    <div className="text-red-600 font-medium">
+                                                                        Est. RBC: {(report.summary.estimatedRBCCount / 1e6).toFixed(2)}M/μL
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                                 <button
@@ -113,54 +131,111 @@ export const Reports = () => {
                                         {/* Cell Detection Summary */}
                                         <div className="bg-slate-50 p-4 rounded-lg mb-6">
                                             <h3 className="font-semibold text-lg mb-3 text-slate-800">Cell Detection Summary</h3>
-                                            <div className="grid grid-cols-2 gap-4">
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                                 <div className="bg-white p-3 rounded border border-slate-200">
                                                     <p className="text-sm text-slate-600">Total Cells</p>
                                                     <p className="text-2xl font-bold text-slate-700">
-                                                        {selectedReport.data.stage1_detection?.total || 0}
+                                                        {selectedReport.summary?.totalCells || selectedReport.data.stage1_detection?.total || 0}
                                                     </p>
                                                 </div>
                                                 <div className="bg-white p-3 rounded border border-slate-200">
                                                     <p className="text-sm text-slate-600">Red Blood Cells</p>
                                                     <p className="text-2xl font-bold text-red-600">
-                                                        {selectedReport.data.stage1_detection?.counts?.RBC || 0}
+                                                        {selectedReport.summary?.rbcCount || selectedReport.data.stage1_detection?.counts?.RBC || 0}
                                                     </p>
                                                 </div>
                                                 <div className="bg-white p-3 rounded border border-slate-200">
                                                     <p className="text-sm text-slate-600">White Blood Cells</p>
                                                     <p className="text-2xl font-bold text-green-600">
-                                                        {selectedReport.data.stage1_detection?.counts?.WBC || 0}
+                                                        {selectedReport.summary?.wbcCount || selectedReport.data.stage1_detection?.counts?.WBC || 0}
                                                     </p>
                                                 </div>
                                                 <div className="bg-white p-3 rounded border border-slate-200">
                                                     <p className="text-sm text-slate-600">Platelets</p>
                                                     <p className="text-2xl font-bold text-amber-600">
-                                                        {selectedReport.data.stage1_detection?.counts?.Platelets || 0}
+                                                        {selectedReport.summary?.plateletCount || selectedReport.data.stage1_detection?.counts?.Platelets || 0}
                                                     </p>
                                                 </div>
                                             </div>
+                                            
+                                            {/* Estimated Counts Section */}
+                                            {selectedReport.summary && (selectedReport.summary.estimatedWBCCount > 0 || selectedReport.summary.estimatedRBCCount > 0) && (
+                                                <div className="mt-4 pt-4 border-t border-slate-200">
+                                                    <h4 className="font-semibold text-md mb-3 text-slate-800">Estimated Cell Concentrations</h4>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                        {selectedReport.summary.estimatedWBCCount > 0 && (
+                                                            <div className="bg-blue-50 p-3 rounded border border-blue-200">
+                                                                <p className="text-sm text-blue-600">Estimated WBC Count</p>
+                                                                <p className="text-xl font-bold text-blue-700">
+                                                                    {selectedReport.summary.estimatedWBCCount.toLocaleString()} cells/μL
+                                                                </p>
+                                                                <p className="text-xs text-blue-500 mt-1">
+                                                                    Formula: (Total WBC / 10) × 2,000
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                        {selectedReport.summary.estimatedRBCCount > 0 && (
+                                                            <div className="bg-red-50 p-3 rounded border border-red-200">
+                                                                <p className="text-sm text-red-600">Estimated RBC Count</p>
+                                                                <p className="text-xl font-bold text-red-700">
+                                                                    {(selectedReport.summary.estimatedRBCCount / 1e6).toFixed(2)} × 10⁶ cells/μL
+                                                                </p>
+                                                                <p className="text-xs text-red-500 mt-1">
+                                                                    Formula: (Average RBC per image ÷ 10) × 200,000
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
 
                                         {/* Detailed Metrics */}
                                         <div className="bg-slate-50 p-4 rounded-lg">
-                                            <h3 className="font-semibold text-lg mb-3 text-slate-800">Detection Metrics</h3>
-                                            <div className="space-y-2 text-sm">
-                                                <div className="flex justify-between text-slate-700">
-                                                    <span>Detection Model:</span>
-                                                    <span className="font-mono">Roboflow bloodcell-hema/5</span>
+                                            <h3 className="font-semibold text-lg mb-3 text-slate-800">Analysis Details</h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                <div className="space-y-2 text-sm">
+                                                    <div className="flex justify-between text-slate-700">
+                                                        <span>Detection Model:</span>
+                                                        <span className="font-mono">Roboflow bloodcell-hema/5</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-slate-700">
+                                                        <span>Confidence Threshold:</span>
+                                                        <span className="font-mono">20%</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-slate-700">
+                                                        <span>Overlap Threshold:</span>
+                                                        <span className="font-mono">20%</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-slate-700">
+                                                        <span>Analysis Date:</span>
+                                                        <span>{selectedReport.timestamp}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="flex justify-between text-slate-700">
-                                                    <span>Confidence Threshold:</span>
-                                                    <span className="font-mono">20%</span>
-                                                </div>
-                                                <div className="flex justify-between text-slate-700">
-                                                    <span>Overlap Threshold:</span>
-                                                    <span className="font-mono">20%</span>
-                                                </div>
-                                                <div className="flex justify-between text-slate-700">
-                                                    <span>Analysis Date:</span>
-                                                    <span>{selectedReport.timestamp}</span>
-                                                </div>
+                                                {selectedReport.sessionData && (
+                                                    <div className="space-y-2 text-sm">
+                                                        <div className="flex justify-between text-slate-700">
+                                                            <span>Images Analyzed:</span>
+                                                            <span className="font-semibold">
+                                                                {selectedReport.sessionData.totalImagesAnalyzed || selectedReport.imagesCount}/10
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between text-slate-700">
+                                                            <span>Analysis Status:</span>
+                                                            <span className={`font-semibold ${selectedReport.sessionData.analysisComplete ? 'text-green-600' : 'text-amber-600'}`}>
+                                                                {selectedReport.sessionData.analysisComplete ? 'Complete' : 'In Progress'}
+                                                            </span>
+                                                        </div>
+                                                        <div className="flex justify-between text-slate-700">
+                                                            <span>WBC Classifications:</span>
+                                                            <span className="font-semibold">{selectedReport.sessionData.aggregatedClassifications?.length || 0}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-slate-700">
+                                                            <span>RBC Classifications:</span>
+                                                            <span className="font-semibold">{selectedReport.sessionData.aggregatedRBCClassifications?.length || 0}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 

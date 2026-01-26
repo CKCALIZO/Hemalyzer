@@ -776,24 +776,17 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 cell_center_y = (y1 + y2) // 2
                 
                 # Create SQUARE crop centered on cell with optimal padding
-                # The classifier uses Enhanced AdaptiveCellPreprocessing which:
-                # 1. Resizes to 384x384 for consistent input size
-                # 2. Applies baseline color normalization using BAS_47.jpg reference
-                # 3. Performs stain normalization (OD space)
-                # 4. Applies CLAHE contrast enhancement in YUV space
-                # 5. Detects and centers cells using Otsu thresholding
-                # 6. Applies final baseline adjustment for color consistency
+                # The classifier's preprocessing pipeline (matching training EXACTLY):
+                #   1. pre_transform: Resize to 384x384
+                #   2. AdaptiveCellPreprocessing:
+                #      a. Stain normalization (OD space)
+                #      b. CLAHE contrast enhancement (YUV space, clipLimit=3.0)
+                #      c. Cell detection and centering (Otsu thresholding)
+                #   3. ToTensor + Normalize (ImageNet stats)
                 # 
-                # This ensures ALL images are processed consistently regardless of:
-                # - Original image size (automatically resized)
-                # - Color variations (normalized to baseline)
-                # - Staining differences (H&E normalization)
-                # - Contrast variations (adaptive histogram equalization)
-                # 
-                # Padding strategy:
-                # - Use 2.5x for WBC (larger cells need more context to avoid Platelet misclassification)
+                # Padding strategy: Use enough context for cell detection to work
+                # - Use 2.5x for WBC (larger cells need more context)
                 # - Use 1.5x for RBC (smaller, more uniform cells)
-                # This ensures the cell is well-centered with sufficient context
                 max_dim = max(cell_width, cell_height)
                 
                 if cell_type == 'WBC':
@@ -843,23 +836,18 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     cell_crop = padded_crop
                 
                 # Convert to PIL Image
-                # The classifier's AdaptiveCellPreprocessing will handle all preprocessing
+                # CRITICAL: Pass the raw crop to the classifier - do NOT resize here!
+                # The classifier's pipeline handles all preprocessing:
+                #   1. pre_transform: Resize to 384x384
+                #   2. AdaptiveCellPreprocessing: stain normalization + CLAHE + cell detection
+                #   3. transform: ToTensor + Normalize
+                # This matches the training val_transform EXACTLY.
                 cell_crop_pil = Image.fromarray(cell_crop)
                 
-                # MINIMUM CROP SIZE CHECK
-                # Based on baseline analysis, crops smaller than 80px can cause misclassification
-                # Increased from 60px to ensure better quality input for baseline preprocessing
-                MIN_CROP_SIZE = 80
+                # Log crop info for debugging
                 crop_w, crop_h = cell_crop_pil.size
-                if min(crop_w, crop_h) < MIN_CROP_SIZE:
-                    print(f"   Warning: Small crop ({crop_w}x{crop_h}) - upscaling for better classification")
-                    # Upscale to minimum size while maintaining aspect ratio
-                    scale = MIN_CROP_SIZE / min(crop_w, crop_h)
-                    new_w = int(crop_w * scale)
-                    new_h = int(crop_h * scale)
-                    cell_crop_pil = cell_crop_pil.resize((new_w, new_h), Image.LANCZOS)
                 
-                # Convert crop to base64 for frontend
+                # Convert crop to base64 for frontend display
                 # Create a display version (384x384) for frontend only
                 display_crop = cell_crop_pil.resize((384, 384), Image.LANCZOS)
                 crop_buffer = io.BytesIO()
@@ -902,45 +890,50 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         for cls_name, prob in sorted_probs:
                             print(f"        {cls_name}: {prob:.3f} ({prob*100:.1f}%)")
                         
-                        # CRITICAL: Exclude RBC and Sickle Cell predictions for WBCs
-                        # RBC classes should not appear in WBC detection results
-                        # If predicted as RBC or Sickle Cell, use the highest WBC class instead
-                        is_non_wbc_class = (
-                            'rbc' in wbc_class.lower() or 
-                            'sickle' in wbc_class.lower() or
-                            'platelet' in wbc_class.lower()
-                        )
+                        # CRITICAL: Exclude ALL non-WBC classes when classifying WBC crops
+                        # The model contains RBC and Platelet classes that should NEVER be returned for WBCs
+                        # Non-WBC classes to exclude: RBC: Normal, Platelet: Normal, RBC: Sickle Cell Anemia
+                        NON_WBC_CLASSES = {
+                            'rbc: normal',
+                            'platelet: normal', 
+                            'rbc: sickle cell anemia'
+                        }
+                        
+                        is_non_wbc_class = wbc_class.lower() in NON_WBC_CLASSES
                         
                         if is_non_wbc_class:
-                            print(f"   WBC #{wbc_idx} predicted as {wbc_class} (non-WBC class) - using next best WBC class")
+                            print(f"   WBC #{wbc_idx} predicted as {wbc_class} (non-WBC class) - filtering to WBC classes only")
                             
-                            # Get only WBC probabilities (exclude RBC, Sickle, Platelet classes) and RE-NORMALIZE
+                            # Get only valid WBC probabilities (exclude all non-WBC classes)
                             wbc_only_probs = {
                                 cls_name: prob 
                                 for cls_name, prob in probs.items() 
-                                if 'rbc' not in cls_name.lower() 
-                                and 'sickle' not in cls_name.lower()
-                                and 'platelet' not in cls_name.lower()
+                                if cls_name.lower() not in NON_WBC_CLASSES
                             }
                             
-                            # Re-normalize probabilities to sum to 1.0 (100%)
-                            total_prob = sum(wbc_only_probs.values())
-                            if total_prob > 0:
-                                normalized_probs = {
-                                    cls_name: prob / total_prob 
-                                    for cls_name, prob in wbc_only_probs.items()
-                                }
-                                
-                                # Find highest probability after normalization
-                                best_wbc_class = max(normalized_probs.items(), key=lambda x: x[1])
-                                wbc_class = best_wbc_class[0]
-                                wbc_confidence = best_wbc_class[1]
-                                
-                                print(f"      → Using {wbc_class} (normalized confidence: {wbc_confidence:.3f})")
+                            if wbc_only_probs:
+                                # Re-normalize probabilities to sum to 1.0 (100%)
+                                total_prob = sum(wbc_only_probs.values())
+                                if total_prob > 0:
+                                    normalized_probs = {
+                                        cls_name: prob / total_prob 
+                                        for cls_name, prob in wbc_only_probs.items()
+                                    }
+                                    
+                                    # Find highest probability WBC class after normalization
+                                    best_wbc_class = max(normalized_probs.items(), key=lambda x: x[1])
+                                    wbc_class = best_wbc_class[0]
+                                    wbc_confidence = best_wbc_class[1]
+                                    
+                                    print(f"      → Using {wbc_class} (normalized confidence: {wbc_confidence:.3f})")
+                                else:
+                                    # Fallback if normalization fails
+                                    wbc_class = 'Neutrophil: Normal'
+                                    wbc_confidence = 0.5
                             else:
-                                # Fallback to Neutrophil: Normal if something goes wrong
+                                # Ultimate fallback if no WBC classes found
                                 wbc_class = 'Neutrophil: Normal'
-                                wbc_confidence = 1.0
+                                wbc_confidence = 0.5
                         
                         # ENHANCED DISEASE-SPECIFIC CONFIDENCE THRESHOLDS
                         # Different thresholds based on disease type to prevent over-prediction
