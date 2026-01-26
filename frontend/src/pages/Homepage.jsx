@@ -6,6 +6,7 @@ import { ThresholdResults } from "../components/ThresholdResults.jsx";
 import { DiseaseInterpretation } from "../components/DiseaseInterpretation.jsx";
 import { FinalResults } from "../components/FinalResults.jsx";
 import { ProcessedImagesThumbnails } from "../components/ProcessedImagesThumbnails.jsx";
+import { saveSession, loadSession, clearSession, migrateFromLocalStorage } from "../utils/sessionStorage.js";
 
 const API_URL = 'http://localhost:5000';
 
@@ -34,20 +35,20 @@ const NUM_FIELDS = 10;
 const Homepage = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    
+
     // File handling
     const [selectedFile, setSelectedFile] = useState(null);
     const [previewUrl, setPreviewUrl] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    
+
     // Progress tracking
     const [analysisProgress, setAnalysisProgress] = useState({
         stage: '',
         percentage: 0,
         message: ''
     });
-    
+
     // Multi-image session state
     const [processedImages, setProcessedImages] = useState([]);
     const [aggregatedCounts, setAggregatedCounts] = useState({
@@ -59,7 +60,7 @@ const Homepage = () => {
     const [aggregatedRBCClassifications, setAggregatedRBCClassifications] = useState([]);
     const [currentResults, setCurrentResults] = useState(null);
     const [showCurrentResults, setShowCurrentResults] = useState(true);
-    
+
     // Threshold tracking
     const [thresholdMet, setThresholdMet] = useState(false);
     const [finalResults, setFinalResults] = useState(null);
@@ -81,24 +82,30 @@ const Homepage = () => {
             if (session.thresholdMet !== undefined) setThresholdMet(session.thresholdMet);
             if (session.finalResults) setFinalResults(session.finalResults);
         }
-        // If no location state, try to restore from localStorage (page reload)
+        // If no location state, try to restore from IndexedDB (page reload)
         else {
-            try {
-                const savedSession = localStorage.getItem('hemalyzer_current_session');
-                if (savedSession) {
-                    const session = JSON.parse(savedSession);
-                    console.log('Restoring session from localStorage:', session);
-                    if (session.processedImages) setProcessedImages(session.processedImages);
-                    if (session.aggregatedCounts) setAggregatedCounts(session.aggregatedCounts);
-                    if (session.aggregatedClassifications) setAggregatedClassifications(session.aggregatedClassifications);
-                    if (session.aggregatedRBCClassifications) setAggregatedRBCClassifications(session.aggregatedRBCClassifications);
-                    if (session.thresholdMet !== undefined) setThresholdMet(session.thresholdMet);
-                    if (session.finalResults) setFinalResults(session.finalResults);
-                    if (session.currentResults) setCurrentResults(session.currentResults);
+            // Wrap async code in IIFE since useEffect can't be async
+            (async () => {
+                try {
+                    // First, migrate any old localStorage session to IndexedDB
+                    await migrateFromLocalStorage();
+
+                    // Load session from IndexedDB
+                    const session = await loadSession();
+                    if (session) {
+                        console.log('Restoring session from IndexedDB:', session);
+                        if (session.processedImages) setProcessedImages(session.processedImages);
+                        if (session.aggregatedCounts) setAggregatedCounts(session.aggregatedCounts);
+                        if (session.aggregatedClassifications) setAggregatedClassifications(session.aggregatedClassifications);
+                        if (session.aggregatedRBCClassifications) setAggregatedRBCClassifications(session.aggregatedRBCClassifications);
+                        if (session.thresholdMet !== undefined) setThresholdMet(session.thresholdMet);
+                        if (session.finalResults) setFinalResults(session.finalResults);
+                        if (session.currentResults) setCurrentResults(session.currentResults);
+                    }
+                } catch (error) {
+                    console.log('No valid session to restore:', error);
                 }
-            } catch (error) {
-                console.log('No valid session to restore:', error);
-            }
+            })();
         }
     }, [location.state]);
 
@@ -119,10 +126,10 @@ const Homepage = () => {
         // Count WBC types from ConvNeXt classifications
         // NEW MODEL FORMAT: "CellType: Condition" (e.g., "Basophil: Normal", "Basophil: CML")
         const wbcTypeCounts = {};
-        
+
         // 5 main WBC categories (for differential) - count regardless of condition
         const mainWBCCategories = ['Neutrophil', 'Lymphocyte', 'Monocyte', 'Eosinophil', 'Basophil'];
-        
+
         // Initialize differential counts for 5 main categories
         const differentialCounts = {
             'Neutrophil': 0,
@@ -131,27 +138,27 @@ const Homepage = () => {
             'Eosinophil': 0,
             'Basophil': 0
         };
-        
+
         // Disease counts
         let cmlCount = 0;
         let cllCount = 0;
         let allCount = 0;
         let amlCount = 0;
-        
+
         // Track abnormal WBCs (for Abnormal WBCs button)
         const abnormalWBCs = [];
-        
+
         allClassifications.forEach(cls => {
             const classification = cls.classification || '';
             wbcTypeCounts[classification] = (wbcTypeCounts[classification] || 0) + 1;
-            
+
             // Extract cell type from new format "CellType: Condition"
             const cellTypePart = classification.split(':')[0]?.trim() || '';
             const conditionPart = classification.split(':')[1]?.trim()?.toLowerCase() || '';
-            
+
             // Enhanced mapping for 20-class model to 5 main WBC categories
             const cellTypeLower = cellTypePart.toLowerCase();
-            
+
             // Map detailed cell types to main categories
             if (cellTypeLower.includes('neutrophil') || cellTypeLower.includes('neutrophils')) {
                 differentialCounts['Neutrophil']++;
@@ -163,38 +170,38 @@ const Homepage = () => {
                 differentialCounts['Eosinophil']++;
             } else if (cellTypeLower.includes('basophil')) {
                 differentialCounts['Basophil']++;
-            } else if (cellTypeLower.includes('myeloblast') || cellTypeLower.includes('myelocyte') || 
-                      cellTypeLower.includes('metamyelocyte') || cellTypeLower.includes('promyelocyte')) {
+            } else if (cellTypeLower.includes('myeloblast') || cellTypeLower.includes('myelocyte') ||
+                cellTypeLower.includes('metamyelocyte') || cellTypeLower.includes('promyelocyte')) {
                 // Immature granulocytes - count as Neutrophils
                 differentialCounts['Neutrophil']++;
             } else if (cellTypeLower.includes('erythroblast')) {
                 // Nucleated RBC - don't count in WBC differential
             }
-            
+
             // Track abnormal WBCs (condition is not "normal")
             if (conditionPart && conditionPart !== 'normal') {
                 abnormalWBCs.push(cls);
             }
-            
+
             // Count disease markers
             if (conditionPart === 'cml') cmlCount++;
             if (conditionPart === 'cll') cllCount++;
             if (conditionPart === 'all') allCount++;
             if (conditionPart === 'aml') amlCount++;
         });
-        
+
         // Calculate estimated cell counts using standard formulas
         // RBC formula: 
         // Step 1: Calculate average RBC per image (Total RBC ÷ Number of images)
         // Step 2: Divide average by 10, then multiply by 200,000
         // Formula: (Average RBC per image ÷ 10) × 200,000 = Estimated RBC/μL
         // WBC count: (Total WBC ÷ 10) × 2,000
-        
+
         const totalImagesProcessed = allProcessedImages.length;
-        
+
         // Step 1: Calculate average RBC count per image
         const averageRBCPerImage = totalImagesProcessed > 0 ? counts.rbc / totalImagesProcessed : 0;
-        
+
         // Step 2: Divide average by 10, then multiply by 200,000
         const estimatedRBCCount = Math.round((averageRBCPerImage / 10) * RBC_MULTIPLIER);
         const estimatedWBCCount = Math.round((counts.wbc / NUM_FIELDS) * WBC_MULTIPLIER);
@@ -202,19 +209,19 @@ const Homepage = () => {
         // Calculate differential percentages based on 5 main WBC categories
         const totalWBC = counts.wbc;
         const wbcDifferential = {};
-        
+
         // Calculate percentage for each of the 5 main WBC categories
         mainWBCCategories.forEach(category => {
             const count = differentialCounts[category];
             const percentage = totalWBC > 0 ? (count / totalWBC) * 100 : 0;
             const normalRange = WBC_NORMAL_RANGES[category];
             let status = 'normal';
-            
+
             if (normalRange) {
                 if (percentage > normalRange.max) status = 'high';
                 else if (percentage < normalRange.min) status = 'low';
             }
-            
+
             wbcDifferential[category] = {
                 count,
                 percentage,
@@ -225,30 +232,30 @@ const Homepage = () => {
 
         // Calculate disease percentages based on About page thresholds
         // Using disease counts extracted from "CellType: Condition" format
-        
+
         // === AML/ALL ANALYSIS (Blast Cells) ===
         // Count cells with ": all" or ": aml" in their classification
         const blastCount = amlCount + allCount;
         const blastPercentage = totalWBC > 0 ? (blastCount / totalWBC) * 100 : 0;
-        
+
         // === CML ANALYSIS ===
         // Count cells classified as CML (e.g., "Basophil: CML", "Neutrophils: CML")
         const cmlPercentage = totalWBC > 0 ? (cmlCount / totalWBC) * 100 : 0;
-        
+
         // === CLL ANALYSIS ===
         // Count cells classified as CLL (e.g., "Lymphocyte: CLL")
         const cllPercentage = totalWBC > 0 ? (cllCount / totalWBC) * 100 : 0;
 
         // Calculate disease findings based on About page thresholds
         const diseaseFindings = [];
-        
+
         // AML/ALL Analysis (based on blast percentage thresholds from About page)
         // < 5% = Normal, 6-10% = Slightly Increased, 11-19% = Suspicious, >= 20% = Acute Leukemia
         if (blastCount > 0) {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
-            
+
             if (blastPercentage >= 20) {
                 // Determine if it's more likely AML or ALL based on cell types
                 if (amlCount > allCount) {
@@ -275,7 +282,7 @@ const Homepage = () => {
                 condition = 'Normal with blast cells';
                 severity = 'INFO';
             }
-            
+
             diseaseFindings.push({
                 type: 'Acute Leukemia (AML/ALL)',
                 percentage: blastPercentage,
@@ -296,7 +303,7 @@ const Homepage = () => {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
-            
+
             if (cmlPercentage > 50) {
                 interpretation = 'Significant CML cell population detected';
                 condition = 'Chronic Myeloid Leukemia (CML)';
@@ -314,7 +321,7 @@ const Homepage = () => {
                 condition = 'Minimal CML markers';
                 severity = 'INFO';
             }
-            
+
             diseaseFindings.push({
                 type: 'CML Analysis',
                 percentage: cmlPercentage,
@@ -334,7 +341,7 @@ const Homepage = () => {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
-            
+
             if (cllPercentage > 50) {
                 interpretation = 'Significant CLL cell population detected';
                 condition = 'Chronic Lymphocytic Leukemia (CLL)';
@@ -352,7 +359,7 @@ const Homepage = () => {
                 condition = 'Minimal CLL markers';
                 severity = 'INFO';
             }
-            
+
             diseaseFindings.push({
                 type: 'CLL Analysis',
                 percentage: cllPercentage,
@@ -373,7 +380,7 @@ const Homepage = () => {
             if (img.sickleCount) sickleCount += img.sickleCount;
         });
         const sicklePercentage = counts.rbc > 0 ? (sickleCount / counts.rbc) * 100 : 0;
-        
+
         let sickleInterpretation = 'Normal blood, no sickling observed';
         let sickleSeverity = 'NORMAL';
         if (sicklePercentage > 30) {
@@ -394,7 +401,7 @@ const Homepage = () => {
         let patientStatus = 'Normal';
         const hasCritical = diseaseFindings.some(f => f.severity === 'HIGH');
         const hasAbnormal = diseaseFindings.some(f => f.severity === 'MODERATE' || f.severity === 'LOW');
-        
+
         if (hasCritical || sicklePercentage > 30) {
             patientStatus = 'Critical';
         } else if (hasAbnormal || sicklePercentage >= 3) {
@@ -452,18 +459,18 @@ const Homepage = () => {
             formData.append('image', selectedFile);
             formData.append('conf_threshold', '0.2');
             formData.append('iou_threshold', '0.2');
-            
+
             setAnalysisProgress({ stage: 'detection', percentage: 30, message: 'Detecting cells with YOLOv8...' });
-            
+
             const response = await fetch(`${API_URL}/api/analyze`, {
                 method: 'POST',
                 body: formData,
             });
-            
+
             setAnalysisProgress({ stage: 'classification', percentage: 60, message: 'Classifying cells with ConvNeXt...' });
 
             const data = await response.json();
-            
+
             setAnalysisProgress({ stage: 'analysis', percentage: 85, message: 'Analyzing results...' });
 
             if (data.success) {
@@ -471,7 +478,7 @@ const Homepage = () => {
                 const wbcCount = data.stage1_detection?.counts?.WBC || 0;
                 const rbcCount = data.stage1_detection?.counts?.RBC || 0;
                 const plateletCount = data.stage1_detection?.counts?.Platelets || 0;
-                
+
                 // Extract sickle cell count from summary (not disease_interpretation)
                 const sickleCount = data.summary?.sickle_cell_count || 0;
 
@@ -501,7 +508,7 @@ const Homepage = () => {
                 const classificationsWithImages = (data.stage2_classification || []).map((cls, idx) => {
                     // If the classification doesn't have a cropped_image, try to get it from cropped_cells
                     if (!cls.cropped_image && data.cropped_cells) {
-                        const matchingCell = data.cropped_cells.find(cell => 
+                        const matchingCell = data.cropped_cells.find(cell =>
                             cell.cell_type === 'WBC' && cell.wbc_id === cls.wbc_id
                         );
                         if (matchingCell) {
@@ -510,7 +517,7 @@ const Homepage = () => {
                     }
                     return cls;
                 });
-                
+
                 const newClassifications = [
                     ...aggregatedClassifications,
                     ...classificationsWithImages
@@ -540,7 +547,7 @@ const Homepage = () => {
                         const finalCalc = calculateFinalResults(newClassifications, newProcessedImages, newCounts, newRBCClassifications);
                         setFinalResults(finalCalc);
                     }
-                    
+
                     // Save session state to localStorage for persistence on reload
                     const sessionState = {
                         processedImages: newProcessedImages,
@@ -548,13 +555,17 @@ const Homepage = () => {
                         aggregatedClassifications: newClassifications,
                         aggregatedRBCClassifications: newRBCClassifications,
                         thresholdMet: newProcessedImages.length >= TARGET_IMAGE_COUNT,
-                        finalResults: newProcessedImages.length >= TARGET_IMAGE_COUNT ? 
+                        finalResults: newProcessedImages.length >= TARGET_IMAGE_COUNT ?
                             calculateFinalResults(newClassifications, newProcessedImages, newCounts, newRBCClassifications) : null,
                         currentResults: data,
                         timestamp: Date.now()
                     };
-                    localStorage.setItem('hemalyzer_current_session', JSON.stringify(sessionState));
-                    console.log('Session saved to localStorage:', sessionState);
+                    // Save session to IndexedDB (non-blocking)
+                    saveSession(sessionState).catch(err => {
+                        console.error('Failed to save session:', err);
+                        setError('Warning: Session could not be saved for page reload.');
+                    });
+                    console.log('Session saved to IndexedDB:', sessionState);
                 } catch (stateError) {
                     console.error('Error updating state:', stateError);
                     setError(`State update error: ${stateError.message}`);
@@ -564,11 +575,11 @@ const Homepage = () => {
                 setSelectedFile(null);
                 // DON'T clear previewUrl - keep showing the last analyzed image
                 // setPreviewUrl(null); // Removed - keep the image visible
-                
+
                 // Reset file input for next upload
                 const fileInput = document.getElementById('pbs-upload');
                 if (fileInput) fileInput.value = '';
-                
+
                 setAnalysisProgress({ stage: 'complete', percentage: 100, message: 'Analysis complete!' });
                 setTimeout(() => {
                     setAnalysisProgress({ stage: '', percentage: 0, message: '' });
@@ -598,10 +609,12 @@ const Homepage = () => {
         setSelectedFile(null);
         setPreviewUrl(null);
         setError(null);
-        
-        // Clear saved session from localStorage
-        localStorage.removeItem('hemalyzer_current_session');
-        console.log('Session cleared from localStorage');
+
+        // Clear saved session from IndexedDB
+        clearSession().catch(err => {
+            console.error('Failed to clear session:', err);
+        });
+        console.log('Session cleared from IndexedDB');
     };
 
     // Save report to localStorage with complete analysis data
@@ -610,7 +623,7 @@ const Homepage = () => {
             alert('No final results to save. Please complete the analysis first.');
             return;
         }
-        
+
         const reports = JSON.parse(localStorage.getItem('hemalyzer_reports') || '[]');
         const newReport = {
             id: Date.now(),
@@ -643,14 +656,14 @@ const Homepage = () => {
             },
             imagesCount: processedImages.length
         };
-        
+
         reports.unshift(newReport);
         // Keep only last 50 reports to prevent localStorage overflow
         if (reports.length > 50) {
             reports.splice(50);
         }
         localStorage.setItem('hemalyzer_reports', JSON.stringify(reports));
-        
+
         alert(`Report saved successfully! \nImages analyzed: ${processedImages.length}\nTotal cells: ${newReport.summary.totalCells}`);
         navigate('/reports');
     };
@@ -710,7 +723,7 @@ const Homepage = () => {
                                         {processedImages.length} / {TARGET_IMAGE_COUNT} images analyzed
                                     </p>
                                 </div>
-                                
+
                                 <div className="p-6">
                                     {/* Progress Indicator */}
                                     <div className="mb-6 bg-rose-50 rounded-lg p-4 border border-rose-100">
@@ -721,7 +734,7 @@ const Homepage = () => {
                                             </span>
                                         </div>
                                         <div className="w-full h-3 bg-rose-200 rounded-full overflow-hidden">
-                                            <div 
+                                            <div
                                                 className="h-full bg-gradient-to-r from-rose-400 to-rose-600 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
                                                 style={{ width: `${progress}%` }}
                                             />
@@ -740,9 +753,9 @@ const Homepage = () => {
                                     {/* Image Preview */}
                                     {previewUrl && (
                                         <div className="mb-4 rounded-lg overflow-hidden border border-red-200">
-                                            <img 
-                                                src={previewUrl} 
-                                                alt="Preview" 
+                                            <img
+                                                src={previewUrl}
+                                                alt="Preview"
                                                 className="w-full h-64 object-contain bg-rose-50"
                                             />
                                         </div>
@@ -750,12 +763,12 @@ const Homepage = () => {
 
                                     {/* File Input */}
                                     <div className="mb-4">
-                                        <input 
+                                        <input
                                             className="block w-full text-sm text-rose-700 border border-rose-300 
                                             rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 
                                             focus:ring-rose-400 p-2"
-                                            id="pbs-upload" 
-                                            type="file" 
+                                            id="pbs-upload"
+                                            type="file"
                                             accept="image/*"
                                             onChange={handleFileChange}
                                             disabled={loading || thresholdMet}
@@ -764,73 +777,63 @@ const Homepage = () => {
 
                                     {/* Analysis Progress Bar - Shows during image processing AND for 2s after completion */}
                                     {analysisProgress.stage && (
-                                        <div className={`mb-4 p-4 rounded-lg border ${
-                                            analysisProgress.stage === 'complete' 
-                                                ? 'bg-emerald-50 border-emerald-300' 
-                                                : 'bg-rose-50 border-rose-300'
-                                        }`}>
+                                        <div className={`mb-4 p-4 rounded-lg border ${analysisProgress.stage === 'complete'
+                                            ? 'bg-emerald-50 border-emerald-300'
+                                            : 'bg-rose-50 border-rose-300'
+                                            }`}>
                                             <div className="flex justify-between items-center mb-2">
-                                                <span className={`text-sm font-medium ${
-                                                    analysisProgress.stage === 'complete' 
-                                                        ? 'text-emerald-800' 
-                                                        : 'text-rose-800'
-                                                }`}>
+                                                <span className={`text-sm font-medium ${analysisProgress.stage === 'complete'
+                                                    ? 'text-emerald-800'
+                                                    : 'text-rose-800'
+                                                    }`}>
                                                     {analysisProgress.message}
                                                 </span>
-                                                <span className={`text-sm font-semibold ${
-                                                    analysisProgress.stage === 'complete' 
-                                                        ? 'text-emerald-600' 
-                                                        : 'text-rose-600'
-                                                }`}>
+                                                <span className={`text-sm font-semibold ${analysisProgress.stage === 'complete'
+                                                    ? 'text-emerald-600'
+                                                    : 'text-rose-600'
+                                                    }`}>
                                                     {analysisProgress.percentage}%
                                                 </span>
                                             </div>
-                                            <div className={`w-full h-2.5 rounded-full overflow-hidden ${
-                                                analysisProgress.stage === 'complete' 
-                                                    ? 'bg-emerald-200' 
-                                                    : 'bg-rose-200'
-                                            }`}>
-                                                <div 
-                                                    className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                                                        analysisProgress.stage === 'complete' 
-                                                            ? 'bg-emerald-500' 
-                                                            : 'bg-gradient-to-r from-rose-400 to-rose-600'
-                                                    }`}
+                                            <div className={`w-full h-2.5 rounded-full overflow-hidden ${analysisProgress.stage === 'complete'
+                                                ? 'bg-emerald-200'
+                                                : 'bg-rose-200'
+                                                }`}>
+                                                <div
+                                                    className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${analysisProgress.stage === 'complete'
+                                                        ? 'bg-emerald-500'
+                                                        : 'bg-gradient-to-r from-rose-400 to-rose-600'
+                                                        }`}
                                                     style={{ width: `${analysisProgress.percentage}%` }}
                                                 />
                                             </div>
-                                            <div className={`mt-3 flex items-center justify-between text-xs ${
-                                                analysisProgress.stage === 'complete' 
-                                                    ? 'text-emerald-700' 
-                                                    : 'text-rose-700'
-                                            }`}>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
-                                                    analysisProgress.percentage >= 10 ? 'font-semibold scale-105' : 'opacity-50'
+                                            <div className={`mt-3 flex items-center justify-between text-xs ${analysisProgress.stage === 'complete'
+                                                ? 'text-emerald-700'
+                                                : 'text-rose-700'
                                                 }`}>
+                                                <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 10 ? 'font-semibold scale-105' : 'opacity-50'
+                                                    }`}>
                                                     <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 10 ? 'text-emerald-500' : ''}`}>
                                                         {analysisProgress.percentage >= 10 ? '✓' : '○'}
                                                     </span>
                                                     <span>Upload</span>
                                                 </div>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
-                                                    analysisProgress.percentage >= 30 ? 'font-semibold scale-105' : 'opacity-50'
-                                                }`}>
+                                                <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 30 ? 'font-semibold scale-105' : 'opacity-50'
+                                                    }`}>
                                                     <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 30 ? 'text-emerald-500' : ''}`}>
                                                         {analysisProgress.percentage >= 30 ? '✓' : '○'}
                                                     </span>
                                                     <span>Detection</span>
                                                 </div>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
-                                                    analysisProgress.percentage >= 60 ? 'font-semibold scale-105' : 'opacity-50'
-                                                }`}>
+                                                <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 60 ? 'font-semibold scale-105' : 'opacity-50'
+                                                    }`}>
                                                     <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 60 ? 'text-emerald-500' : ''}`}>
                                                         {analysisProgress.percentage >= 60 ? '✓' : '○'}
                                                     </span>
                                                     <span>Classification</span>
                                                 </div>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
-                                                    analysisProgress.percentage >= 85 ? 'font-semibold scale-105' : 'opacity-50'
-                                                }`}>
+                                                <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 85 ? 'font-semibold scale-105' : 'opacity-50'
+                                                    }`}>
                                                     <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 85 ? 'text-emerald-500' : ''}`}>
                                                         {analysisProgress.percentage >= 85 ? '✓' : '○'}
                                                     </span>
@@ -841,7 +844,7 @@ const Homepage = () => {
                                     )}
 
                                     {/* Analyze Button */}
-                                    <button 
+                                    <button
                                         onClick={handleAnalyze}
                                         disabled={!selectedFile || loading || thresholdMet}
                                         className={`w-full flex items-center justify-center gap-2 text-white 
@@ -931,7 +934,7 @@ const Homepage = () => {
                                         </button>
                                     )}
                                 </div>
-                                
+
                                 <div className="p-6 overflow-y-auto flex-1">
                                     {!currentResults && !loading && (
                                         <div className="text-center py-8">
@@ -982,9 +985,9 @@ const Homepage = () => {
                                             {/* Annotated Image */}
                                             {currentResults.annotated_image && (
                                                 <div className="rounded-lg overflow-hidden border border-slate-200">
-                                                    <img 
+                                                    <img
                                                         src={`data:image/jpeg;base64,${currentResults.annotated_image}`}
-                                                        alt="Annotated" 
+                                                        alt="Annotated"
                                                         className="w-full"
                                                     />
                                                 </div>
@@ -1037,7 +1040,7 @@ const Homepage = () => {
                                             <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm">
                                                 <p className="font-semibold text-slate-700">Note:</p>
                                                 <p className="text-xs mt-1 text-slate-600">
-                                                    Continue uploading images until 10 images are analyzed for 
+                                                    Continue uploading images until 10 images are analyzed for
                                                     a reliable differential count and disease assessment.
                                                 </p>
                                             </div>
