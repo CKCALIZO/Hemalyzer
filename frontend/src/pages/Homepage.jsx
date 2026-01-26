@@ -665,388 +665,322 @@ const Homepage = () => {
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-rose-50">
+        <div className="flex flex-col min-h-screen bg-stone-50 font-sans selection:bg-rose-100 selection:text-rose-900">
             <Header />
-            <main className="flex-1 p-6">
-                <div className="max-w-7xl mx-auto">
-                    {/* Page Title */}
-                    <div className="mb-6">
-                        <h1 className="text-2xl font-bold text-rose-800">Blood Smear Analysis</h1>
-                        <p className="text-rose-600 text-sm mt-1">
-                            Upload 10 blood smear images for accurate differential count and disease assessment
-                        </p>
+            <main className="flex-grow p-4 lg:p-8 xl:p-12">
+                <div className="max-w-[1600px] mx-auto">
+                    {/* Diagnostic Engine Header */}
+                    <div className="mb-12 flex flex-col md:flex-row md:items-end md:justify-between gap-6 px-4">
+                        <div>
+                            <div className="inline-flex items-center gap-2 px-3 py-1 bg-rose-600 text-white rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-4 shadow-lg shadow-rose-200">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                                </span>
+                                System Operational
+                            </div>
+                            <h1 className="text-6xl font-black text-zinc-950 tracking-tighter leading-none mb-2 uppercase">
+                                Diagnostic <span className="text-rose-600">Engine</span>
+                            </h1>
+                            <p className="text-stone-500 font-bold text-lg tracking-tight uppercase opacity-60">
+                                Morphological Processing Suite • v2.5.0
+                            </p>
+                        </div>
+                        <div className="flex flex-col items-end">
+                            <div className="text-right mb-2">
+                                <span className="text-zinc-400 text-[10px] font-black uppercase tracking-widest pl-1">Session Integrity</span>
+                                <div className="flex items-center gap-3 mt-1">
+                                    <div className="flex gap-1">
+                                        {[...Array(TARGET_IMAGE_COUNT)].map((_, i) => (
+                                            <div 
+                                                key={i} 
+                                                className={`w-2 h-7 rounded-full transition-all duration-700 ${
+                                                    i < processedImages.length ? 'bg-rose-600' : 'bg-stone-200'
+                                                }`}
+                                            />
+                                        ))}
+                                    </div>
+                                    <span className="text-3xl font-black text-zinc-950 tabular-nums">
+                                        {processedImages.length}<span className="text-stone-300 mx-1">/</span>{TARGET_IMAGE_COUNT}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Processed Images Thumbnail Bar */}
-                    {processedImages.length > 0 && (
-                        <ProcessedImagesThumbnails
-                            processedImages={processedImages}
-                            currentImageCount={processedImages.length}
-                            targetImageCount={TARGET_IMAGE_COUNT}
-                        />
-                    )}
-
-                    {/* Final Results (shown when 100 WBC threshold is met) */}
-                    {thresholdMet && finalResults && (
-                        <div className="mb-6">
-                            <FinalResults
-                                aggregatedResults={finalResults}
-                                processedImages={processedImages}
-                                onReset={handleReset}
-                            />
-                        </div>
-                    )}
-
-                    {/* Main Content Grid */}
-                    {!thresholdMet && (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                            {/* Upload Section */}
-                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm h-fit">
-                                <div className="px-6 py-4 border-b border-rose-200 bg-rose-50">
-                                    <h2 className="text-lg font-semibold text-rose-800">
-                                        Upload Blood Smear Image
-                                    </h2>
-                                    <p className="text-sm text-rose-600 mt-1">
-                                        {processedImages.length} / {TARGET_IMAGE_COUNT} images analyzed
-                                    </p>
-                                </div>
+                    <div className="grid grid-cols-1 xl:grid-cols-12 gap-10 items-start">
+                        {/* Left Column: Scanner Controls */}
+                        <div className="xl:col-span-4 space-y-6">
+                            <div className="bg-zinc-950 rounded-[40px] p-8 text-white shadow-2xl relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-64 h-64 bg-rose-600/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
                                 
-                                <div className="p-6">
-                                    {/* Progress Indicator */}
-                                    <div className="mb-6 bg-rose-50 rounded-lg p-4 border border-rose-100">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-sm font-medium text-rose-700">Analysis Progress</span>
-                                            <span className="text-sm text-rose-600">
-                                                {processedImages.length} / {TARGET_IMAGE_COUNT} Images
-                                            </span>
-                                        </div>
-                                        <div className="w-full h-3 bg-rose-200 rounded-full overflow-hidden">
-                                            <div 
-                                                className="h-full bg-gradient-to-r from-rose-400 to-rose-600 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
-                                                style={{ width: `${progress}%` }}
-                                            />
-                                        </div>
-                                        {remainingImages > 0 ? (
-                                            <p className="text-xs text-rose-600 mt-2">
-                                                Need {remainingImages} more image{remainingImages > 1 ? 's' : ''} for reliable differential
-                                            </p>
+                                <h2 className="text-2xl font-black tracking-tighter mb-8 relative z-10 flex items-center gap-3 uppercase">
+                                    Scanner Controls
+                                    <div className="h-px flex-grow bg-white/10"></div>
+                                </h2>
+
+                                <div className="space-y-8 relative z-10">
+                                    {/* Dropzone / Preview */}
+                                    <div className="group relative">
+                                        {previewUrl ? (
+                                            <div className="aspect-video rounded-[30px] overflow-hidden bg-white/5 border border-white/10 relative group">
+                                                <img src={previewUrl} alt="Preview" className="w-full h-full object-cover opacity-80 group-hover:opacity-60 transition-opacity" />
+                                                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                    <input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" disabled={loading || thresholdMet} />
+                                                    <span className="bg-white text-zinc-950 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest">Change Image</span>
+                                                </div>
+                                            </div>
                                         ) : (
-                                            <p className="text-xs text-emerald-600 mt-2 font-medium">
-                                                Threshold met! Processing final results...
-                                            </p>
+                                            <div className="aspect-video rounded-[30px] border-2 border-dashed border-white/20 flex flex-col items-center justify-center group-hover:border-rose-500/50 group-hover:bg-rose-500/5 transition-all duration-500">
+                                                <input type="file" onChange={handleFileChange} className="absolute inset-0 opacity-0 cursor-pointer z-10" disabled={loading || thresholdMet} />
+                                                <svg className="w-10 h-10 text-rose-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                </svg>
+                                                <p className="font-black text-[10px] tracking-widest uppercase">Load Smear Feed</p>
+                                            </div>
                                         )}
                                     </div>
 
-                                    {/* Image Preview */}
-                                    {previewUrl && (
-                                        <div className="mb-4 rounded-lg overflow-hidden border border-red-200">
-                                            <img 
-                                                src={previewUrl} 
-                                                alt="Preview" 
-                                                className="w-full h-64 object-contain bg-rose-50"
-                                            />
-                                        </div>
-                                    )}
-
-                                    {/* File Input */}
-                                    <div className="mb-4">
-                                        <input 
-                                            className="block w-full text-sm text-rose-700 border border-rose-300 
-                                            rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 
-                                            focus:ring-rose-400 p-2"
-                                            id="pbs-upload" 
-                                            type="file" 
-                                            accept="image/*"
-                                            onChange={handleFileChange}
-                                            disabled={loading || thresholdMet}
-                                        />
-                                    </div>
-
-                                    {/* Analysis Progress Bar - Shows during image processing AND for 2s after completion */}
+                                    {/* Progress Interaction */}
                                     {analysisProgress.stage && (
-                                        <div className={`mb-4 p-4 rounded-lg border ${
-                                            analysisProgress.stage === 'complete' 
-                                                ? 'bg-emerald-50 border-emerald-300' 
-                                                : 'bg-rose-50 border-rose-300'
-                                        }`}>
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className={`text-sm font-medium ${
-                                                    analysisProgress.stage === 'complete' 
-                                                        ? 'text-emerald-800' 
-                                                        : 'text-rose-800'
-                                                }`}>
-                                                    {analysisProgress.message}
-                                                </span>
-                                                <span className={`text-sm font-semibold ${
-                                                    analysisProgress.stage === 'complete' 
-                                                        ? 'text-emerald-600' 
-                                                        : 'text-rose-600'
-                                                }`}>
-                                                    {analysisProgress.percentage}%
-                                                </span>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-end">
+                                                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-500">{analysisProgress.message}</span>
+                                                <span className="text-xl font-black">{analysisProgress.percentage}%</span>
                                             </div>
-                                            <div className={`w-full h-2.5 rounded-full overflow-hidden ${
-                                                analysisProgress.stage === 'complete' 
-                                                    ? 'bg-emerald-200' 
-                                                    : 'bg-rose-200'
-                                            }`}>
+                                            <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
                                                 <div 
-                                                    className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                                                        analysisProgress.stage === 'complete' 
-                                                            ? 'bg-emerald-500' 
-                                                            : 'bg-gradient-to-r from-rose-400 to-rose-600'
-                                                    }`}
+                                                    className="h-full bg-rose-600 transition-all duration-500" 
                                                     style={{ width: `${analysisProgress.percentage}%` }}
                                                 />
                                             </div>
-                                            <div className={`mt-3 flex items-center justify-between text-xs ${
-                                                analysisProgress.stage === 'complete' 
-                                                    ? 'text-emerald-700' 
-                                                    : 'text-rose-700'
-                                            }`}>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
-                                                    analysisProgress.percentage >= 10 ? 'font-semibold scale-105' : 'opacity-50'
-                                                }`}>
-                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 10 ? 'text-emerald-500' : ''}`}>
-                                                        {analysisProgress.percentage >= 10 ? '✓' : '○'}
-                                                    </span>
-                                                    <span>Upload</span>
-                                                </div>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
-                                                    analysisProgress.percentage >= 30 ? 'font-semibold scale-105' : 'opacity-50'
-                                                }`}>
-                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 30 ? 'text-emerald-500' : ''}`}>
-                                                        {analysisProgress.percentage >= 30 ? '✓' : '○'}
-                                                    </span>
-                                                    <span>Detection</span>
-                                                </div>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
-                                                    analysisProgress.percentage >= 60 ? 'font-semibold scale-105' : 'opacity-50'
-                                                }`}>
-                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 60 ? 'text-emerald-500' : ''}`}>
-                                                        {analysisProgress.percentage >= 60 ? '✓' : '○'}
-                                                    </span>
-                                                    <span>Classification</span>
-                                                </div>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${
-                                                    analysisProgress.percentage >= 85 ? 'font-semibold scale-105' : 'opacity-50'
-                                                }`}>
-                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 85 ? 'text-emerald-500' : ''}`}>
-                                                        {analysisProgress.percentage >= 85 ? '✓' : '○'}
-                                                    </span>
-                                                    <span>Analysis</span>
-                                                </div>
-                                            </div>
                                         </div>
                                     )}
 
-                                    {/* Analyze Button */}
-                                    <button 
+                                    {/* Action Button */}
+                                    <button
                                         onClick={handleAnalyze}
                                         disabled={!selectedFile || loading || thresholdMet}
-                                        className={`w-full flex items-center justify-center gap-2 text-white 
-                                        bg-rose-600 hover:bg-rose-500 transition-colors font-semibold 
-                                        rounded-lg text-base px-6 py-3
-                                        ${(!selectedFile || loading || thresholdMet) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                                        className={`
+                                            w-full py-6 rounded-[25px] font-black text-xs tracking-[0.2em] uppercase transition-all duration-500
+                                            ${(!selectedFile || loading || thresholdMet)
+                                                ? 'bg-white/5 text-white/20 cursor-not-allowed'
+                                                : 'bg-rose-600 text-white hover:bg-rose-700 hover:scale-[1.02] active:scale-95 shadow-lg shadow-rose-900/20'}
+                                        `}
                                     >
-                                        {loading ? (
-                                            <>
-                                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                                Analyzing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                </svg>
-                                                Analyze Image
-                                            </>
-                                        )}
+                                        {loading ? 'Processing Array...' : 'Process Image'}
                                     </button>
 
-                                    {/* Error Display */}
-                                    {error && (
-                                        <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg">
-                                            <p className="font-semibold text-sm">Error</p>
-                                            <p className="text-sm">{error}</p>
-                                        </div>
-                                    )}
-
-                                    {/* Aggregated Stats */}
+                                    {/* Session Metrics */}
                                     {processedImages.length > 0 && (
-                                        <div className="mt-6 pt-6 border-t border-rose-200">
-                                            <h3 className="text-sm font-semibold text-rose-700 mb-3">
-                                                Session Totals ({processedImages.length} images)
-                                            </h3>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
-                                                    <p className="text-xl font-bold text-rose-700">{aggregatedCounts.wbc}</p>
-                                                    <p className="text-xs text-rose-600">WBC</p>
+                                        <div className="pt-8 border-t border-white/5">
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/5">
+                                                    <p className="text-[10px] font-black text-rose-500 uppercase mb-1">WBC</p>
+                                                    <p className="text-xl font-black tabular-nums">{aggregatedCounts.wbc}</p>
                                                 </div>
-                                                <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
-                                                    <p className="text-xl font-bold text-rose-600">{aggregatedCounts.rbc}</p>
-                                                    <p className="text-xs text-rose-600">RBC</p>
+                                                <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/5">
+                                                    <p className="text-[10px] font-black text-stone-400 uppercase mb-1">RBC</p>
+                                                    <p className="text-xl font-black tabular-nums">{aggregatedCounts.rbc}</p>
                                                 </div>
-                                                <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
-                                                    <p className="text-xl font-bold text-rose-500">{aggregatedCounts.platelets}</p>
-                                                    <p className="text-xs text-rose-600">Platelets</p>
+                                                <div className="bg-white/5 rounded-2xl p-4 text-center border border-white/5">
+                                                    <p className="text-[10px] font-black text-stone-400 uppercase mb-1">PLT</p>
+                                                    <p className="text-xl font-black tabular-nums">{aggregatedCounts.platelets}</p>
                                                 </div>
                                             </div>
+                                            <button
+                                                onClick={handleReset}
+                                                className="w-full mt-6 py-3 border border-white/5 hover:bg-white/5 rounded-[20px] font-black text-[10px] tracking-widest text-white/40 uppercase transition-all"
+                                            >
+                                                Discard Session
+                                            </button>
                                         </div>
-                                    )}
-
-                                    {/* Reset Button */}
-                                    {processedImages.length > 0 && (
-                                        <button
-                                            onClick={handleReset}
-                                            className="w-full mt-4 px-4 py-2 bg-white border border-rose-300 text-rose-600 
-                                            rounded-lg hover:bg-rose-50 transition-colors text-sm font-medium"
-                                        >
-                                            Reset Analysis Session
-                                        </button>
                                     )}
                                 </div>
                             </div>
 
-                            {/* Results Section */}
-                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm flex flex-col max-h-[calc(100vh-200px)]">
-                                <div className="px-6 py-4 border-b border-rose-200 bg-rose-50 flex items-center justify-between flex-shrink-0">
-                                    <div>
-                                        <h2 className="text-lg font-semibold text-rose-800">
-                                            Current Image Results
-                                        </h2>
-                                        <p className="text-sm text-rose-600 mt-1">
-                                            Analysis of the most recently uploaded image
-                                        </p>
+                            {/* Clinical Advisory */}
+                            <div className="bg-rose-50 rounded-[35px] p-8 border border-rose-100">
+                                <h3 className="text-rose-950 font-black text-[10px] uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    Clinical Advisory
+                                </h3>
+                                <p className="text-rose-900/60 text-sm font-bold leading-relaxed">
+                                    Ensure adequate field selection to normalize automated differentials. A minimum of {TARGET_IMAGE_COUNT} fields is required for diagnostic validation.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Right Column: Dynamic Feed / Matrix */}
+                        <div className="xl:col-span-8 space-y-10">
+                            {/* Condition: Show Live Feed if not threshold met or results finished */}
+                            <div className="space-y-10">
+                                {processedImages.length > 0 && (
+                                    <div className="bg-white rounded-[40px] p-8 border border-stone-200 shadow-sm">
+                                        <div className="flex items-center justify-between mb-10">
+                                            <h2 className="text-2xl font-black text-zinc-950 tracking-tighter uppercase">Detection Feed</h2>
+                                            <span className="px-4 py-1.5 bg-stone-100 rounded-full text-[10px] font-black text-stone-500 uppercase tracking-widest">
+                                                Session Data Capture
+                                            </span>
+                                        </div>
+                                        <ProcessedImagesThumbnails 
+                                            processedImages={processedImages} 
+                                            currentImageCount={processedImages.length}
+                                            targetImageCount={TARGET_IMAGE_COUNT}
+                                        />
                                     </div>
-                                    {currentResults && (
-                                        <button
-                                            onClick={() => setShowCurrentResults(!showCurrentResults)}
-                                            className="text-sm text-rose-600 hover:text-rose-800"
-                                        >
-                                            {showCurrentResults ? 'Hide' : 'Show'}
-                                        </button>
-                                    )}
-                                </div>
-                                
-                                <div className="p-6 overflow-y-auto flex-1">
-                                    {!currentResults && !loading && (
-                                        <div className="text-center py-8">
-                                            <svg className="w-16 h-16 mx-auto text-rose-200 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                            </svg>
-                                            <p className="text-rose-400">
-                                                Upload an image and click "Analyze" to see results
+                                )}
+
+                                {thresholdMet && finalResults && (
+                                    <div className="bg-white rounded-[40px] p-10 border border-stone-200 shadow-xl relative overflow-hidden ring-4 ring-rose-500/5">
+                                        <div className="absolute top-0 right-0 p-6">
+                                            <div className="px-4 py-2 bg-rose-600 text-white rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-200">
+                                                Final Report Generated
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="mb-12">
+                                            <h2 className="text-4xl font-black text-zinc-950 tracking-tighter mb-2 uppercase italic underline decoration-rose-600 decoration-8 underline-offset-8">Diagnostic Matrix</h2>
+                                            <p className="text-stone-400 font-bold text-xs uppercase tracking-[0.2em] mt-6">
+                                                Multi-stage morphological consensus • {processedImages.length} Samples
                                             </p>
                                         </div>
-                                    )}
 
-                                    {currentResults && showCurrentResults && (
-                                        <div className="space-y-4">
-                                            {/* View Cell Classifications Button */}
-                                            {currentResults.cropped_cells && currentResults.cropped_cells.length > 0 && (
-                                                <button
-                                                    onClick={() => navigate('/classifications', {
-                                                        state: {
-                                                            croppedCells: currentResults.cropped_cells,
-                                                            wbcClassifications: currentResults.stage2_classification,
-                                                            summary: currentResults.summary,
-                                                            results: currentResults,
-                                                            previewUrl: previewUrl,
-                                                            // Pass session state for restoration
-                                                            sessionState: {
-                                                                processedImages,
-                                                                aggregatedCounts,
-                                                                aggregatedClassifications,
-                                                                aggregatedRBCClassifications,
-                                                                thresholdMet,
-                                                                finalResults
-                                                            }
-                                                        }
-                                                    })}
-                                                    className="w-full px-4 py-3 bg-rose-50 text-rose-600 rounded-lg 
-                                                    hover:bg-rose-100 font-medium flex items-center justify-center gap-2 
-                                                    border border-rose-200 transition-colors"
-                                                >
-                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                    </svg>
-                                                    View Cell Classifications ({currentResults.cropped_cells.length} cells)
-                                                </button>
-                                            )}
+                                        <div className="space-y-12">
+                                            <ThresholdResults 
+                                                counts={aggregatedCounts}
+                                                wbcCounts={aggregatedClassifications} // Logic matches backup/original usage
+                                                processedImages={processedImages}
+                                            />
+                                            
+                                            <div className="pt-12 border-t border-stone-100">
+                                                <FinalResults 
+                                                    aggregatedResults={finalResults}
+                                                    processedImages={processedImages}
+                                                    onReset={handleReset}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
-                                            {/* Annotated Image */}
-                                            {currentResults.annotated_image && (
-                                                <div className="rounded-lg overflow-hidden border border-slate-200">
+                                {currentResults && showCurrentResults && !thresholdMet && (
+                                    <div className="bg-white rounded-[40px] p-8 border border-stone-200 shadow-lg animate-in fade-in slide-in-from-bottom-5">
+                                        <div className="flex items-center justify-between mb-8">
+                                            <h2 className="text-2xl font-black text-zinc-950 tracking-tighter uppercase underline decoration-rose-500 decoration-4">Live Analysis</h2>
+                                            <button 
+                                                onClick={() => setShowCurrentResults(false)}
+                                                className="text-stone-400 hover:text-rose-600 transition-colors"
+                                            >
+                                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                                                </svg>
+                                            </button>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                                            <div className="space-y-6">
+                                                <div className="relative rounded-[30px] overflow-hidden border-2 border-stone-100 group shadow-inner">
                                                     <img 
                                                         src={`data:image/jpeg;base64,${currentResults.annotated_image}`}
                                                         alt="Annotated" 
-                                                        className="w-full"
+                                                        className="w-full h-auto"
                                                     />
-                                                </div>
-                                            )}
-
-                                            {/* Detection Summary */}
-                                            <div className="bg-slate-50 p-4 rounded-lg">
-                                                <h3 className="font-semibold text-slate-700 mb-3">Detection Summary</h3>
-                                                <div className="grid grid-cols-2 gap-3 text-sm">
-                                                    <div className="flex justify-between">
-                                                        <span className="text-slate-600">Total Cells:</span>
-                                                        <span className="font-semibold">{currentResults.stage1_detection?.total || 0}</span>
-                                                    </div>
-                                                    <div className="flex justify-between">
-                                                        <span className="text-slate-600">RBC:</span>
-                                                        <span className="font-semibold text-rose-600">{currentResults.stage1_detection?.counts?.RBC || 0}</span>
-                                                    </div>
-                                                    <div className="flex justify-between">
-                                                        <span className="text-slate-600">WBC:</span>
-                                                        <span className="font-semibold">{currentResults.stage1_detection?.counts?.WBC || 0}</span>
-                                                    </div>
-                                                    <div className="flex justify-between">
-                                                        <span className="text-slate-600">Platelets:</span>
-                                                        <span className="font-semibold text-amber-600">{currentResults.stage1_detection?.counts?.Platelets || 0}</span>
+                                                    <div className="absolute bottom-4 right-4 bg-zinc-950/90 text-white px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest">
+                                                        Raw Neural Feed
                                                     </div>
                                                 </div>
+                                                
+                                                {currentResults.cropped_cells && (
+                                                    <button
+                                                        onClick={() => navigate('/classifications', {
+                                                            state: { 
+                                                                croppedCells: currentResults.cropped_cells,
+                                                                wbcClassifications: currentResults.stage2_classification,
+                                                                summary: currentResults.summary,
+                                                                results: currentResults,
+                                                                previewUrl: previewUrl,
+                                                                sessionState: {
+                                                                    processedImages,
+                                                                    aggregatedCounts,
+                                                                    aggregatedClassifications,
+                                                                    aggregatedRBCClassifications,
+                                                                    thresholdMet,
+                                                                    finalResults
+                                                                }
+                                                            }
+                                                        })}
+                                                        className="w-full py-4 bg-zinc-950 text-white rounded-[20px] font-black text-[10px] tracking-widest uppercase hover:bg-rose-600 transition-all flex items-center justify-center gap-3"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                        </svg>
+                                                        Explore Morphological Data ({currentResults.cropped_cells.length})
+                                                    </button>
+                                                )}
                                             </div>
 
-                                            {/* Abnormal Cells Alert */}
-                                            {currentResults.summary && (currentResults.summary.abnormal_wbc_count > 0 || currentResults.summary.sickle_cell_count > 0) && (
-                                                <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg">
-                                                    <p className="font-semibold text-amber-800 flex items-center gap-2">
-                                                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                                        </svg>
-                                                        Abnormal Cells Detected
-                                                    </p>
-                                                    <div className="mt-2 text-sm text-amber-700 space-y-1">
-                                                        {currentResults.summary.abnormal_wbc_count > 0 && (
-                                                            <p>• {currentResults.summary.abnormal_wbc_count} abnormal WBC(s) found</p>
-                                                        )}
-                                                        {currentResults.summary.sickle_cell_count > 0 && (
-                                                            <p>• {currentResults.summary.sickle_cell_count} Sickle Cell(s) detected</p>
-                                                        )}
+                                            <div className="space-y-8">
+                                                <div className="bg-stone-50 rounded-[30px] p-6 border border-stone-100">
+                                                    <h3 className="text-zinc-950 font-black text-[10px] uppercase tracking-widest mb-6 flex items-center gap-2">
+                                                        <div className="w-1 h-3 bg-rose-500 rounded-full"></div>
+                                                        Morphological Consensus
+                                                    </h3>
+                                                    <div className="space-y-4">
+                                                        {Object.entries(
+                                                            currentResults.stage2_classification?.reduce((acc, curr) => {
+                                                                const cls = curr.classification || 'Unknown';
+                                                                acc[cls] = (acc[cls] || 0) + 1;
+                                                                return acc;
+                                                            }, {}) || {}
+                                                        ).map(([type, count]) => {
+                                                            const percentage = (count / (currentResults.stage2_classification?.length || 1)) * 100;
+                                                            return (
+                                                                <div key={type} className="group">
+                                                                    <div className="flex justify-between text-[10px] font-black mb-1.5 uppercase">
+                                                                        <span className="text-zinc-400 group-hover:text-zinc-950 transition-colors">{type}</span>
+                                                                        <span className="text-rose-600">{count} Units</span>
+                                                                    </div>
+                                                                    <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                                                                        <div 
+                                                                            className="h-full bg-zinc-950 rounded-full transition-all duration-500" 
+                                                                            style={{ width: `${percentage}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
-                                            )}
 
-                                            {/* Clinical Note */}
-                                            <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-sm">
-                                                <p className="font-semibold text-slate-700">Note:</p>
-                                                <p className="text-xs mt-1 text-slate-600">
-                                                    Continue uploading images until 10 images are analyzed for 
-                                                    a reliable differential count and disease assessment.
-                                                </p>
+                                                <DiseaseInterpretation 
+                                                    diseaseInterpretation={currentResults.disease_interpretation}
+                                                    clinicalThresholds={null}
+                                                />
                                             </div>
                                         </div>
-                                    )}
-                                </div>
+                                    </div>
+                                )}
+
+                                {!loading && processedImages.length === 0 && (
+                                    <div className="h-[600px] border-2 border-dashed border-stone-200 rounded-[40px] flex flex-col items-center justify-center text-center p-12 group transition-all duration-500 hover:border-rose-200 hover:bg-rose-50/5">
+                                        <div className="w-24 h-24 bg-stone-100 rounded-3xl flex items-center justify-center mb-6 group-hover:scale-110 group-hover:bg-rose-100 transition-all duration-500 shadow-sm border border-stone-200">
+                                            <svg className="w-12 h-12 text-stone-300 group-hover:text-rose-500 transition-colors font-thin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                        </div>
+                                        <h3 className="text-2xl font-black text-zinc-950 tracking-tighter uppercase mb-2">Diagnostic Engine Idle</h3>
+                                        <p className="text-stone-400 font-bold text-xs uppercase tracking-widest max-w-sm">
+                                            Initialize morphological pipeline by uploading peripheral film samples.
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
-                    )}
+                    </div>
                 </div>
             </main>
             <Footer />

@@ -1,17 +1,21 @@
 export const Footer = () => {
     return(
-        <footer className="bg-rose-700 text-rose-100 py-4 px-6">
-            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                    <span className="text-sm font-medium text-white">Hemalyzer</span>
-                    <span className="text-rose-300">|</span>
-                    <span className="text-xs">Blood Cell Analysis System</span>
+        <footer className="bg-zinc-950 text-rose-100 py-6 px-8 border-t border-rose-900/30">
+            <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="w-6 h-6 bg-rose-700 rounded flex items-center justify-center shadow-lg shadow-rose-900/20">
+                        <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 12l2 2 4-4" />
+                        </svg>
+                    </div>
+                    <div>
+                        <span className="text-sm font-black text-white uppercase tracking-wider">Hemalyzer</span>
+                        <span className="mx-2 text-rose-900/50">|</span>
+                        <span className="text-[10px] text-rose-500 font-bold uppercase tracking-widest">Medical Analysis Suite</span>
+                    </div>
                 </div>
-                <div className="text-xs text-rose-200">
-                    {new Date().getFullYear()} Research & Educational Purposes Only
+                <div className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-500">
+                    &copy; {new Date().getFullYear()} RESEARCH & EDUCATIONAL PURPOSES ONLY
                 </div>
             </div>
         </footer>

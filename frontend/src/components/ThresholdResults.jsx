@@ -3,8 +3,8 @@ import React from "react";
 export const ThresholdResults = ({ diseaseInterpretation, clinicalThresholds }) => {
   if (!diseaseInterpretation || !clinicalThresholds) {
     return (
-      <div className="bg-slate-50 border border-slate-200 p-4 rounded-lg">
-        <p className="text-slate-600 text-sm">No threshold interpretation available.</p>
+      <div className="bg-stone-50 border border-stone-200 p-8 rounded-[32px] text-center">
+        <p className="text-slate-400 font-bold text-xs uppercase tracking-widest">No threshold interpretation available</p>
       </div>
     );
   }
@@ -17,40 +17,56 @@ export const ThresholdResults = ({ diseaseInterpretation, clinicalThresholds }) 
   const percentBar = (value) => `${Math.max(0, Math.min(100, value || 0))}%`;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Sample Adequacy */}
       {adequacy && (
-        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-          <h4 className="font-semibold mb-2 text-slate-800">Sample Adequacy</h4>
-          <div className="flex items-center gap-2 text-sm">
-            <span className="font-medium text-slate-700">Confidence:</span>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-              adequacy.confidence_level === 'high' ? 'bg-green-100 text-green-800' :
-              adequacy.confidence_level === 'moderate' ? 'bg-amber-100 text-amber-800' :
-              adequacy.confidence_level === 'low' ? 'bg-amber-100 text-amber-800' :
-              'bg-red-100 text-red-800'
+        <div className="bg-white p-8 rounded-[32px] border border-stone-200 shadow-sm">
+          <div className="flex justify-between items-center mb-6">
+            <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Sample Adequacy</h4>
+            <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${
+              adequacy.confidence_level === 'high' ? 'bg-green-50 text-green-600' :
+              adequacy.confidence_level === 'moderate' ? 'bg-amber-50 text-amber-600' :
+              'bg-rose-50 text-rose-600'
             }`}>
-              {adequacy.confidence_level?.toUpperCase()}
-            </span>
-            <span className="text-slate-600">
-              Fields analyzed: {adequacy.fields_analyzed} / Recommended: {adequacy.recommended_fields}
+              {adequacy.confidence_level} Confidence
             </span>
           </div>
+          
+          <div className="flex items-center gap-4 mb-6">
+            <div className="flex-1 h-2 bg-stone-100 rounded-full overflow-hidden">
+                <div 
+                    className="h-full bg-zinc-950 transition-all duration-500" 
+                    style={{ width: `${(adequacy.fields_analyzed / adequacy.recommended_fields) * 100}%` }}
+                />
+            </div>
+            <span className="text-[10px] font-black text-zinc-950 uppercase">{adequacy.fields_analyzed}/{adequacy.recommended_fields} Fields</span>
+          </div>
+
           {(adequacy.warnings?.length > 0 || adequacy.recommendations?.length > 0) && (
-            <div className="mt-3 grid md:grid-cols-2 gap-3 text-sm">
+            <div className="grid md:grid-cols-2 gap-6 pt-6 border-t border-stone-100">
               {adequacy.warnings?.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded p-3">
-                  <p className="font-semibold text-amber-800 mb-1">Warnings</p>
-                  <ul className="list-disc pl-5 space-y-1 text-amber-800">
-                    {adequacy.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                <div>
+                  <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-3">Pathology Warnings</p>
+                  <ul className="space-y-2">
+                    {adequacy.warnings.map((w, i) => (
+                        <li key={i} className="text-xs text-slate-500 flex items-start gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 mt-1 shrink-0"></span>
+                            {w}
+                        </li>
+                    ))}
                   </ul>
                 </div>
               )}
               {adequacy.recommendations?.length > 0 && (
-                <div className="bg-slate-50 border border-slate-200 rounded p-3">
-                  <p className="font-semibold text-slate-700 mb-1">Recommendations</p>
-                  <ul className="list-disc pl-5 space-y-1 text-slate-600">
-                    {adequacy.recommendations.map((r, i) => <li key={i}>{r}</li>)}
+                <div>
+                  <p className="text-[10px] font-black text-zinc-950 uppercase tracking-widest mb-3">Clinical Recommendations</p>
+                  <ul className="space-y-2">
+                    {adequacy.recommendations.map((r, i) => (
+                        <li key={i} className="text-xs text-slate-500 flex items-start gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 mt-1 shrink-0"></span>
+                            {r}
+                        </li>
+                    ))}
                   </ul>
                 </div>
               )}
@@ -61,24 +77,32 @@ export const ThresholdResults = ({ diseaseInterpretation, clinicalThresholds }) 
 
       {/* Sickle Cell Analysis */}
       {sc && (
-        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-          <h4 className="font-semibold mb-3 text-slate-800">Sickle Cell Analysis</h4>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <div className="flex justify-between text-sm text-slate-700 mb-1">
-                <span>Percent sickled RBCs</span>
-                <span className="font-mono">{sc.percentage}%</span>
+        <div className="bg-white p-8 rounded-[32px] border border-stone-200 shadow-sm">
+          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-6">Morphological Distortion (Sickle Cell)</h4>
+          <div className="grid md:grid-cols-12 gap-10">
+            <div className="md:col-span-7">
+              <div className="flex justify-between items-end mb-3">
+                <span className="text-4xl font-black text-zinc-950 tracking-tighter">{sc.percentage}%</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sickled Indices</span>
               </div>
-              <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
-                <div className="h-full bg-red-500" style={{ width: percentBar(sc.percentage) }} />
+              <div className="w-full h-4 bg-stone-100 rounded-full overflow-hidden mb-4">
+                <div className="h-full bg-rose-600 transition-all duration-700" style={{ width: percentBar(sc.percentage) }} />
               </div>
-              <div className="text-xs text-slate-600 mt-1">95% CI: {sc.confidence_interval}</div>
-              <div className="text-xs text-slate-600">Sickle cells: {sc.sickle_cell_count} / {sc.total_rbc_analyzed} RBCs</div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-3 bg-stone-50 rounded-2xl">
+                    <p className="text-[9px] font-black text-slate-400 uppercase">Count</p>
+                    <p className="text-sm font-black text-zinc-950">{sc.sickle_cell_count} cells</p>
+                </div>
+                <div className="p-3 bg-stone-50 rounded-2xl">
+                    <p className="text-[9px] font-black text-slate-400 uppercase">95% CI</p>
+                    <p className="text-sm font-black text-zinc-950">{sc.confidence_interval}</p>
+                </div>
+              </div>
             </div>
-            <div className="flex flex-col justify-center">
-              <div className="text-sm text-slate-700">Interpretation</div>
-              <div className="text-base font-semibold text-slate-800">{sc.interpretation}</div>
-              {sc.note && <div className="text-xs text-slate-600 mt-1">{sc.note}</div>}
+            <div className="md:col-span-5 flex flex-col justify-center border-l border-stone-100 pl-10">
+              <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest mb-2">Interpretation</p>
+              <div className="text-xl font-black text-zinc-950 tracking-tight leading-tight">{sc.interpretation}</div>
+              {sc.note && <div className="text-xs text-slate-400 mt-3 font-medium">{sc.note}</div>}
             </div>
           </div>
         </div>
@@ -86,71 +110,29 @@ export const ThresholdResults = ({ diseaseInterpretation, clinicalThresholds }) 
 
       {/* WBC Differential vs Normal Ranges */}
       {Object.keys(wbc).length > 0 && (
-        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-          <h4 className="font-semibold mb-3 text-slate-800">WBC Differential (Observed vs Normal)</h4>
-          <div className="space-y-3">
+        <div className="bg-white p-8 rounded-[32px] border border-stone-200 shadow-sm">
+          <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-8">Clinical Differential (WBC)</h4>
+          <div className="space-y-8">
             {Object.entries(wbc).map(([name, info]) => (
-              <div key={name}>
-                <div className="flex justify-between text-sm">
-                  <div className="font-medium text-slate-700">{name}</div>
-                  <div className="font-mono text-slate-700">{info.percentage}%</div>
+              <div key={name} className="relative">
+                <div className="flex justify-between items-end mb-3">
+                  <div className="flex items-center gap-3">
+                    <span className="w-3 h-3 rounded-full bg-zinc-950"></span>
+                    <span className="text-sm font-black text-zinc-950 uppercase tracking-tighter">{name}</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <span className="text-xs font-bold text-slate-400 uppercase">Range: {info.normal_range}</span>
+                    <span className={`text-sm font-black ${info.status === 'normal' ? 'text-zinc-400' : 'text-rose-600'}`}>{info.percentage}%</span>
+                  </div>
                 </div>
-                <div className="relative w-full h-3 bg-slate-200 rounded-full overflow-hidden">
-                  {/* Observed percentage */}
-                  <div className={`absolute left-0 top-0 h-3 ${
-                    info.normal_status === 'normal' ? 'bg-green-500' : 'bg-amber-500'
-                  }`} style={{ width: percentBar(info.percentage) }} />
-                  {/* Normal range overlay */}
-                  {info.normal_range && (() => {
-                    const [minStr, maxStr] = info.normal_range.split('%')[0].split('-');
-                    const min = parseFloat(minStr);
-                    const max = parseFloat(maxStr);
-                    return (
-                      <div className="absolute top-0 h-3 bg-green-300/40" style={{ left: percentBar(min), width: percentBar(max - min) }} />
-                    );
-                  })()}
-                </div>
-                <div className="text-xs text-slate-600 flex justify-between">
-                  <span>95% CI: {info.confidence_interval}</span>
-                  {info.normal_range && <span>Normal: {info.normal_range}</span>}
+                <div className="relative w-full h-2.5 bg-stone-100 rounded-full overflow-hidden">
+                  <div className={`absolute left-0 top-0 h-full transition-all duration-700 ${info.status === 'normal' ? 'bg-zinc-950' : 'bg-rose-600'}`} style={{ width: percentBar(info.percentage) }} />
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
-
-      {/* Leukemia Analysis */}
-      {la && (
-        <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-          <h4 className="font-semibold mb-3 text-slate-800">Leukemia Analysis</h4>
-          <div className="grid md:grid-cols-2 gap-4">
-            <div>
-              <div className="flex justify-between text-sm text-slate-700 mb-1">
-                <span>Abnormal WBCs</span>
-                <span className="font-mono">{la.abnormal_wbc_percentage}%</span>
-              </div>
-              <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
-                <div className="h-full bg-amber-500" style={{ width: percentBar(la.abnormal_wbc_percentage) }} />
-              </div>
-              <div className="text-xs text-slate-600 mt-1">95% CI: {la.confidence_interval}</div>
-            </div>
-            <div className="space-y-1">
-              <div className="text-sm text-slate-700">Findings</div>
-              {(la.findings || []).length === 0 && (
-                <div className="text-sm text-slate-600">No acute leukemia findings based on thresholds.</div>
-              )}
-              {(la.findings || []).map((f, i) => (
-                <div key={i} className="text-sm text-slate-700">
-                  <span className="font-medium">{f.type}:</span> {f.interpretation}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
-
-export default ThresholdResults;

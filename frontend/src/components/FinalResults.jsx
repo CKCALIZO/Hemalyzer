@@ -185,7 +185,7 @@ export const FinalResults = ({
         let yPos = 20;
 
         // Header
-        doc.setFillColor(30, 58, 95);
+        doc.setFillColor(9, 9, 11); // Zinc-950
         doc.rect(0, 0, pageWidth, 40, 'F');
         
         doc.setTextColor(255, 255, 255);
@@ -195,7 +195,7 @@ export const FinalResults = ({
         
         doc.setFontSize(10);
         doc.setFont("helvetica", "normal");
-        doc.text("Blood Cell Analysis Report", margin, 33);
+        doc.text("Automated Hematology Suite • Clinical Output Report", margin, 33);
 
         // Report metadata
         doc.setTextColor(255, 255, 255);
@@ -376,113 +376,146 @@ export const FinalResults = ({
     };
 
     return (
-        <div className="bg-white rounded-lg border-2 border-slate-200 shadow-lg overflow-hidden">
-            {/* Header */}
-            <div className="bg-slate-800 text-white px-6 py-4">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-bold flex items-center gap-2">
-                            <span className="text-2xl">🔬</span>
-                            Final Analysis Report
-                        </h2>
-                        <p className="text-slate-300 text-sm mt-1">
-                            Analysis complete - 10 images processed
-                        </p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-sm text-slate-300">Images Analyzed</p>
-                        <p className="text-2xl font-bold">{processedImages.length}</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Patient Status Banner */}
-            <div className={`px-6 py-4 border-l-4 ${getStatusStyle(patientStatus)}`}>
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                        <span className="text-3xl">{getStatusIcon(patientStatus)}</span>
-                        <div>
-                            <p className="text-sm font-medium opacity-75">Overall Patient Status</p>
-                            <p className="text-2xl font-bold">{patientStatus || 'Normal'}</p>
-                        </div>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-sm opacity-75">Total WBCs Counted</p>
-                        <p className="text-3xl font-bold">{totalWBC}</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Cell Counts Summary */}
-            <div className="px-6 py-4 border-b border-slate-200">
-                <h3 className="text-lg font-semibold text-slate-700 mb-3">Cell Count Summary</h3>
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-5 duration-1000">
+            {/* Clinical Verdict - Primary Results Card */}
+            <div className={`rounded-[40px] overflow-hidden border shadow-2xl relative ${getStatusStyle(patientStatus)}`}>
+                <div className="absolute top-0 right-0 w-96 h-96 bg-white/10 rounded-full -mr-48 -mt-48 blur-[120px] opacity-30"></div>
                 
-                {/* Raw Detection Counts */}
-                <div className="mb-4">
-                    <p className="text-sm text-slate-500 mb-2">Cells Detected (across 10 images)</p>
-                    <div className="grid grid-cols-3 gap-4">
-                        <div className="bg-slate-50 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-slate-800">{totalWBC}</p>
-                            <p className="text-sm text-slate-600">WBC Detected</p>
+                <div className="p-12 relative z-10">
+                    <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-12">
+                        <div className="flex-grow">
+                            <div className="flex flex-wrap items-center gap-4 mb-8">
+                                <span className="px-6 py-2.5 bg-zinc-950 text-white rounded-full text-[12px] font-black uppercase tracking-[0.3em] flex items-center gap-3">
+                                    <span className="relative flex h-2 w-2">
+                                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                        <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+                                    </span>
+                                    Final Clinical Verdict
+                                </span>
+                                {diseaseFindings && diseaseFindings.length > 0 && (
+                                    <span className="px-6 py-2.5 bg-rose-600 text-white rounded-full text-[12px] font-black uppercase tracking-[0.3em] shadow-lg shadow-rose-900/20">
+                                        Morphological Indicators Present
+                                    </span>
+                                )}
+                            </div>
+                            
+                            <h2 className="text-7xl font-black tracking-tighter mb-4 leading-none uppercase italic underline decoration-rose-600 decoration-8 underline-offset-[16px]">
+                                {patientStatus || 'Awaiting Status'}
+                                <span className="text-4xl ml-6 opacity-30 not-italic">{getStatusIcon(patientStatus)}</span>
+                            </h2>
+                            <p className="text-xl font-bold opacity-70 max-w-2xl leading-relaxed mt-12">
+                                Integrated morphological consensus established through {processedImages.length} analyzed fields. 
+                                Statistical normalization applied across automated differential thresholds.
+                            </p>
                         </div>
-                        <div className="bg-slate-50 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-red-600">{totalRBC}</p>
-                            <p className="text-sm text-slate-600">RBC Detected</p>
-                        </div>
-                        <div className="bg-slate-50 rounded-lg p-4 text-center">
-                            <p className="text-2xl font-bold text-amber-600">{totalPlatelets}</p>
-                            <p className="text-sm text-slate-600">Platelets</p>
+                        
+                        <div className="flex flex-col sm:flex-row xl:flex-col gap-4 min-w-[280px]">
+                            <button
+                                onClick={generatePDF}
+                                className="w-full py-6 bg-zinc-950 text-white hover:bg-zinc-900 rounded-[30px] font-black text-xs tracking-[0.2em] uppercase transition-all shadow-2xl flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-95"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                                </svg>
+                                Export Clinical PDF
+                            </button>
+                            <button
+                                onClick={saveReport}
+                                className="w-full py-6 bg-rose-600 text-white hover:bg-rose-700 rounded-[30px] font-black text-xs tracking-[0.2em] uppercase transition-all shadow-2xl flex items-center justify-center gap-4 hover:scale-[1.02] active:scale-95"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                </svg>
+                                Save to Archive
+                            </button>
                         </div>
                     </div>
-                </div>
 
-                {/* Estimated Cell Counts */}
-                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                    <p className="text-sm font-medium text-blue-800 mb-3">Estimated Cell Counts (per µL)</p>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white rounded-lg p-3 border border-blue-100">
-                            <p className="text-2xl font-bold text-blue-700">
-                                {estimatedWBCCount?.toLocaleString() || 0}
-                            </p>
-                            <p className="text-sm text-blue-600">WBC/µL</p>
-                            <p className="text-xs text-slate-500 mt-1">
-                                Formula: ({totalWBC} / 10) × 2,000
+                    {/* Metric Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-20">
+                        <div className="bg-white/50 backdrop-blur-sm rounded-[35px] p-8 border border-black/5 group hover:bg-white/80 transition-all duration-500">
+                            <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] mb-3">Absolute WBC Est.</p>
+                            <p className="text-4xl font-black text-zinc-950 tabular-nums lowercase leading-none">
+                                {estimatedWBCCount?.toLocaleString()} <span className="text-[10px] opacity-40 uppercase tracking-widest font-black block mt-2">cells / µl</span>
                             </p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-blue-100">
-                            <p className="text-2xl font-bold text-red-600">
-                                {estimatedRBCCount?.toLocaleString() || 0}
+                        <div className="bg-white/50 backdrop-blur-sm rounded-[35px] p-8 border border-black/5 group hover:bg-white/80 transition-all duration-500">
+                            <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] mb-3">Absolute RBC Est.</p>
+                            <p className="text-4xl font-black text-zinc-950 tabular-nums lowercase leading-none">
+                                {estimatedRBCCount?.toLocaleString()} <span className="text-[10px] opacity-40 uppercase tracking-widest font-black block mt-2">million / µl</span>
                             </p>
-                            <p className="text-sm text-red-500">RBC/µL</p>
-                            <p className="text-xs text-slate-500 mt-1">
-                                Formula: ({avgRBCPerField?.toFixed(1) || 0} avg) × 200,000
+                        </div>
+                        <div className="bg-white/50 backdrop-blur-sm rounded-[35px] p-8 border border-black/5 group hover:bg-white/80 transition-all duration-500">
+                            <p className="text-[10px] font-black text-stone-400 uppercase tracking-[0.2em] mb-3">Platelet Density</p>
+                            <p className="text-4xl font-black text-zinc-950 tabular-nums lowercase leading-none">
+                                {totalPlatelets} <span className="text-[10px] opacity-40 uppercase tracking-widest font-black block mt-2">total detected</span>
+                            </p>
+                        </div>
+                        <div className="bg-zinc-950/5 rounded-[35px] p-8 border border-black/5 group hover:bg-zinc-950/10 transition-all duration-500">
+                            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mb-3">Sampling Capacity</p>
+                            <p className="text-4xl font-black text-zinc-950 tabular-nums leading-none">
+                                {processedImages.length} <span className="text-[10px] opacity-40 uppercase tracking-widest font-black block mt-2">fields of view</span>
                             </p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* ConvNeXt Classification Breakdown */}
-            {aggregatedResults.classificationCounts && Object.keys(aggregatedResults.classificationCounts).length > 0 && (
-                <div className="px-6 py-4 border-b border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-3">ConvNeXt Classification Breakdown</h3>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                        {Object.entries(aggregatedResults.classificationCounts)
-                            .sort((a, b) => b[1] - a[1]) // Sort by count descending
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                {/* Disease Analysis Column */}
+                <div className="bg-stone-50 rounded-[40px] p-10 border border-stone-200 shadow-sm">
+                    <h3 className="text-2xl font-black text-zinc-950 tracking-tighter mb-10 uppercase flex items-center gap-4 italic">
+                        Diagnostic Findings
+                        <div className="h-px flex-grow bg-stone-200"></div>
+                    </h3>
+                    
+                    {diseaseFindings && diseaseFindings.length > 0 ? (
+                        <div className="space-y-6">
+                            {diseaseFindings.map((finding, idx) => (
+                                <div key={idx} className="bg-white p-8 rounded-[30px] border border-stone-100 flex items-start gap-6 shadow-sm group hover:border-rose-200 transition-all">
+                                    <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform">
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <p className="font-black text-xl text-zinc-950 tracking-tight uppercase leading-none mb-2 underline decoration-rose-500/20">{finding.type || finding}</p>
+                                        <p className="text-sm font-bold text-stone-400 leading-relaxed italic">{finding.interpretation || 'Morphologically significant indicator detected'}</p>
+                                        {finding.severity && (
+                                            <span className="mt-4 px-3 py-1 bg-rose-50 text-rose-600 border border-rose-100 rounded-full text-[8px] font-black uppercase tracking-widest inline-block">
+                                                Severity: {finding.severity}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-20 bg-white/40 rounded-[30px] border border-dashed border-stone-200">
+                            <p className="text-stone-300 font-black text-[10px] uppercase tracking-[0.3em]">No Acute Indicators Detected</p>
+                        </div>
+                    )}
+                </div>
+
+                {/* Composition Column */}
+                <div className="bg-stone-50 rounded-[40px] p-10 border border-stone-200 shadow-sm">
+                    <h3 className="text-2xl font-black text-zinc-950 tracking-tighter mb-10 uppercase flex items-center gap-4 italic">
+                        Cellular Makeup
+                        <div className="h-px flex-grow bg-stone-200"></div>
+                    </h3>
+                    
+                    <div className="grid grid-cols-2 gap-4">
+                        {aggregatedResults.classificationCounts && Object.entries(aggregatedResults.classificationCounts)
+                            .sort((a, b) => b[1] - a[1])
                             .map(([className, count]) => {
                                 const catInfo = getClassificationCategory(className);
                                 const percentage = totalWBC > 0 ? ((count / totalWBC) * 100).toFixed(1) : 0;
                                 return (
-                                    <div 
-                                        key={className}
-                                        className={`p-2 rounded-lg border ${catInfo.color}`}
-                                    >
-                                        <p className="text-xs font-semibold truncate" title={catInfo.label}>
-                                            {catInfo.label}
-                                        </p>
-                                        <div className="flex justify-between items-baseline mt-1">
-                                            <span className="text-lg font-bold">{count}</span>
-                                            <span className="text-xs opacity-75">{percentage}%</span>
+                                    <div key={className} className={`p-6 rounded-[25px] border-2 bg-white transition-all hover:scale-[1.02] flex flex-col justify-between h-36 ${catInfo.color.split(' ')[2]}`}>
+                                        <p className="text-[10px] font-black text-stone-400 uppercase tracking-widest leading-tight">{catInfo.label}</p>
+                                        <div className="flex justify-between items-end">
+                                            <span className="text-4xl font-black text-zinc-950 tabular-nums">{count}</span>
+                                            <span className="text-xs font-black text-rose-600 tabular-nums bg-rose-50 px-2 py-1 rounded-lg">{percentage}%</span>
                                         </div>
                                     </div>
                                 );
@@ -490,523 +523,170 @@ export const FinalResults = ({
                         }
                     </div>
                 </div>
-            )}
-
-            {/* WBC Differential - 5 Main Categories */}
-            {wbcDifferential && Object.keys(wbcDifferential).length > 0 && (
-                <div className="px-6 py-4 border-b border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-2">WBC Differential (5 Main Categories)</h3>
-                    <p className="text-xs text-slate-500 mb-3">
-                        Cells are categorized by type regardless of condition (e.g., "Basophil: CML" counts as Basophil)
-                    </p>
-                    <div className="space-y-3">
-                        {Object.entries(wbcDifferential).map(([name, data]) => (
-                            <div key={name} className="flex items-center gap-4">
-                                <div className="w-28 text-sm font-medium text-slate-700">{name}</div>
-                                <div className="flex-1">
-                                    <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
-                                        <div 
-                                            className={`h-full transition-all duration-500 ${
-                                                data.status === 'high' ? 'bg-red-500' :
-                                                data.status === 'low' ? 'bg-blue-500' :
-                                                'bg-green-500'
-                                            }`}
-                                            style={{ width: `${Math.min(100, data.percentage)}%` }}
-                                        />
-                                    </div>
-                                </div>
-                                <div className="w-12 text-right font-mono text-sm font-bold">{data.count}</div>
-                                <div className="w-16 text-right font-mono text-sm">{data.percentage.toFixed(1)}%</div>
-                                <div className="w-20 text-right text-xs text-slate-500">{data.normalRange}</div>
-                                <div className={`w-16 text-center text-xs px-2 py-1 rounded font-medium ${
-                                    data.status === 'high' ? 'bg-red-100 text-red-700' :
-                                    data.status === 'low' ? 'bg-blue-100 text-blue-700' :
-                                    'bg-green-100 text-green-700'
-                                }`}>
-                                    {data.status === 'normal' ? 'Normal' : data.status === 'high' ? 'High' : 'Low'}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    {/* Normal Value Reference */}
-                    <div className="mt-4 p-3 bg-slate-50 rounded-lg">
-                        <p className="text-xs font-medium text-slate-600 mb-2">Normal Value Thresholds:</p>
-                        <div className="flex flex-wrap gap-2 text-xs">
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Neutrophil: 45-65%</span>
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Lymphocyte: 20-35%</span>
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Monocyte: 2-6%</span>
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Eosinophil: 2-4%</span>
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Basophil: 0-1%</span>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Disease Findings */}
-            {diseaseFindings && diseaseFindings.length > 0 && (
-                <div className="px-6 py-4 border-b border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-3">Disease Analysis</h3>
-                    <div className="space-y-3">
-                        {diseaseFindings.map((finding, idx) => (
-                            <div 
-                                key={idx} 
-                                className={`p-4 rounded-lg border-l-4 ${
-                                    finding.severity === 'HIGH' ? 'bg-red-50 border-red-500' :
-                                    finding.severity === 'MODERATE' ? 'bg-amber-50 border-amber-500' :
-                                    finding.severity === 'LOW' ? 'bg-yellow-50 border-yellow-500' :
-                                    'bg-slate-50 border-slate-400'
-                                }`}
-                            >
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-semibold text-slate-800">{finding.type}</p>
-                                        <p className="text-sm text-slate-600 mt-1">{finding.interpretation}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <p className="text-xl font-bold">{finding.percentage?.toFixed(1)}%</p>
-                                        <p className={`text-xs px-2 py-1 rounded ${
-                                            finding.severity === 'HIGH' ? 'bg-red-200 text-red-800' :
-                                            finding.severity === 'MODERATE' ? 'bg-amber-200 text-amber-800' :
-                                            'bg-slate-200 text-slate-800'
-                                        }`}>{finding.severity}</p>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Sickle Cell Analysis */}
-            {sickleCell && sickleCell.count > 0 && (
-                <div className="px-6 py-4 border-b border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-3">Sickle Cell Analysis</h3>
-                    <div className={`p-4 rounded-lg border-l-4 ${
-                        sickleCell.percentage > 30 ? 'bg-red-50 border-red-500' :
-                        sickleCell.percentage >= 10 ? 'bg-amber-50 border-amber-500' :
-                        sickleCell.percentage >= 3 ? 'bg-yellow-50 border-yellow-500' :
-                        'bg-green-50 border-green-500'
-                    }`}>
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <p className="font-semibold">{sickleCell.interpretation}</p>
-                                <p className="text-sm text-slate-600">
-                                    {sickleCell.count} sickle cells / {sickleCell.totalRBC} RBCs analyzed
-                                </p>
-                                <p className={`text-xs mt-1 px-2 py-1 rounded inline-block ${
-                                    sickleCell.severity === 'SEVERE' ? 'bg-red-200 text-red-800' :
-                                    sickleCell.severity === 'MODERATE' ? 'bg-amber-200 text-amber-800' :
-                                    sickleCell.severity === 'MILD' ? 'bg-yellow-200 text-yellow-800' :
-                                    'bg-green-200 text-green-800'
-                                }`}>{sickleCell.severity || 'NORMAL'}</p>
-                            </div>
-                            <p className="text-2xl font-bold">{sickleCell.percentage?.toFixed(2)}%</p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Actions */}
-            <div className="px-6 py-4 bg-red-50 flex gap-4 flex-wrap">
-                <button
-                    onClick={generatePDF}
-                    className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-red-700 text-white rounded-lg hover:bg-red-800 transition-colors font-semibold"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                    </svg>
-                    Print PDF Report
-                </button>
-                <button
-                    onClick={saveReport}
-                    className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                    </svg>
-                    Save Report
-                </button>
-                {/* Abnormal WBCs Button - Shows WBCs with disease markers (CML, CLL, ALL, AML) */}
-                {abnormalWBCs && abnormalWBCs.length > 0 && (
-                    <button
-                        onClick={() => setShowAbnormalWBCs(!showAbnormalWBCs)}
-                        className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-semibold"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                        </svg>
-                        {showAbnormalWBCs ? 'Hide' : 'Show'} Abnormal WBCs ({abnormalWBCs.length})
-                    </button>
-                )}
-                <button
-                    onClick={() => setShowWBCExamination(!showWBCExamination)}
-                    className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-red-800 text-white rounded-lg hover:bg-red-900 transition-colors font-semibold"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    {showWBCExamination ? 'Hide' : 'Show'} WBC Examination
-                </button>
-                <button
-                    onClick={() => setShowRBCExamination(!showRBCExamination)}
-                    className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
-                >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                    </svg>
-                    {showRBCExamination ? 'Hide' : 'Show'} RBC/Sickle Cell Examination
-                </button>
-                <button
-                    onClick={onReset}
-                    className="px-6 py-3 bg-white border-2 border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors font-semibold"
-                >
-                    New Analysis
-                </button>
             </div>
 
-            {/* WBC Manual Examination Section */}
-            {showWBCExamination && wbcClassifications && wbcClassifications.length > 0 && (
-                <div className="border-t border-red-200">
-                    <div className="px-6 py-4 bg-red-50">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-red-900 flex items-center gap-2">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                </svg>
-                                WBC Manual Examination
-                            </h3>
-                            <p className="text-sm text-red-600">
-                                {filteredWBCs.length} of {wbcClassifications.length} cells shown
-                            </p>
-                        </div>
-                        
-                        {/* Category Filter Buttons */}
-                        <div className="flex flex-wrap gap-2">
-                            <button
-                                onClick={() => setWbcFilter('all')}
-                                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                                    wbcFilter === 'all' ? 'bg-red-700 text-white' : 'bg-white text-red-700 hover:bg-red-100'
-                                }`}
-                            >
-                                All ({wbcClassifications.length})
-                            </button>
-                            <button
-                                onClick={() => setWbcFilter('abnormal')}
-                                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                                    wbcFilter === 'abnormal' ? 'bg-red-600 text-white' : 'bg-white text-red-700 hover:bg-red-100'
-                                }`}
-                            >
-                                Abnormal ({wbcClassifications.length - categoryCounts['Normal']})
-                            </button>
-                            <button
-                                onClick={() => setWbcFilter('Normal')}
-                                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                                    wbcFilter === 'Normal' ? 'bg-green-600 text-white' : 'bg-white text-green-700 hover:bg-green-100'
-                                }`}
-                            >
-                                Normal ({categoryCounts['Normal'] || 0})
-                            </button>
-                            {categoryCounts['AML'] > 0 && (
-                                <button
-                                    onClick={() => setWbcFilter('AML')}
-                                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                                        wbcFilter === 'AML' ? 'bg-red-600 text-white' : 'bg-white text-red-700 hover:bg-red-100'
-                                    }`}
-                                >
-                                    AML ({categoryCounts['AML']})
-                                </button>
-                            )}
-                            {categoryCounts['ALL'] > 0 && (
-                                <button
-                                    onClick={() => setWbcFilter('ALL')}
-                                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                                        wbcFilter === 'ALL' ? 'bg-red-600 text-white' : 'bg-white text-red-700 hover:bg-red-100'
-                                    }`}
-                                >
-                                    ALL ({categoryCounts['ALL']})
-                                </button>
-                            )}
-                            {categoryCounts['CML'] > 0 && (
-                                <button
-                                    onClick={() => setWbcFilter('CML')}
-                                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                                        wbcFilter === 'CML' ? 'bg-amber-600 text-white' : 'bg-white text-amber-700 hover:bg-amber-100'
-                                    }`}
-                                >
-                                    CML ({categoryCounts['CML']})
-                                </button>
-                            )}
-                            {categoryCounts['CLL'] > 0 && (
-                                <button
-                                    onClick={() => setWbcFilter('CLL')}
-                                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                                        wbcFilter === 'CLL' ? 'bg-amber-600 text-white' : 'bg-white text-amber-700 hover:bg-amber-100'
-                                    }`}
-                                >
-                                    CLL ({categoryCounts['CLL']})
-                                </button>
-                            )}
-                        </div>
+            {/* Differential Analysis - 5 Part Focus */}
+            {wbcDifferential && Object.keys(wbcDifferential).length > 0 && (
+                <div className="bg-white rounded-[40px] p-10 border border-stone-200 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-10">
+                        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-stone-200">Clinical Reference Range Alignment</span>
                     </div>
                     
-                    {/* Scrollable WBC Grid */}
-                    <div className="px-6 py-4 max-h-96 overflow-y-auto bg-white">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                    <h3 className="text-2xl font-black text-zinc-950 tracking-tighter mb-12 uppercase flex items-center gap-4 italic">
+                        5-Part Differential Profile
+                        <div className="h-px w-24 bg-rose-600"></div>
+                    </h3>
+
+                    <div className="space-y-10">
+                        {Object.entries(wbcDifferential).map(([name, data]) => (
+                            <div key={name} className="group transition-all">
+                                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-4">
+                                    <div>
+                                        <div className="flex items-center gap-3">
+                                            <h4 className="text-xl font-black text-zinc-950 tracking-tight uppercase group-hover:text-rose-600 transition-colors">{name}</h4>
+                                            <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                                                data.status === 'high' ? 'bg-rose-600 text-white' :
+                                                data.status === 'low' ? 'bg-zinc-950 text-white opacity-40' :
+                                                'bg-stone-100 text-stone-400'
+                                            }`}>
+                                                Status: {data.status}
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest mt-1">Normal Consensus: {data.normalRange}</p>
+                                    </div>
+                                    <div className="flex items-baseline gap-6">
+                                        <div className="text-right">
+                                            <span className="text-4xl font-black text-zinc-950 tabular-nums leading-none tracking-tighter italic">{data.percentage.toFixed(1)}%</span>
+                                            <p className="text-[10px] font-black text-stone-300 uppercase tracking-widest mt-1">{data.count} Observed Units</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="w-full h-2 bg-stone-100 rounded-full overflow-hidden shadow-inner">
+                                    <div 
+                                        className={`h-full transition-all duration-1000 ease-in-out ${
+                                            data.status === 'normal' ? 'bg-zinc-950 shadow-[0_0_12px_rgba(9,9,11,0.2)]' : 'bg-rose-600 animate-pulse'
+                                        }`}
+                                        style={{ width: `${Math.min(100, data.percentage)}%` }}
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Manual Verification Hub */}
+            <div className="bg-zinc-950 rounded-[40px] p-12 text-white shadow-2xl relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-rose-600 to-transparent"></div>
+                
+                <div className="flex flex-col md:flex-row items-center justify-between gap-10">
+                    <div>
+                        <h3 className="text-2xl font-black tracking-tighter uppercase mb-2 italic">Manual Verification Hub</h3>
+                        <p className="text-zinc-500 font-bold text-xs uppercase tracking-[0.3em]">Neural output review & morphological audit</p>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-4">
+                        <button
+                            onClick={() => setShowWBCExamination(!showWBCExamination)}
+                            className={`px-8 py-5 rounded-[25px] font-black text-[10px] tracking-widest uppercase transition-all duration-500 ${
+                                showWBCExamination ? 'bg-rose-600 text-white shadow-xl shadow-rose-900/40' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
+                            }`}
+                        >
+                            {showWBCExamination ? 'Conceal Review' : 'WBC Audit Feed'}
+                        </button>
+                        
+                        <button
+                            onClick={() => setShowRBCExamination(!showRBCExamination)}
+                            className={`px-8 py-5 rounded-[25px] font-black text-[10px] tracking-widest uppercase transition-all duration-500 ${
+                                showRBCExamination ? 'bg-rose-600 text-white shadow-xl shadow-rose-900/40' : 'bg-white/5 text-zinc-400 hover:bg-white/10 hover:text-white'
+                            }`}
+                        >
+                            {showRBCExamination ? 'Conceal Feed' : 'RBC/Sickle Audit'}
+                        </button>
+
+                        <button
+                            onClick={onReset}
+                            className="px-8 py-5 border border-white/10 text-white/20 hover:text-white hover:bg-white/5 rounded-[25px] font-black text-[10px] tracking-widest uppercase transition-all"
+                        >
+                            New Diagnostic Session
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            {/* Scrollable WBC Manual Audit Section */}
+            {showWBCExamination && wbcClassifications && wbcClassifications.length > 0 && (
+                <div className="bg-white rounded-[40px] border border-stone-200 overflow-hidden shadow-sm animate-in zoom-in-95 duration-500">
+                    <div className="p-10 bg-stone-50 border-b border-stone-200">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+                            <div>
+                                <h3 className="text-2xl font-black text-zinc-950 tracking-tighter uppercase italic">WBC Morphological Audit</h3>
+                                <p className="text-stone-400 font-bold text-[10px] uppercase tracking-widest mt-1">Reviewing {filteredWBCs.length} of {wbcClassifications.length} detected samples</p>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setWbcFilter('all')}
+                                    className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        wbcFilter === 'all' ? 'bg-zinc-950 text-white' : 'bg-white text-stone-400 border border-stone-200 hover:bg-stone-100'
+                                    }`}
+                                >
+                                    Total ({wbcClassifications.length})
+                                </button>
+                                <button
+                                    onClick={() => setWbcFilter('abnormal')}
+                                    className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        wbcFilter === 'abnormal' ? 'bg-rose-600 text-white' : 'bg-white text-rose-400 border border-rose-100 hover:bg-rose-50'
+                                    }`}
+                                >
+                                    Abnormal ({wbcClassifications.length - (categoryCounts['Normal'] || 0)})
+                                </button>
+                                <button
+                                    onClick={() => setWbcFilter('Normal')}
+                                    className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        wbcFilter === 'Normal' ? 'bg-zinc-950 text-white' : 'bg-white text-stone-400 border border-stone-200 hover:bg-stone-100'
+                                    }`}
+                                >
+                                    Normal ({categoryCounts['Normal'] || 0})
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="p-10 max-h-[700px] overflow-y-auto bg-white scrollbar-thin scrollbar-thumb-stone-200">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
                             {filteredWBCs.map((wbc, idx) => {
                                 const catInfo = getClassificationCategory(wbc.classification);
                                 return (
                                     <div 
                                         key={wbc.wbc_id || idx}
-                                        className={`rounded-lg border-2 overflow-hidden ${catInfo.color}`}
+                                        className={`rounded-[25px] border-2 overflow-hidden transition-all hover:scale-[1.05] hover:shadow-xl ${catInfo.color.split(' ')[2]}`}
                                     >
-                                        {/* Cell Image */}
-                                        {wbc.cropped_image && (
-                                            <div className="aspect-square bg-slate-100">
+                                        <div className="aspect-square bg-stone-50">
+                                            {wbc.cropped_image && (
                                                 <img
                                                     src={`data:image/png;base64,${wbc.cropped_image}`}
                                                     alt={wbc.classification}
                                                     className="w-full h-full object-cover"
                                                 />
-                                            </div>
-                                        )}
-                                        
-                                        {/* Classification Label */}
-                                        <div className="p-2 text-center">
-                                            <p className="text-xs font-bold truncate" title={catInfo.label}>
-                                                {catInfo.label}
-                                            </p>
-                                            <p className="text-xs opacity-75">
-                                                {(wbc.confidence * 100).toFixed(0)}% conf
-                                            </p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                        
-                        {filteredWBCs.length === 0 && (
-                            <div className="text-center py-8 text-slate-500">
-                                No cells match the selected filter
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* Classification Legend */}
-                    <div className="px-6 py-3 bg-red-50 border-t border-red-200">
-                        <p className="text-xs text-red-700 font-medium mb-2">Classification Legend (Based on About Page Thresholds):</p>
-                        <div className="flex flex-wrap gap-2 text-xs">
-                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">AML/ALL: Blast cells (20% or more = Acute Leukemia)</span>
-                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">CML: Granulocytes (60% or more = CML indicators)</span>
-                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">CLL: Lymphocytes (40% or more = CLL indicators)</span>
-                            <span className="px-2 py-1 bg-green-100 text-green-800 rounded">Normal: Healthy WBC types</span>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Abnormal WBCs Examination Section - WBCs with disease markers not in 5 main categories */}
-            {showAbnormalWBCs && abnormalWBCs && abnormalWBCs.length > 0 && (
-                <div className="border-t border-amber-200">
-                    <div className="px-6 py-4 bg-amber-50">
-                        <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-amber-900 flex items-center gap-2">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                                </svg>
-                                Abnormal WBCs for Review
-                            </h3>
-                            <p className="text-sm text-amber-700">
-                                {abnormalWBCs.length} abnormal cells detected (non-Normal classifications)
-                            </p>
-                        </div>
-                        <p className="text-xs text-amber-700 mb-3">
-                            These WBCs have been classified with disease markers (CML, CLL, ALL, AML) and require further review.
-                        </p>
-                    </div>
-                    
-                    {/* Abnormal WBCs Grid */}
-                    <div className="px-6 py-4 max-h-96 overflow-y-auto bg-white">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                            {abnormalWBCs.map((wbc, idx) => {
-                                const catInfo = getClassificationCategory(wbc.classification);
-                                return (
-                                    <div 
-                                        key={wbc.wbc_id || `abnormal-${idx}`}
-                                        className={`rounded-lg border-2 overflow-hidden ${catInfo.color}`}
-                                    >
-                                        {/* Cell Image */}
-                                        {wbc.cropped_image && (
-                                            <div className="aspect-square bg-slate-100">
-                                                <img
-                                                    src={`data:image/png;base64,${wbc.cropped_image}`}
-                                                    alt={wbc.classification}
-                                                    className="w-full h-full object-cover"
-                                                />
-                                            </div>
-                                        )}
-                                        
-                                        {/* Classification Label */}
-                                        <div className="p-2 text-center">
-                                            <p className="text-xs font-bold truncate" title={wbc.classification}>
-                                                {wbc.classification}
-                                            </p>
-                                            <p className="text-xs opacity-75">
-                                                {(wbc.confidence * 100).toFixed(0)}% conf
-                                            </p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                    
-                    {/* Abnormal WBCs Legend */}
-                    <div className="px-6 py-3 bg-amber-50 border-t border-amber-200">
-                        <p className="text-xs text-amber-700 font-medium mb-2">Disease Markers Detected:</p>
-                        <div className="flex flex-wrap gap-2 text-xs">
-                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">AML: Acute Myeloid Leukemia</span>
-                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">ALL: Acute Lymphoblastic Leukemia</span>
-                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded">CML: Chronic Myeloid Leukemia</span>
-                            <span className="px-2 py-1 bg-amber-100 text-amber-800 rounded">CLL: Chronic Lymphocytic Leukemia</span>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* RBC/Sickle Cell Manual Examination Section */}
-            {showRBCExamination && aggregatedResults.rbcClassifications && aggregatedResults.rbcClassifications.length > 0 && (
-                <div className="border-t border-slate-200">
-                    {/* RBC Section Header */}
-                    <div className="px-6 py-3 bg-red-50 border-b border-slate-200">
-                        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                            </svg>
-                            RBC/Sickle Cell Manual Examination
-                            <span className="text-sm font-normal text-slate-600">
-                                ({aggregatedResults.rbcClassifications.length} RBC cells detected)
-                            </span>
-                        </h3>
-                    </div>
-                    
-                    {/* RBC Filter Buttons */}
-                    <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex flex-wrap gap-2">
-                        <button
-                            onClick={() => setRbcFilter('all')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                rbcFilter === 'all' 
-                                    ? 'bg-slate-600 text-white' 
-                                    : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'
-                            }`}
-                        >
-                            All RBCs ({aggregatedResults.rbcClassifications.length})
-                        </button>
-                        <button
-                            onClick={() => setRbcFilter('sickle')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                rbcFilter === 'sickle' 
-                                    ? 'bg-red-600 text-white' 
-                                    : 'bg-white text-red-600 border border-red-300 hover:bg-red-50'
-                            }`}
-                        >
-                            Sickle Cells Only ({aggregatedResults.rbcClassifications.filter(rbc => rbc.is_abnormal).length})
-                        </button>
-                        <button
-                            onClick={() => setRbcFilter('normal')}
-                            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                                rbcFilter === 'normal' 
-                                    ? 'bg-green-600 text-white' 
-                                    : 'bg-white text-green-600 border border-green-300 hover:bg-green-50'
-                            }`}
-                        >
-                            Normal RBCs ({aggregatedResults.rbcClassifications.filter(rbc => !rbc.is_abnormal).length})
-                        </button>
-                    </div>
-                    
-                    {/* RBC Cells Scrollable Grid */}
-                    <div className="px-6 py-4 max-h-[500px] overflow-y-auto">
-                        <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3">
-                            {aggregatedResults.rbcClassifications
-                                .filter(rbc => {
-                                    if (rbcFilter === 'all') return true;
-                                    if (rbcFilter === 'sickle') return rbc.is_abnormal;
-                                    if (rbcFilter === 'normal') return !rbc.is_abnormal;
-                                    return true;
-                                })
-                                .map((rbc, idx) => {
-                                    const isSickle = rbc.is_abnormal;
-                                    const borderColor = isSickle ? 'border-red-500' : 'border-green-500';
-                                    const label = isSickle ? 'Sickle Cell' : 'Normal RBC';
-                                    
-                                    return (
-                                        <div
-                                            key={rbc.rbc_id || idx}
-                                            className={`rounded-lg border-2 overflow-hidden ${borderColor}`}
-                                        >
-                                            {/* Cell Image */}
-                                            {rbc.cropped_image && (
-                                                <div className="aspect-square bg-slate-100">
-                                                    <img
-                                                        src={`data:image/png;base64,${rbc.cropped_image}`}
-                                                        alt={label}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                </div>
                                             )}
-                                            
-                                            {/* Classification Label */}
-                                            <div className="p-2 text-center">
-                                                <p className={`text-xs font-bold truncate ${isSickle ? 'text-red-800' : 'text-green-800'}`} title={label}>
-                                                    {label}
-                                                </p>
-                                                {rbc.confidence && (
-                                                    <p className="text-xs opacity-75">
-                                                        {(rbc.confidence * 100).toFixed(0)}% conf
-                                                    </p>
-                                                )}
-                                            </div>
                                         </div>
-                                    );
-                                })}
+                                        <div className="p-4 text-center">
+                                            <p className="text-[10px] font-black truncate uppercase tracking-tighter" title={catInfo.label}>{catInfo.label}</p>
+                                            <p className="text-[10px] font-black text-rose-600 opacity-60 mt-1 uppercase">{(wbc.confidence * 100).toFixed(0)}% Conf</p>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
-                        
-                        {aggregatedResults.rbcClassifications.filter(rbc => {
-                            if (rbcFilter === 'all') return true;
-                            if (rbcFilter === 'sickle') return rbc.is_abnormal;
-                            if (rbcFilter === 'normal') return !rbc.is_abnormal;
-                            return true;
-                        }).length === 0 && (
-                            <div className="text-center py-8 text-slate-500">
-                                No cells match the selected filter
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* Sickle Cell Threshold Legend */}
-                    <div className="px-6 py-3 bg-red-50 border-t border-slate-200">
-                        <p className="text-xs text-slate-600 font-medium mb-2">Sickle Cell Thresholds (Based on About Page):</p>
-                        <div className="flex flex-wrap gap-2 text-xs">
-                            <span className="px-2 py-1 bg-green-100 text-green-800 rounded">&lt;0.3%: Normal</span>
-                            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded">0.4-0.6%: Minimal Sickling</span>
-                            <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded">0.7-1.0%: Sickle Cell Trait</span>
-                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">1.1-1.5%: Sickle Cell Disease</span>
-                            <span className="px-2 py-1 bg-red-200 text-red-900 rounded font-bold">≥1.6%: Severe Sickle Cell Disease</span>
-                        </div>
-                        <p className="text-xs text-slate-500 mt-2">
-                            <strong>Current Sickle Cell Percentage:</strong> {aggregatedResults.sickleCell.percentage}% 
-                            ({aggregatedResults.sickleCell.count} sickle cells / {aggregatedResults.totalRBC} total RBCs)
-                        </p>
                     </div>
                 </div>
             )}
 
-            {/* Disclaimer */}
-            <div className="px-6 py-3 bg-slate-100 border-t border-slate-200">
-                <p className="text-xs text-slate-500">
-                    <strong>Clinical Disclaimer:</strong> This analysis is for research and educational purposes. 
-                    Results should be verified by a qualified hematologist. Additional diagnostic tests may be required.
+            {/* Disclaimer Footer */}
+            <div className="pt-10 border-t border-stone-100 text-center">
+                <p className="text-[10px] font-black text-stone-300 uppercase tracking-[0.4em] max-w-3xl mx-auto leading-relaxed">
+                    Clinical Research Interface • Dual-Stage AI Verification • Final results must be validated by a licensed physician or clinical hematologist.
                 </p>
             </div>
         </div>

@@ -17,20 +17,20 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
     const leukemia = diseaseInterpretation.leukemia_analysis;
     const overallAssessment = diseaseInterpretation.overall_assessment || [];
 
-    // Helper to get severity color classes - medical professional theme
+    // Helper to get severity color classes - professional medical design
     const getSeverityColor = (severity) => {
         switch (severity?.toUpperCase()) {
             case 'HIGH':
-                return 'bg-red-50 border-red-500 text-red-800';
+                return 'bg-rose-50 border-rose-500 text-rose-800';
             case 'MODERATE':
                 return 'bg-amber-50 border-amber-500 text-amber-800';
             case 'LOW':
-                return 'bg-yellow-50 border-yellow-500 text-yellow-800';
+                return 'bg-stone-50 border-stone-300 text-stone-600';
             case 'INFO':
-                return 'bg-slate-50 border-slate-400 text-slate-700';
+                return 'bg-zinc-50 border-zinc-300 text-zinc-700';
             case 'NORMAL':
             default:
-                return 'bg-green-50 border-green-500 text-green-800';
+                return 'bg-stone-50 border-stone-200 text-stone-700';
         }
     };
 
@@ -39,7 +39,7 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
             case 'HIGH':
                 return '⚠';
             case 'MODERATE':
-                return '!';
+                return '!!';
             case 'LOW':
                 return '•';
             case 'INFO':
@@ -53,22 +53,20 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
     // Percentage bar component
     const PercentageBar = ({ percentage, thresholds, label }) => {
         const getBarColor = (pct) => {
-            if (pct >= 80) return 'bg-red-500';
-            if (pct >= 60) return 'bg-amber-500';
-            if (pct >= 40) return 'bg-yellow-500';
-            if (pct >= 20) return 'bg-slate-500';
-            return 'bg-green-500';
+            if (pct >= 50) return 'bg-rose-600';
+            if (pct >= 20) return 'bg-zinc-950';
+            return 'bg-zinc-300';
         };
 
         return (
-            <div className="mt-2">
-                <div className="flex justify-between text-xs text-slate-600 mb-1">
+            <div className="mt-4">
+                <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-stone-400 mb-2">
                     <span>{label}</span>
-                    <span className="font-mono font-semibold">{percentage}%</span>
+                    <span className="tabular-nums">{percentage}%</span>
                 </div>
-                <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-stone-100 rounded-full overflow-hidden">
                     <div 
-                        className={`h-full ${getBarColor(percentage)} transition-all duration-300`}
+                        className={`h-full ${getBarColor(percentage)} transition-all duration-1000 ease-out`}
                         style={{ width: `${Math.min(100, percentage)}%` }}
                     />
                 </div>
@@ -77,31 +75,40 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
     };
 
     return (
-        <div className="mt-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Disease Interpretation
+        <div className="mt-12 space-y-6 animate-in fade-in duration-700">
+            <h3 className="text-xl font-black text-zinc-950 uppercase tracking-tighter flex items-center gap-4 italic mb-8">
+                Clinical Interpretation
+                <div className="h-px flex-grow bg-stone-200"></div>
             </h3>
 
             {/* Overall Assessment Summary */}
             {overallAssessment.length > 0 && (
-                <div className="bg-slate-50 rounded-lg p-4 border-l-4 border-slate-700">
-                    <h4 className="font-semibold text-slate-700 mb-3 text-sm">Overall Assessment</h4>
-                    <div className="space-y-2">
+                <div className="bg-zinc-950 rounded-[35px] p-8 text-white shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-8 opacity-10">
+                        <svg className="w-24 h-24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                    </div>
+                    <h4 className="font-black text-[10px] uppercase tracking-[0.3em] text-rose-500 mb-6 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+                        Executive Summary
+                    </h4>
+                    <div className="space-y-4">
                         {overallAssessment.map((item, idx) => (
                             <div 
                                 key={idx} 
-                                className={`p-2 rounded border-l-4 text-sm ${
+                                className={`p-6 rounded-[25px] border text-sm font-bold leading-relaxed transition-all hover:scale-[1.01] ${
                                     item.type === 'warning' 
-                                        ? 'bg-amber-50 border-amber-400 text-amber-800'
+                                        ? 'bg-rose-600/10 border-rose-500/30 text-rose-400'
                                         : item.type === 'finding'
-                                        ? getSeverityColor(item.severity)
-                                        : 'bg-slate-100 border-slate-400 text-slate-700'
+                                        ? 'bg-white/5 border-white/10 text-white'
+                                        : 'bg-white/5 border-white/10 text-zinc-400'
                                 }`}
                             >
-                                <span>{item.message}</span>
+                                <span className="flex items-start gap-4">
+                                    <span className="text-rose-500 mt-1">→</span>
+                                    {item.message}
+                                </span>
                             </div>
                         ))}
                     </div>
@@ -110,31 +117,35 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
 
             {/* Leukemia Analysis Section */}
             {leukemia && leukemia.findings && leukemia.findings.length > 0 && (
-                <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-                    <div className="bg-slate-800 text-white px-4 py-2">
-                        <h4 className="font-semibold text-sm">Leukemia Analysis</h4>
+                <div className="bg-stone-50 rounded-[40px] border border-stone-200 overflow-hidden shadow-sm">
+                    <div className="bg-white px-8 py-6 border-b border-stone-200 flex items-center justify-between">
+                        <h4 className="font-black text-xs uppercase tracking-[0.2em] text-zinc-950 italic">Hematological Morphology Review</h4>
+                        <span className="px-3 py-1 bg-stone-100 text-stone-400 rounded-full text-[8px] font-black uppercase tracking-widest">WBC Focused</span>
                     </div>
-                    <div className="p-4 space-y-4">
+                    <div className="p-8 space-y-6">
                         {leukemia.findings.map((finding, idx) => (
                             <div 
                                 key={idx} 
-                                className={`rounded-lg p-4 border-l-4 ${getSeverityColor(finding.severity)}`}
+                                className={`rounded-[30px] p-8 border-2 transition-all hover:shadow-lg ${getSeverityColor(finding.severity)}`}
                             >
-                                <div className="flex items-start justify-between">
+                                <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
                                     <div className="flex-1">
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <span className="w-5 h-5 rounded-full bg-current/10 flex items-center justify-center text-xs font-bold">
-                                                {getSeverityIcon(finding.severity)}
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <span className="px-4 py-1.5 bg-zinc-950 text-white rounded-full text-[9px] font-black uppercase tracking-widest">
+                                                {finding.type}
                                             </span>
-                                            <span className="font-bold">{finding.type}</span>
+                                            {finding.severity === 'HIGH' && (
+                                                <span className="animate-pulse px-3 py-1 bg-rose-600 text-white rounded-full text-[8px] font-black uppercase tracking-widest leading-none">
+                                                    CRITICAL FINDING
+                                                </span>
+                                            )}
                                         </div>
-                                        <p className="text-sm mb-2">{finding.interpretation}</p>
-                                        <div className="text-xs opacity-75">
-                                            <span className="font-mono">Condition: {finding.condition}</span>
-                                        </div>
+                                        <p className="text-xl font-black text-zinc-900 tracking-tight leading-7 mb-2 uppercase italic">{finding.condition}</p>
+                                        <p className="text-sm font-bold opacity-70 leading-relaxed max-w-xl">{finding.interpretation}</p>
                                     </div>
                                     <div className="text-right">
-                                        <span className="text-xl font-bold">{finding.percentage}%</span>
+                                        <p className="text-[10px] font-black opacity-30 uppercase tracking-[0.2em] mb-1 text-current">Detected Load</p>
+                                        <span className="text-5xl font-black tabular-nums tracking-tighter italic">{finding.percentage}<span className="text-xl not-italic ml-1">%</span></span>
                                     </div>
                                 </div>
 

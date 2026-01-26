@@ -26,201 +26,147 @@ export const CellClassifications = () => {
     // Get color class based on classification - medical professional theme
     const getClassificationColor = (classification, cellType) => {
         if (cellType === 'RBC') {
-            return 'bg-red-50 border-red-400 text-red-800';
+            return 'bg-white border-stone-200 text-zinc-900 shadow-sm';
         }
         
-        // Check for normal condition in new format "CellType: Normal"
-        if (classification && classification.toLowerCase().includes(': normal')) {
-            return 'bg-green-50 border-green-400 text-green-800';
+        const cLower = classification ? classification.toLowerCase() : '';
+        if (cLower.includes(': normal')) {
+            return 'bg-white border-stone-200 text-zinc-900 shadow-sm';
         }
         
-        // Check for specific disease conditions with appropriate colors
-        const classLower = classification ? classification.toLowerCase() : '';
-        if (classLower.includes(': cml') || classLower.includes(': aml')) {
-            return 'bg-red-50 border-red-500 text-red-800'; // High severity
-        }
-        if (classLower.includes(': cll') || classLower.includes(': all')) {
-            return 'bg-orange-50 border-orange-500 text-orange-800'; // Moderate severity
-        }
-        
-        // Default for other abnormal classifications
-        return 'bg-amber-50 border-amber-400 text-amber-800';
+        return 'bg-zinc-950 border-rose-500 text-white shadow-xl shadow-rose-600/10';
     };
 
     // Get icon based on classification
     const getClassificationIcon = (classification, cellType) => {
         if (cellType === 'RBC') return '●';
-        
-        // Check for normal condition in new format
-        if (classification && classification.toLowerCase().includes(': normal')) {
-            return '✓';
-        }
-        
-        // Disease-specific icons
-        const classLower = classification ? classification.toLowerCase() : '';
-        if (classLower.includes(': cml') || classLower.includes(': aml')) return '⚠';
-        if (classLower.includes(': cll') || classLower.includes(': all')) return '!';
-        
-        return '!';
+        const cLower = classification ? classification.toLowerCase() : '';
+        if (cLower.includes(': normal')) return '✓';
+        return '⚠';
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-red-50">
+        <div className="flex flex-col min-h-screen bg-stone-50">
             <Header />
-            <main className="flex grow flex-col p-8">
-                <div className="max-w-7xl mx-auto w-full">
-                    {/* Header Section */}
-                    <div className="flex justify-between items-center mb-6">
+            <main className="flex grow flex-col px-12 py-16">
+                <div className="w-full max-w-7xl mx-auto">
+                    <div className="mb-12 border-b border-stone-200 pb-10 flex justify-between items-end">
                         <div>
-                            <h1 className="text-3xl font-bold text-red-900">Cell Classifications</h1>
-                            <p className="text-red-700 mt-1">
-                                ConvNeXt Model Classification Results
-                            </p>
+                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-600 mb-2 block">Morphological Analysis</span>
+                            <h1 className="text-6xl font-black text-zinc-950 tracking-tighter">Cell Classification Results</h1>
                         </div>
-                        <button
-                            onClick={() => navigate('/', {
-                                state: {
-                                    results: location.state?.results,
-                                    previewUrl: location.state?.previewUrl,
-                                    sessionState: location.state?.sessionState
-                                }
-                            })}
-                            className="px-4 py-2 bg-red-700 text-white rounded-lg hover:bg-red-800 font-semibold"
-                        >
-                            Back to Results
-                        </button>
-                    </div>
-
-                    {/* Summary removed - stats now shown in Quick Stats section below */}
-
-                    {/* Info Banner - Only Abnormal Cells Displayed */}
-                    <div className="mb-6 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg">
-                        <div className="flex items-start gap-3">
-                            <svg className="w-6 h-6 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            <div>
-                                <h3 className="font-semibold text-amber-800 mb-1">Abnormal Cells Only</h3>
-                                <p className="text-sm text-amber-700">
-                                    This page displays only abnormal/diseased cells detected by the ConvNeXt model. Normal WBCs, RBCs, and Platelets are automatically filtered out. 
-                                    Showing: <span className="font-semibold">Abnormal WBCs</span> and <span className="font-semibold">Sickle Cells</span> (≥80% confidence).
-                                </p>
-                            </div>
+                        <div className="flex gap-4">
+                            <button 
+                                onClick={() => navigate('/')}
+                                className="px-6 py-3 bg-white text-zinc-950 border border-stone-200 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-stone-50 transition-all shadow-sm"
+                            >
+                                New Scan
+                            </button>
                         </div>
                     </div>
 
                     {/* Quick Stats */}
-                    <div className="mb-6 grid grid-cols-3 gap-4">
-                        <div className="bg-white p-4 rounded-lg border-l-4 border-rose-500">
-                            <p className="text-sm text-rose-600 font-medium">Total Abnormal</p>
-                            <p className="text-2xl font-bold text-rose-800">{croppedCells.length}</p>
+                    {summary && (
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+                            <div className="bg-zinc-950 p-8 rounded-[32px] text-white shadow-xl">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-2 block">Total Analysis</span>
+                                <div className="text-4xl font-black text-rose-500 leading-tight">
+                                    {summary.total_detected} <span className="text-sm font-bold text-white uppercase tracking-tighter">Cells</span>
+                                </div>
+                            </div>
+                            <div className="bg-white p-8 rounded-[32px] border border-stone-200 shadow-sm">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Malignancy Capture</span>
+                                <div className="text-4xl font-black text-zinc-950 leading-tight">
+                                    {summary.abnormal_count} <span className="text-sm font-bold text-rose-600 uppercase tracking-tighter">Detected</span>
+                                </div>
+                            </div>
+                            <div className="bg-white p-8 rounded-[32px] border border-stone-200 shadow-sm">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Erythrocytes</span>
+                                <div className="text-4xl font-black text-zinc-950 leading-tight">
+                                    {summary.cell_types['RBC'] || 0}
+                                </div>
+                            </div>
+                            <div className="bg-white p-8 rounded-[32px] border border-stone-200 shadow-sm">
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 block">Leukocytes</span>
+                                <div className="text-4xl font-black text-zinc-950 leading-tight">
+                                    {summary.cell_types['WBC'] || 0}
+                                </div>
+                            </div>
                         </div>
-                        <div className="bg-white p-4 rounded-lg border-l-4 border-blue-500">
-                            <p className="text-sm text-blue-600 font-medium">Abnormal WBCs</p>
-                            <p className="text-2xl font-bold text-blue-800">{croppedCells.filter(c => c.cell_type === 'WBC').length}</p>
-                        </div>
-                        <div className="bg-white p-4 rounded-lg border-l-4 border-red-600">
-                            <p className="text-sm text-red-600 font-medium">Sickle Cells</p>
-                            <p className="text-2xl font-bold text-red-800">{croppedCells.filter(c => c.cell_type === 'RBC').length}</p>
-                        </div>
-                    </div>
+                    )}
 
                     {/* No Data Message */}
-                    {croppedCells.length === 0 && (
-                        <div className="bg-white rounded-lg p-16 text-center border border-red-200">
-                            <p className="text-xl text-red-600">No cell classifications available</p>
-                            <p className="text-sm text-red-400 mt-2">
-                                Analyze an image first to see cell classification results
+                    {croppedCells.length === 0 && !summary && (
+                        <div className="bg-white rounded-[40px] p-24 text-center border border-stone-200 shadow-sm">
+                            <div className="w-20 h-20 bg-stone-50 rounded-3xl flex items-center justify-center mx-auto mb-6 text-slate-300">
+                                <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                            </div>
+                            <p className="text-2xl font-black text-zinc-950 tracking-tight">No clinical data available</p>
+                            <p className="text-sm text-slate-400 mt-2 font-medium">
+                                Execute an automated scan to populate pathological morphologies
                             </p>
                             <button
                                 onClick={() => navigate('/')}
-                                className="mt-4 px-6 py-2 bg-red-700 text-white rounded-lg hover:bg-red-800"
+                                className="mt-8 px-8 py-3 bg-rose-600 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-lg shadow-rose-600/20"
                             >
-                                Go to Analysis
+                                Start Analysis
                             </button>
                         </div>
                     )}
 
-                    {/* Cell Grid - All Abnormal Cells */}
+                    {/* Cell Grid - Abnormal Cells Display */}
                     {croppedCells.length > 0 && (
-                        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                            {croppedCells.map((cell, idx) => (
-                                <div 
-                                    key={cell.id || idx}
-                                    className={`rounded-lg border-2 overflow-hidden shadow-sm hover:shadow-md transition-shadow ${
-                                        getClassificationColor(cell.classification, cell.cell_type)
-                                    }`}
-                                >
-                                    {/* Cell Image */}
-                                    <div className="aspect-square bg-slate-100">
-                                        <img
-                                            src={`data:image/png;base64,${cell.cropped_image}`}
-                                            alt={`${cell.cell_type} - ${cell.classification}`}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </div>
-                                    
-                                    {/* Cell Info */}
-                                    <div className="p-3">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-xs font-semibold uppercase tracking-wide">
-                                                {cell.cell_type}
-                                            </span>
-                                            <span className="w-5 h-5 rounded-full bg-current/10 flex items-center justify-center text-xs font-bold">
+                        <div>
+                            <div className="mb-6 flex items-center justify-between px-2">
+                                <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Morphological Abnormalities ({croppedCells.length})</h2>
+                                <span className="text-[9px] font-black bg-rose-50 text-rose-600 px-2 py-1 rounded-full uppercase tracking-tighter">AI flagged candidates</span>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                                {croppedCells.map((cell, idx) => (
+                                    <div 
+                                        key={cell.id || idx}
+                                        className={`rounded-[32px] border overflow-hidden shadow-sm hover:scale-105 transition-all duration-300 ${
+                                            getClassificationColor(cell.classification, cell.cell_type)
+                                        }`}
+                                    >
+                                        <div className="aspect-square bg-slate-100 m-2 rounded-[24px] overflow-hidden relative">
+                                            {cell.cropped_image ? (
+                                                <img
+                                                    src={`data:image/png;base64,${cell.cropped_image}`}
+                                                    alt={`${cell.cell_type} - ${cell.classification}`}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-slate-300">
+                                                    <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                                                </div>
+                                            )}
+                                            <div className="absolute top-2 right-2 w-6 h-6 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-[10px] font-black text-white">
                                                 {getClassificationIcon(cell.classification, cell.cell_type)}
-                                            </span>
+                                            </div>
                                         </div>
-                                        <p className="font-bold text-sm" title={cell.classification}>
-                                            Classified: {cell.classification}
-                                        </p>
+                                        <div className="p-4 text-center">
+                                            <p className="text-[10px] font-black uppercase tracking-tight truncate">
+                                                {cell.cell_type}
+                                            </p>
+                                            <p className="text-[10px] font-bold opacity-60 tracking-tight truncate uppercase mt-0.5">
+                                                {cell.classification || 'Unclassified'}
+                                            </p>
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-
-                    {/* WBC Classification Summary Table */}
-                    {wbcClassifications.length > 0 && (
-                        <div className="mt-8 bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
-                            <h2 className="text-xl font-bold mb-4 text-slate-800">Detailed WBC Classifications</h2>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="bg-slate-50 border-b border-slate-200">
-                                            <th className="text-left p-3 text-slate-700">ID</th>
-                                            <th className="text-left p-3 text-slate-700">Classification</th>
-                                            <th className="text-left p-3 text-slate-700">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {wbcClassifications.map((wbc) => (
-                                            <tr key={wbc.wbc_id} className="border-b border-slate-100 hover:bg-slate-50">
-                                                <td className="p-3 font-mono text-slate-700">WBC #{wbc.wbc_id}</td>
-                                                <td className="p-3 font-semibold text-slate-800">{wbc.classification}</td>
-                                                <td className="p-3">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                        wbc.classification === 'Normal'
-                                                            ? 'bg-green-100 text-green-800'
-                                                            : 'bg-amber-100 text-amber-800'
-                                                    }`}>
-                                                        {wbc.classification === 'Normal' ? '✓ Normal' : '! Abnormal'}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                ))}
                             </div>
                         </div>
                     )}
 
                     {/* Clinical Note */}
-                    <div className="mt-6 bg-slate-50 border border-slate-200 p-4 rounded-lg">
-                        <p className="font-semibold text-slate-700">Clinical Note:</p>
-                        <p className="text-sm text-slate-600 mt-1">
-                            These classifications are generated by a ConvNeXt deep learning model for research 
-                            and educational purposes. Results should be validated by trained hematologists 
-                            and confirmed with additional diagnostic tests before any clinical decisions.
+                    <div className="mt-16 bg-white border border-stone-200 p-8 rounded-[32px] shadow-sm relative overflow-hidden">
+                        <div className="absolute top-0 left-0 w-1.5 h-full bg-rose-600"></div>
+                        <h4 className="font-black text-zinc-950 mb-2 text-sm uppercase tracking-tighter">Clinical Compliance Notice</h4>
+                        <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                            Malignancy detection and morphological classifications are generated via automated ConvNeXt-V2 neural analysis. 
+                            These results are intended for clinical research assistant applications and must be verified by a board-certified hematologist. 
+                            Confirm all anomalous findings using peripheral blood film manual microscopy.
                         </p>
                     </div>
                 </div>

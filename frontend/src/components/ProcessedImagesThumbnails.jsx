@@ -349,11 +349,11 @@ export const ProcessedImagesThumbnails = ({
                                                 <p className="text-red-200 text-xs mb-2 font-medium">WBC Distribution</p>
                                                 <div className="space-y-1">
                                                     {[
-                                                        { name: 'Neu', count: breakdown.neutrophil, color: 'bg-blue-500' },
-                                                        { name: 'Lym', count: breakdown.lymphocyte, color: 'bg-green-500' },
-                                                        { name: 'Mon', count: breakdown.monocyte, color: 'bg-yellow-500' },
-                                                        { name: 'Eos', count: breakdown.eosinophil, color: 'bg-orange-500' },
-                                                        { name: 'Bas', count: breakdown.basophil, color: 'bg-purple-500' }
+                                                        { name: 'Neu', count: breakdown.neutrophil, color: 'bg-rose-600' },
+                                                        { name: 'Lym', count: breakdown.lymphocyte, color: 'bg-rose-400' },
+                                                        { name: 'Mon', count: breakdown.monocyte, color: 'bg-stone-400' },
+                                                        { name: 'Eos', count: breakdown.eosinophil, color: 'bg-stone-300' },
+                                                        { name: 'Bas', count: breakdown.basophil, color: 'bg-rose-950' }
                                                     ].map((wbc, i) => {
                                                         const pct = breakdown.totalWBC > 0 ? (wbc.count / breakdown.totalWBC) * 100 : 0;
                                                         return (
@@ -555,8 +555,8 @@ export const ProcessedImagesThumbnails = ({
                                                     <td className="text-right font-bold text-red-600">{selectedImage.rbcCount || 0}</td>
                                                 </tr>
                                                 <tr className="border-b border-slate-100">
-                                                    <td className="py-2 font-medium text-blue-700">WBC (Total)</td>
-                                                    <td className="text-right font-bold text-blue-600">{selectedImage.wbcCount || 0}</td>
+                                                    <td className="py-2 font-medium text-rose-700">WBC (Total)</td>
+                                                    <td className="text-right font-bold text-rose-600">{selectedImage.wbcCount || 0}</td>
                                                 </tr>
                                             </tbody>
                                         </table>
@@ -568,25 +568,25 @@ export const ProcessedImagesThumbnails = ({
                                         if (!breakdown) return null;
 
                                         return (
-                                            <div className="bg-blue-50 rounded-lg p-4 mb-4">
-                                                <h5 className="font-semibold text-blue-800 mb-3">WBC Classification Breakdown</h5>
+                                            <div className="bg-rose-50 rounded-lg p-4 mb-4">
+                                                <h5 className="font-semibold text-rose-800 mb-3">WBC Classification Breakdown</h5>
                                                 <table className="w-full text-sm">
                                                     <thead>
-                                                        <tr className="border-b border-blue-200">
-                                                            <th className="text-left py-2 text-blue-700">Type</th>
-                                                            <th className="text-right py-2 text-blue-700">Count</th>
-                                                            <th className="text-right py-2 text-blue-700">%</th>
+                                                        <tr className="border-b border-rose-200">
+                                                            <th className="text-left py-2 text-rose-700">Type</th>
+                                                            <th className="text-right py-2 text-rose-700">Count</th>
+                                                            <th className="text-right py-2 text-rose-700">%</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody>
-                                                        <tr className="border-b border-blue-100">
+                                                        <tr className="border-b border-rose-100">
                                                             <td className="py-2 text-slate-700">Neutrophil</td>
                                                             <td className="text-right font-medium">{breakdown.neutrophil}</td>
                                                             <td className="text-right text-slate-500">
                                                                 {breakdown.totalWBC > 0 ? ((breakdown.neutrophil / breakdown.totalWBC) * 100).toFixed(1) : 0}%
                                                             </td>
                                                         </tr>
-                                                        <tr className="border-b border-blue-100">
+                                                        <tr className="border-b border-rose-100">
                                                             <td className="py-2 text-slate-700">
                                                                 Lymphocyte <span className="text-xs text-amber-600">(CLL/ALL indicator)</span>
                                                             </td>
@@ -595,21 +595,21 @@ export const ProcessedImagesThumbnails = ({
                                                                 {breakdown.totalWBC > 0 ? ((breakdown.lymphocyte / breakdown.totalWBC) * 100).toFixed(1) : 0}%
                                                             </td>
                                                         </tr>
-                                                        <tr className="border-b border-blue-100">
+                                                        <tr className="border-b border-rose-100">
                                                             <td className="py-2 text-slate-700">Monocyte</td>
                                                             <td className="text-right font-medium">{breakdown.monocyte}</td>
                                                             <td className="text-right text-slate-500">
                                                                 {breakdown.totalWBC > 0 ? ((breakdown.monocyte / breakdown.totalWBC) * 100).toFixed(1) : 0}%
                                                             </td>
                                                         </tr>
-                                                        <tr className="border-b border-blue-100">
+                                                        <tr className="border-b border-rose-100">
                                                             <td className="py-2 text-slate-700">Eosinophil</td>
                                                             <td className="text-right font-medium">{breakdown.eosinophil}</td>
                                                             <td className="text-right text-slate-500">
                                                                 {breakdown.totalWBC > 0 ? ((breakdown.eosinophil / breakdown.totalWBC) * 100).toFixed(1) : 0}%
                                                             </td>
                                                         </tr>
-                                                        <tr className="border-b border-blue-100">
+                                                        <tr className="border-b border-rose-100">
                                                             <td className="py-2 text-slate-700">Basophil</td>
                                                             <td className="text-right font-medium">{breakdown.basophil}</td>
                                                             <td className="text-right text-slate-500">
@@ -621,7 +621,7 @@ export const ProcessedImagesThumbnails = ({
 
                                                 {/* Normal WBCs Button */}
                                                 {breakdown.normalWBCs.length > 0 && (
-                                                    <div className="mt-3 pt-3 border-t border-blue-200">
+                                                    <div className="mt-3 pt-3 border-t border-rose-200">
                                                         <button
                                                             onClick={() => setShowNormalWBCs(!showNormalWBCs)}
                                                             className="w-full flex items-center justify-between px-3 py-2 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg transition-colors"
@@ -671,7 +671,7 @@ export const ProcessedImagesThumbnails = ({
 
                                                 {/* Abnormal WBCs Button */}
                                                 {breakdown.abnormalWBCs.length > 0 && (
-                                                    <div className="mt-3 pt-3 border-t border-blue-200">
+                                                    <div className="mt-3 pt-3 border-t border-rose-200">
                                                         <button
                                                             onClick={() => setShowAbnormalWBCs(!showAbnormalWBCs)}
                                                             className="w-full flex items-center justify-between px-3 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg transition-colors"
@@ -721,7 +721,7 @@ export const ProcessedImagesThumbnails = ({
 
                                                 {/* Other WBCs Button */}
                                                 {breakdown.otherWBCs.length > 0 && (
-                                                    <div className="mt-3 pt-3 border-t border-blue-200">
+                                                    <div className="mt-3 pt-3 border-t border-rose-200">
                                                         <button
                                                             onClick={() => setShowOtherWBCs(!showOtherWBCs)}
                                                             className="w-full flex items-center justify-between px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg transition-colors"
