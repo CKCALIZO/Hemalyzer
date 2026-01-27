@@ -939,11 +939,11 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         # Different thresholds based on disease type to prevent over-prediction
                         # CML is commonly over-predicted, so we use 95% threshold
                         DISEASE_CONFIDENCE_THRESHOLDS = {
-                            'cml': 0.95,   # 95% for CML (very strict - user requested)
-                            'aml': 0.90,   # 90% for AML (high confidence needed)
-                            'all': 0.90,   # 90% for ALL (high confidence needed)
-                            'cll': 0.88,   # 88% for CLL (slightly lower as it's less over-predicted)
-                            'default': 0.85  # 85% for other conditions
+                            'cml': 0.90,   # 90% for CML (very strict - user requested)
+                            'aml': 0.80,   # 80% for AML (high confidence needed)
+                            'all': 0.80,   # 80% for ALL (high confidence needed)
+                            'cll': 0.80,   # 80% for CLL (slightly lower as it's less over-predicted)
+                            'default': 0.75  # 75% for other conditions
                         }
                         
                         is_disease_prediction = ': normal' not in wbc_class.lower()

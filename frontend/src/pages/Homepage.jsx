@@ -297,28 +297,33 @@ const Homepage = () => {
             });
         }
 
-        // CML Analysis - based on CML-classified cells percentage
-        // Only show if there are CML-classified cells
+        // CML Analysis - based on granulocyte (CML-classified cells) percentage
+        // Thresholds from disease_thresholds.py:
+        // <60% = Normal, 60-75% = Reactive, 76-89% = Early CML, 90-95% = Chronic Phase, >95% = Accelerated
         if (cmlCount > 0) {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
 
-            if (cmlPercentage > 50) {
-                interpretation = 'Significant CML cell population detected';
-                condition = 'Chronic Myeloid Leukemia (CML)';
+            if (cmlPercentage > 95) {
+                interpretation = 'Accelerated Phase CML - extreme granulocytic proliferation';
+                condition = 'Chronic Myeloid Leukemia (Accelerated Phase)';
                 severity = 'HIGH';
-            } else if (cmlPercentage >= 20) {
-                interpretation = 'Moderate CML cell population - suggestive of CML';
-                condition = 'Suspicious for CML';
+            } else if (cmlPercentage >= 90) {
+                interpretation = 'Typical Chronic Phase CML - granulocytes dominate differential';
+                condition = 'Chronic Myeloid Leukemia (Chronic Phase)';
+                severity = 'HIGH';
+            } else if (cmlPercentage >= 76) {
+                interpretation = 'Suspicious for Early Chronic Myeloid Leukemia (CML - Chronic Phase)';
+                condition = 'Suspicious for Early CML';
                 severity = 'MODERATE';
-            } else if (cmlPercentage >= 5) {
-                interpretation = 'Low CML cell percentage - monitor closely';
-                condition = 'Low CML markers';
+            } else if (cmlPercentage >= 60) {
+                interpretation = 'Reactive / Secondary Leukocytosis (CML) - mild granulocytic predominance';
+                condition = 'Reactive Leukocytosis';
                 severity = 'LOW';
             } else {
-                interpretation = 'Minimal CML markers detected';
-                condition = 'Minimal CML markers';
+                interpretation = 'Normal differential count - balanced white cell maturation';
+                condition = 'Normal granulocyte count';
                 severity = 'INFO';
             }
 
@@ -335,28 +340,33 @@ const Homepage = () => {
             });
         }
 
-        // CLL Analysis - based on CLL-classified cells percentage
-        // Only show if there are CLL-classified cells
+        // CLL Analysis - based on lymphocyte (CLL-classified cells) percentage
+        // Thresholds from disease_thresholds.py:
+        // <20% = Normal, 20-40% = Reactive, 41-60% = Early CLL, 61-80% = Typical CLL, >80% = Advanced CLL
         if (cllCount > 0) {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
 
-            if (cllPercentage > 50) {
-                interpretation = 'Significant CLL cell population detected';
+            if (cllPercentage > 80) {
+                interpretation = 'Advanced / Progressive CLL - lymphocytes dominate smear';
+                condition = 'Chronic Lymphocytic Leukemia (Advanced/Progressive)';
+                severity = 'HIGH';
+            } else if (cllPercentage >= 61) {
+                interpretation = 'Typical Chronic Lymphocytic Leukemia (CLL)';
                 condition = 'Chronic Lymphocytic Leukemia (CLL)';
                 severity = 'HIGH';
-            } else if (cllPercentage >= 20) {
-                interpretation = 'Moderate CLL cell population - suggestive of CLL';
-                condition = 'Suspicious for CLL';
+            } else if (cllPercentage >= 41) {
+                interpretation = 'Suspicious for Early / Smoldering CLL';
+                condition = 'Suspicious for Early CLL';
                 severity = 'MODERATE';
-            } else if (cllPercentage >= 5) {
-                interpretation = 'Low CLL cell percentage - monitor closely';
-                condition = 'Low CLL markers';
+            } else if (cllPercentage >= 20) {
+                interpretation = 'Reactive / Secondary Lymphocytosis - may occur with viral infections';
+                condition = 'Reactive Lymphocytosis';
                 severity = 'LOW';
             } else {
-                interpretation = 'Minimal CLL markers detected';
-                condition = 'Minimal CLL markers';
+                interpretation = 'Normal lymphocyte count - balanced white cell differential';
+                condition = 'Normal lymphocyte count';
                 severity = 'INFO';
             }
 

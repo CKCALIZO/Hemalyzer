@@ -13,8 +13,8 @@ const WBC_NORMAL_RANGE = { min: 4000, max: 6000 }; // cells/μL
  * Displays a clickable thumbnail bar of all processed images
  * Allows users to view individual image results with detailed WBC breakdown
  */
-export const ProcessedImagesThumbnails = ({ 
-    processedImages, 
+export const ProcessedImagesThumbnails = ({
+    processedImages,
     onImageClick,
     currentImageCount,
     targetImageCount = 10
@@ -30,14 +30,14 @@ export const ProcessedImagesThumbnails = ({
     }
 
     const progress = Math.min(100, (currentImageCount / targetImageCount) * 100);
-    
+
     // Calculate total WBC count from all processed images
     const currentWBCCount = processedImages.reduce((sum, img) => sum + (img.wbcCount || 0), 0);
 
     // Calculate WBC breakdown for a single image
     const getWBCBreakdown = (classifications) => {
         if (!classifications || classifications.length === 0) return null;
-        
+
         const breakdown = {
             // Main WBC types (aggregated normal + abnormal)
             neutrophil: 0,
@@ -56,11 +56,11 @@ export const ProcessedImagesThumbnails = ({
 
         // Main WBC types to track
         const mainWBCTypes = ['Neutrophil', 'Basophil', 'Monocyte', 'Eosinophil', 'Lymphocyte'];
-        
+
         // Disease/blast types for "Other WBCs" (these don't fall into normal/abnormal of main types)
         const diseaseTypes = [
-            'Myeloblast', 
-            'Acute Myeloid Leukemia', 
+            'Myeloblast',
+            'Acute Myeloid Leukemia',
             'Acute Lymphoblastic Leukemia',
             'Chronic Myeloid Leukemia',
             'Chronic Lymphocytic Leukemia',
@@ -73,17 +73,17 @@ export const ProcessedImagesThumbnails = ({
         classifications.forEach(cls => {
             const type = cls.classification;
             breakdown.totalWBC++;
-            
+
             // Check if it's a "detailed" classification (e.g., "Basophil: Normal" or "Lymphocyte: CLL")
             const hasColon = type.includes(':');
-            
+
             if (hasColon) {
                 // Parse "CellType: Status" format
                 const [cellType, status] = type.split(':').map(s => s.trim());
-                
+
                 // Check if it's one of the main 5 WBC types
                 const isMainType = mainWBCTypes.some(t => cellType.toLowerCase().includes(t.toLowerCase()));
-                
+
                 if (isMainType) {
                     // Increment main type counter
                     if (cellType.toLowerCase().includes('neutrophil')) breakdown.neutrophil++;
@@ -91,11 +91,11 @@ export const ProcessedImagesThumbnails = ({
                     else if (cellType.toLowerCase().includes('monocyte')) breakdown.monocyte++;
                     else if (cellType.toLowerCase().includes('eosinophil')) breakdown.eosinophil++;
                     else if (cellType.toLowerCase().includes('basophil')) breakdown.basophil++;
-                    
+
                     // Categorize into Normal or Abnormal WBCs
                     const isNormal = status.toLowerCase().includes('normal');
                     const targetArray = isNormal ? breakdown.normalWBCs : breakdown.abnormalWBCs;
-                    
+
                     const existing = targetArray.find(o => o.type === type);
                     if (existing) {
                         existing.count++;
@@ -108,8 +108,8 @@ export const ProcessedImagesThumbnails = ({
                     if (existing) {
                         existing.count++;
                     } else {
-                        breakdown.otherWBCs.push({ 
-                            type, 
+                        breakdown.otherWBCs.push({
+                            type,
                             count: 1,
                             isDisease: diseaseTypes.some(dt => type.includes(dt))
                         });
@@ -164,8 +164,8 @@ export const ProcessedImagesThumbnails = ({
                     if (existing) {
                         existing.count++;
                     } else {
-                        breakdown.otherWBCs.push({ 
-                            type, 
+                        breakdown.otherWBCs.push({
+                            type,
                             count: 1,
                             isDisease: diseaseTypes.includes(type)
                         });
@@ -191,7 +191,8 @@ export const ProcessedImagesThumbnails = ({
         // Calculate average RBC per field
         const totalRBC = processedImages.reduce((sum, img) => sum + (img.rbcCount || 0), 0);
         const avgRBCPerField = totalRBC / processedImages.length;
-        const estimatedRBCPerUL = avgRBCPerField * RBC_MULTIPLIER;
+        // RBC Formula: (Average RBC per field ÷ 10) × 200,000 = Estimated RBC/μL
+        const estimatedRBCPerUL = (avgRBCPerField / 10) * RBC_MULTIPLIER;
 
         // Check WBC status against normal range
         let wbcStatus = 'normal';
@@ -235,16 +236,16 @@ export const ProcessedImagesThumbnails = ({
             {/* Thumbnail Bar */}
             <div className="bg-red-700 rounded-lg overflow-hidden mb-4">
                 {/* Header with progress */}
-                <div 
+                <div
                     className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-red-800 transition-colors"
                     onClick={() => setIsExpanded(!isExpanded)}
                 >
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
-                            <svg 
-                                className={`w-4 h-4 text-white transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
-                                fill="none" 
-                                stroke="currentColor" 
+                            <svg
+                                className={`w-4 h-4 text-white transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
                                 viewBox="0 0 24 24"
                             >
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -253,16 +254,16 @@ export const ProcessedImagesThumbnails = ({
                                 Processed Images ({processedImages.length})
                             </span>
                         </div>
-                        
+
                         {/* Mini thumbnails preview when collapsed */}
                         {!isExpanded && (
                             <div className="flex items-center gap-1 ml-2">
                                 {processedImages.slice(0, 5).map((img, idx) => (
-                                    <div 
+                                    <div
                                         key={idx}
                                         className="w-8 h-8 rounded border-2 border-red-500 overflow-hidden"
                                     >
-                                        <img 
+                                        <img
                                             src={img.preview || `data:image/jpeg;base64,${img.annotated}`}
                                             alt={`Img ${idx + 1}`}
                                             className="w-full h-full object-cover"
@@ -285,10 +286,9 @@ export const ProcessedImagesThumbnails = ({
                             </p>
                         </div>
                         <div className="w-24 h-2 bg-red-900 rounded-full overflow-hidden">
-                            <div 
-                                className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${
-                                    progress >= 100 ? 'bg-green-400' : 'bg-gradient-to-r from-white/80 to-white'
-                                }`}
+                            <div
+                                className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${progress >= 100 ? 'bg-green-400' : 'bg-gradient-to-r from-white/80 to-white'
+                                    }`}
                                 style={{ width: `${progress}%` }}
                             />
                         </div>
@@ -305,7 +305,7 @@ export const ProcessedImagesThumbnails = ({
                             {processedImages.map((img, idx) => {
                                 const breakdown = getWBCBreakdown(img.classifications);
                                 return (
-                                    <div 
+                                    <div
                                         key={idx}
                                         className="bg-red-800 rounded-lg p-3 cursor-pointer hover:bg-red-700 transition-colors"
                                         onClick={() => handleImageClick(img, idx)}
@@ -314,7 +314,7 @@ export const ProcessedImagesThumbnails = ({
                                         <div className="flex items-center gap-3 mb-3">
                                             <div className="relative">
                                                 <div className="w-14 h-14 rounded-lg overflow-hidden border-2 border-red-400">
-                                                    <img 
+                                                    <img
                                                         src={img.preview || `data:image/jpeg;base64,${img.annotated}`}
                                                         alt={`Image ${idx + 1}`}
                                                         className="w-full h-full object-cover"
@@ -330,7 +330,7 @@ export const ProcessedImagesThumbnails = ({
                                                 <p className="text-red-200 text-xs">Blood Smear Analysis</p>
                                             </div>
                                         </div>
-                                        
+
                                         {/* Cell counts row */}
                                         <div className="grid grid-cols-2 gap-2 mb-3">
                                             <div className="bg-red-900/50 rounded px-2 py-1.5 text-center">
@@ -342,7 +342,7 @@ export const ProcessedImagesThumbnails = ({
                                                 <p className="text-white font-bold text-sm">{img.wbcCount || 0}</p>
                                             </div>
                                         </div>
-                                        
+
                                         {/* 5 WBC Categories */}
                                         {breakdown && breakdown.totalWBC > 0 && (
                                             <div className="bg-red-900/30 rounded-lg p-2">
@@ -360,7 +360,7 @@ export const ProcessedImagesThumbnails = ({
                                                             <div key={i} className="flex items-center gap-2">
                                                                 <span className="text-red-200 text-xs w-8">{wbc.name}</span>
                                                                 <div className="flex-1 h-2 bg-red-900 rounded-full overflow-hidden">
-                                                                    <div 
+                                                                    <div
                                                                         className={`h-full ${wbc.color} transition-all duration-500`}
                                                                         style={{ width: `${pct}%` }}
                                                                     />
@@ -385,7 +385,7 @@ export const ProcessedImagesThumbnails = ({
                                                 )}
                                             </div>
                                         )}
-                                        
+
                                         {/* Click hint */}
                                         <p className="text-red-300 text-xs text-center mt-2 opacity-70">
                                             Click for detailed view
@@ -432,10 +432,9 @@ export const ProcessedImagesThumbnails = ({
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* WBC Estimate */}
-                                    <div className={`rounded-lg p-3 ${
-                                        estimates.wbcStatus === 'normal' ? 'bg-green-900/50' :
-                                        estimates.wbcStatus === 'high' ? 'bg-red-900/70' : 'bg-yellow-900/50'
-                                    }`}>
+                                    <div className={`rounded-lg p-3 ${estimates.wbcStatus === 'normal' ? 'bg-green-900/50' :
+                                            estimates.wbcStatus === 'high' ? 'bg-red-900/70' : 'bg-yellow-900/50'
+                                        }`}>
                                         <p className="text-red-200 text-xs mb-1">Estimated WBC</p>
                                         <p className="text-white font-bold text-lg">
                                             {estimates.estimatedWBCPerUL.toLocaleString()} cells/μL
@@ -444,12 +443,11 @@ export const ProcessedImagesThumbnails = ({
                                             SI: {estimates.wbcSIUnits}
                                         </p>
                                         <p className="text-xs mt-1">
-                                            <span className={`px-2 py-0.5 rounded ${
-                                                estimates.wbcStatus === 'normal' ? 'bg-green-600 text-white' :
-                                                estimates.wbcStatus === 'high' ? 'bg-red-600 text-white' : 'bg-yellow-600 text-white'
-                                            }`}>
+                                            <span className={`px-2 py-0.5 rounded ${estimates.wbcStatus === 'normal' ? 'bg-green-600 text-white' :
+                                                    estimates.wbcStatus === 'high' ? 'bg-red-600 text-white' : 'bg-yellow-600 text-white'
+                                                }`}>
                                                 {estimates.wbcStatus === 'normal' ? '✓ Normal' :
-                                                 estimates.wbcStatus === 'high' ? '↑ High' : '↓ Low'}
+                                                    estimates.wbcStatus === 'high' ? '↑ High' : '↓ Low'}
                                             </span>
                                             <span className="text-red-300 ml-2">
                                                 (Normal: 4,000-6,000/μL)
@@ -495,11 +493,11 @@ export const ProcessedImagesThumbnails = ({
 
             {/* Image Detail Modal */}
             {selectedImage && (
-                <div 
+                <div
                     className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
                     onClick={closeModal}
                 >
-                    <div 
+                    <div
                         className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto"
                         onClick={(e) => e.stopPropagation()}
                     >
@@ -509,7 +507,7 @@ export const ProcessedImagesThumbnails = ({
                                 <h3 className="text-lg font-bold">Blood Smear Image #{selectedImage.index + 1}</h3>
                                 <p className="text-sm text-slate-300">{selectedImage.fileName || 'Blood Smear Image'}</p>
                             </div>
-                            <button 
+                            <button
                                 onClick={closeModal}
                                 className="text-white hover:text-slate-300 transition-colors"
                             >
@@ -527,7 +525,7 @@ export const ProcessedImagesThumbnails = ({
                                     {selectedImage.annotated && (
                                         <div>
                                             <h4 className="text-sm font-semibold text-slate-600 mb-2">Annotated Image</h4>
-                                            <img 
+                                            <img
                                                 src={`data:image/jpeg;base64,${selectedImage.annotated}`}
                                                 alt="Annotated"
                                                 className="w-full rounded-lg border border-slate-200"
@@ -539,7 +537,7 @@ export const ProcessedImagesThumbnails = ({
                                 {/* Right: Results Table */}
                                 <div>
                                     <h4 className="text-sm font-semibold text-slate-600 mb-3">Cell Analysis Results</h4>
-                                    
+
                                     {/* Cell Counts Summary */}
                                     <div className="bg-slate-50 rounded-lg p-4 mb-4">
                                         <table className="w-full text-sm">
