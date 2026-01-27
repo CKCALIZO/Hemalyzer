@@ -65,6 +65,13 @@ const Homepage = () => {
     const [thresholdMet, setThresholdMet] = useState(false);
     const [finalResults, setFinalResults] = useState(null);
 
+    // Bulk upload state
+    const [bulkFiles, setBulkFiles] = useState([]);
+    const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+    const [imageProgress, setImageProgress] = useState(0); // Per-image progress percentage (0-100)
+    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+    const [showClassificationsModal, setShowClassificationsModal] = useState(false);
+
     // Restore state when navigating back from classifications OR on page reload
     useEffect(() => {
         // First try to restore from location.state (navigation)
@@ -94,20 +101,72 @@ const Homepage = () => {
                     const session = await loadSession();
                     if (session) {
                         console.log('Restoring session from IndexedDB:', session);
+                        console.log('Session has processedImages:', session.processedImages?.length);
+                        console.log('Session thresholdMet:', session.thresholdMet);
+                        console.log('Session has finalResults:', !!session.finalResults);
+
+                        // Set all states from session
                         if (session.processedImages) setProcessedImages(session.processedImages);
                         if (session.aggregatedCounts) setAggregatedCounts(session.aggregatedCounts);
                         if (session.aggregatedClassifications) setAggregatedClassifications(session.aggregatedClassifications);
                         if (session.aggregatedRBCClassifications) setAggregatedRBCClassifications(session.aggregatedRBCClassifications);
-                        if (session.thresholdMet !== undefined) setThresholdMet(session.thresholdMet);
-                        if (session.finalResults) setFinalResults(session.finalResults);
                         if (session.currentResults) setCurrentResults(session.currentResults);
+
+                        // Handle threshold and final results
+                        const isThresholdMet = session.thresholdMet === true ||
+                            (session.processedImages && session.processedImages.length >= TARGET_IMAGE_COUNT);
+
+                        if (isThresholdMet) {
+                            console.log('Threshold met - setting thresholdMet=true and restoring finalResults if available');
+                            setThresholdMet(true);
+
+                            // If finalResults exists in session, use it
+                            // Otherwise, the safety effect will recalculate it
+                            if (session.finalResults) {
+                                console.log('Using saved finalResults from session');
+                                setFinalResults(session.finalResults);
+                            } else {
+                                console.log('No finalResults in session - safety effect will recalculate');
+                                // Don't call calculateFinalResults here - it may not be defined yet
+                                // The safety effect will handle recalculation
+                            }
+                        } else {
+                            setThresholdMet(false);
+                            setFinalResults(null);
+                        }
                     }
                 } catch (error) {
                     console.log('No valid session to restore:', error);
                 }
             })();
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [location.state]);
+
+    // Safety effect: Sync thresholdMet and finalResults when processedImages reaches target
+    // This handles edge cases where states get out of sync after page reload
+    useEffect(() => {
+        const shouldHaveThreshold = processedImages.length >= TARGET_IMAGE_COUNT;
+
+        // If we have 10+ images but thresholdMet is false, fix it
+        if (shouldHaveThreshold && !thresholdMet) {
+            console.log('Safety sync: Setting thresholdMet to true (have', processedImages.length, 'images)');
+            setThresholdMet(true);
+        }
+
+        // If thresholdMet is true but finalResults is null, recalculate
+        if (shouldHaveThreshold && thresholdMet && !finalResults && aggregatedClassifications.length > 0) {
+            console.log('Safety sync: Recalculating finalResults');
+            const recalculatedResults = calculateFinalResults(
+                aggregatedClassifications,
+                processedImages,
+                aggregatedCounts,
+                aggregatedRBCClassifications
+            );
+            setFinalResults(recalculatedResults);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [processedImages.length, thresholdMet, finalResults, aggregatedClassifications.length, aggregatedCounts, aggregatedRBCClassifications]);
 
     // Handle file selection
     const handleFileChange = (e) => {
@@ -428,7 +487,7 @@ const Homepage = () => {
             // WBC: (Total WBC / 10) x 2,000
             estimatedWBCCount,
             estimatedRBCCount,
-            avgRBCPerField,
+            avgRBCPerField: averageRBCPerImage,
             wbcClassifications: allClassifications,
             rbcClassifications: allRBCClassifications, // Add RBC classifications
             abnormalWBCs, // WBCs with non-normal conditions (e.g., CML, ALL, AML, CLL)
@@ -608,7 +667,7 @@ const Homepage = () => {
     };
 
     // Reset analysis session
-    const handleReset = () => {
+    const handleReset = async () => {
         setProcessedImages([]);
         setAggregatedCounts({ wbc: 0, rbc: 0, platelets: 0 });
         setAggregatedClassifications([]);
@@ -619,63 +678,321 @@ const Homepage = () => {
         setSelectedFile(null);
         setPreviewUrl(null);
         setError(null);
+        // Clear bulk upload state
+        setBulkFiles([]);
+        setBulkProgress({ current: 0, total: 0 });
+        setImageProgress(0);
+        setIsBulkProcessing(false);
 
-        // Clear saved session from IndexedDB
-        clearSession().catch(err => {
+        // Clear saved session from IndexedDB and localStorage
+        try {
+            await clearSession();
+            // Also clear any localStorage fallbacks
+            localStorage.removeItem('hemalyzer_session_fallback');
+            localStorage.removeItem('hemalyzer_current_session');
+            console.log('Session fully cleared from all storage');
+        } catch (err) {
             console.error('Failed to clear session:', err);
-        });
-        console.log('Session cleared from IndexedDB');
+        }
     };
 
-    // Save report to localStorage with complete analysis data
-    const saveReport = () => {
-        if (!finalResults) {
-            alert('No final results to save. Please complete the analysis first.');
+    // Handle bulk file selection
+    const handleBulkFileChange = (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length > 0) {
+            // Calculate remaining images needed
+            const remaining = TARGET_IMAGE_COUNT - processedImages.length;
+            const maxAllowed = Math.min(remaining, 10);
+
+            // Check if user tried to select more than allowed
+            if (files.length > maxAllowed) {
+                // Show warning about file limit
+                setError(`Only ${maxAllowed} more image${maxAllowed !== 1 ? 's' : ''} needed. Selected first ${maxAllowed} of ${files.length} images.`);
+            } else {
+                setError(null);
+            }
+
+            // Limit to allowed max
+            const filesToProcess = files.slice(0, maxAllowed);
+            setBulkFiles(filesToProcess);
+        }
+    };
+
+    // Process a single image and return the result (used by bulk processing)
+    const processSingleImage = async (file) => {
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('conf_threshold', '0.2');
+        formData.append('iou_threshold', '0.2');
+
+        const response = await fetch(`${API_URL}/api/analyze`, {
+            method: 'POST',
+            body: formData,
+        });
+
+        const data = await response.json();
+        return data;
+    };
+
+    // Handle bulk upload and sequential processing
+    const handleBulkUpload = async () => {
+        if (bulkFiles.length === 0) {
+            setError('Please select images first');
             return;
         }
 
-        const reports = JSON.parse(localStorage.getItem('hemalyzer_reports') || '[]');
-        const newReport = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleString(),
-            // Include complete analysis data
-            data: finalResults,
-            // Add session metadata
-            sessionData: {
-                processedImages: processedImages,
-                aggregatedCounts: aggregatedCounts,
-                aggregatedClassifications: aggregatedClassifications,
-                aggregatedRBCClassifications: aggregatedRBCClassifications,
-                thresholdMet: thresholdMet,
-                totalImagesAnalyzed: processedImages.length,
-                analysisComplete: thresholdMet
-            },
-            // Add summary for quick display
-            summary: {
-                totalCells: aggregatedCounts.wbc + aggregatedCounts.rbc + aggregatedCounts.platelets,
-                wbcCount: aggregatedCounts.wbc,
-                rbcCount: aggregatedCounts.rbc,
-                plateletCount: aggregatedCounts.platelets,
-                imagesAnalyzed: processedImages.length,
-                // Include estimated counts
-                estimatedWBCCount: finalResults?.estimatedWBCCount || 0,
-                estimatedRBCCount: finalResults?.estimatedRBCCount || 0,
-                // Include disease findings
-                diseaseFindings: finalResults?.diseaseFindings || [],
-                sickleCount: finalResults?.sickleCount || 0
-            },
-            imagesCount: processedImages.length
-        };
-
-        reports.unshift(newReport);
-        // Keep only last 50 reports to prevent localStorage overflow
-        if (reports.length > 50) {
-            reports.splice(50);
+        if (thresholdMet) {
+            setError('Analysis complete. Click "New Analysis" to start over.');
+            return;
         }
-        localStorage.setItem('hemalyzer_reports', JSON.stringify(reports));
 
-        alert(`Report saved successfully! \nImages analyzed: ${processedImages.length}\nTotal cells: ${newReport.summary.totalCells}`);
-        navigate('/reports');
+        setIsBulkProcessing(true);
+        setLoading(true);
+        setError(null);
+        setShowCurrentResults(true);
+        setBulkProgress({ current: 0, total: bulkFiles.length });
+
+        let currentProcessedImages = [...processedImages];
+        let currentCounts = { ...aggregatedCounts };
+        let currentClassifications = [...aggregatedClassifications];
+        let currentRBCClassifications = [...aggregatedRBCClassifications];
+
+        try {
+            for (let i = 0; i < bulkFiles.length; i++) {
+                const file = bulkFiles[i];
+
+                // Reset per-image progress
+                setImageProgress(0);
+
+                // Update bulk progress count
+                setBulkProgress({ current: i, total: bulkFiles.length });
+                setAnalysisProgress({
+                    stage: 'bulk',
+                    percentage: 0,
+                    message: `Processing image ${i + 1} of ${bulkFiles.length}: ${file.name}`
+                });
+
+                // Start simulated progress animation (0% to 90% over ~3 seconds)
+                let simulatedProgress = 0;
+                const progressInterval = setInterval(() => {
+                    simulatedProgress += Math.random() * 15 + 5; // Random increment 5-20%
+                    if (simulatedProgress > 90) simulatedProgress = 90;
+                    setImageProgress(Math.round(simulatedProgress));
+                    setAnalysisProgress(prev => ({
+                        ...prev,
+                        percentage: Math.round(simulatedProgress)
+                    }));
+                }, 300);
+
+                // Process this image
+                const data = await processSingleImage(file);
+
+                // Stop the simulated progress and jump to 100%
+                clearInterval(progressInterval);
+                setImageProgress(100);
+                setAnalysisProgress(prev => ({
+                    ...prev,
+                    percentage: 100
+                }));
+
+                // Brief pause to show 100% completion
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                if (data.success) {
+                    // Extract counts
+                    const wbcCount = data.stage1_detection?.counts?.WBC || 0;
+                    const rbcCount = data.stage1_detection?.counts?.RBC || 0;
+                    const plateletCount = data.stage1_detection?.counts?.Platelets || 0;
+                    const sickleCount = data.summary?.sickle_cell_count || 0;
+
+                    // Create processed image record
+                    const processedImage = {
+                        id: Date.now() + i,
+                        fileName: file.name,
+                        preview: URL.createObjectURL(file),
+                        annotated: data.annotated_image,
+                        wbcCount,
+                        rbcCount,
+                        plateletCount,
+                        sickleCount,
+                        classifications: data.stage2_classification || [],
+                        results: data
+                    };
+
+                    // Update local tracking variables
+                    currentCounts = {
+                        wbc: currentCounts.wbc + wbcCount,
+                        rbc: currentCounts.rbc + rbcCount,
+                        platelets: currentCounts.platelets + plateletCount
+                    };
+
+                    // Get classifications with cropped images
+                    const classificationsWithImages = (data.stage2_classification || []).map((cls) => {
+                        if (!cls.cropped_image && data.cropped_cells) {
+                            const matchingCell = data.cropped_cells.find(cell =>
+                                cell.cell_type === 'WBC' && cell.wbc_id === cls.wbc_id
+                            );
+                            if (matchingCell) {
+                                return { ...cls, cropped_image: matchingCell.cropped_image };
+                            }
+                        }
+                        return cls;
+                    });
+
+                    currentClassifications = [...currentClassifications, ...classificationsWithImages];
+
+                    // RBC classifications
+                    const rbcCells = (data.cropped_cells || []).filter(cell => cell.cell_type === 'RBC');
+                    currentRBCClassifications = [...currentRBCClassifications, ...rbcCells];
+
+                    // Add to processed images
+                    currentProcessedImages = [...currentProcessedImages, processedImage];
+
+                    // Update state after each image
+                    setProcessedImages(currentProcessedImages);
+                    setAggregatedCounts(currentCounts);
+                    setAggregatedClassifications(currentClassifications);
+                    setAggregatedRBCClassifications(currentRBCClassifications);
+                    setCurrentResults(data);
+                    setPreviewUrl(URL.createObjectURL(file));
+
+                    // Check if threshold is met
+                    if (currentProcessedImages.length >= TARGET_IMAGE_COUNT) {
+                        setThresholdMet(true);
+                        const finalCalc = calculateFinalResults(currentClassifications, currentProcessedImages, currentCounts, currentRBCClassifications);
+                        setFinalResults(finalCalc);
+
+                        // Save session
+                        const sessionState = {
+                            processedImages: currentProcessedImages,
+                            aggregatedCounts: currentCounts,
+                            aggregatedClassifications: currentClassifications,
+                            aggregatedRBCClassifications: currentRBCClassifications,
+                            thresholdMet: true,
+                            finalResults: finalCalc,
+                            currentResults: data,
+                            timestamp: Date.now()
+                        };
+                        saveSession(sessionState).catch(err => console.error('Failed to save session:', err));
+                        break; // Stop processing, threshold met
+                    }
+                } else {
+                    console.error(`Failed to process image ${file.name}:`, data.error);
+                }
+            }
+
+            // Final save if threshold not yet met
+            if (currentProcessedImages.length < TARGET_IMAGE_COUNT) {
+                const sessionState = {
+                    processedImages: currentProcessedImages,
+                    aggregatedCounts: currentCounts,
+                    aggregatedClassifications: currentClassifications,
+                    aggregatedRBCClassifications: currentRBCClassifications,
+                    thresholdMet: false,
+                    finalResults: null,
+                    currentResults: currentProcessedImages[currentProcessedImages.length - 1]?.results || null,
+                    timestamp: Date.now()
+                };
+                saveSession(sessionState).catch(err => console.error('Failed to save session:', err));
+            }
+
+            setAnalysisProgress({ stage: 'complete', percentage: 100, message: 'Bulk upload complete!' });
+            setTimeout(() => {
+                setAnalysisProgress({ stage: '', percentage: 0, message: '' });
+            }, 2000);
+
+        } catch (err) {
+            setError(`Bulk upload failed: ${err.message}`);
+            setAnalysisProgress({ stage: '', percentage: 0, message: '' });
+        } finally {
+            setLoading(false);
+            setIsBulkProcessing(false);
+            setBulkFiles([]);
+            setBulkProgress({ current: 0, total: 0 });
+            setImageProgress(0);
+            // Reset bulk file input
+            const bulkInput = document.getElementById('bulk-upload');
+            if (bulkInput) bulkInput.value = '';
+        }
+    };
+
+
+    // Save report to localStorage with complete analysis data
+    const saveReport = () => {
+        console.log('saveReport called - finalResults:', !!finalResults);
+
+        try {
+            if (!finalResults) {
+                alert('No final results to save. Please complete the analysis first.');
+                return;
+            }
+
+            const reports = JSON.parse(localStorage.getItem('hemalyzer_reports') || '[]');
+            const newReport = {
+                id: Date.now(),
+                timestamp: new Date().toLocaleString(),
+                // Include complete analysis data (without heavy base64 images)
+                data: {
+                    thresholdMet: finalResults?.thresholdMet,
+                    totalWBC: finalResults?.totalWBC,
+                    totalRBC: finalResults?.totalRBC,
+                    totalPlatelets: finalResults?.totalPlatelets,
+                    estimatedWBCCount: finalResults?.estimatedWBCCount,
+                    estimatedRBCCount: finalResults?.estimatedRBCCount,
+                    wbcDifferential: finalResults?.wbcDifferential,
+                    diseaseFindings: finalResults?.diseaseFindings,
+                    sickleCount: finalResults?.sickleCount,
+                    abnormalWBCs: finalResults?.abnormalWBCs?.length || 0
+                },
+                // Add session metadata (WITHOUT processedImages which contains base64 data)
+                sessionData: {
+                    imageCount: processedImages.length,
+                    aggregatedCounts: aggregatedCounts,
+                    // Store classification summaries, not full data
+                    wbcClassificationCount: aggregatedClassifications?.length || 0,
+                    rbcClassificationCount: aggregatedRBCClassifications?.length || 0,
+                    thresholdMet: thresholdMet,
+                    totalImagesAnalyzed: processedImages.length,
+                    analysisComplete: thresholdMet
+                },
+                // Add summary for quick display
+                summary: {
+                    totalCells: aggregatedCounts.wbc + aggregatedCounts.rbc + aggregatedCounts.platelets,
+                    wbcCount: aggregatedCounts.wbc,
+                    rbcCount: aggregatedCounts.rbc,
+                    plateletCount: aggregatedCounts.platelets,
+                    imagesAnalyzed: processedImages.length,
+                    // Include estimated counts
+                    estimatedWBCCount: finalResults?.estimatedWBCCount || 0,
+                    estimatedRBCCount: finalResults?.estimatedRBCCount || 0,
+                    // Include disease findings
+                    diseaseFindings: finalResults?.diseaseFindings || [],
+                    sickleCount: finalResults?.sickleCount || 0
+                },
+                imagesCount: processedImages.length
+            };
+
+            reports.unshift(newReport);
+            // Keep only last 50 reports to prevent localStorage overflow
+            if (reports.length > 50) {
+                reports.splice(50);
+            }
+            localStorage.setItem('hemalyzer_reports', JSON.stringify(reports));
+
+            alert(`Report saved successfully! \nImages analyzed: ${processedImages.length}\nTotal cells: ${newReport.summary.totalCells}`);
+            navigate('/reports');
+        } catch (error) {
+            console.error('Error saving report:', error);
+
+            // Handle localStorage quota exceeded error
+            if (error.name === 'QuotaExceededError' || error.message.includes('quota')) {
+                // Clear the corrupted/oversized reports and try again
+                localStorage.removeItem('hemalyzer_reports');
+                alert('Storage was full. Old reports have been cleared. Please click Save Report again.');
+            } else {
+                alert('Failed to save report: ' + error.message);
+            }
+        }
     };
 
     // Calculate progress based on image count
@@ -716,6 +1033,7 @@ const Homepage = () => {
                                 aggregatedResults={finalResults}
                                 processedImages={processedImages}
                                 onReset={handleReset}
+                                saveReport={saveReport}
                             />
                         </div>
                     )}
@@ -771,8 +1089,9 @@ const Homepage = () => {
                                         </div>
                                     )}
 
-                                    {/* File Input */}
+                                    {/* Single File Input */}
                                     <div className="mb-4">
+                                        <label className="block text-sm font-medium text-rose-700 mb-2">Single Image Upload</label>
                                         <input
                                             className="block w-full text-sm text-rose-700 border border-rose-300 
                                             rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 
@@ -781,9 +1100,125 @@ const Homepage = () => {
                                             type="file"
                                             accept="image/*"
                                             onChange={handleFileChange}
-                                            disabled={loading || thresholdMet}
+                                            disabled={loading || thresholdMet || isBulkProcessing}
                                         />
                                     </div>
+
+                                    {/* Divider */}
+                                    <div className="relative my-6">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <div className="w-full border-t border-rose-200"></div>
+                                        </div>
+                                        <div className="relative flex justify-center text-sm">
+                                            <span className="bg-white px-3 text-rose-500 font-medium">OR</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Bulk Upload Section */}
+                                    <div className="mb-4 p-4 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg border border-rose-200">
+                                        <label className="block text-sm font-medium text-rose-700 mb-2">
+                                            Bulk Upload (up to {TARGET_IMAGE_COUNT - processedImages.length} images)
+                                        </label>
+                                        <input
+                                            className="block w-full text-sm text-rose-700 border border-rose-300 
+                                            rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 
+                                            focus:ring-rose-400 p-2 mb-3"
+                                            id="bulk-upload"
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            onChange={handleBulkFileChange}
+                                            disabled={loading || thresholdMet || isBulkProcessing}
+                                        />
+
+                                        {/* Selected files preview */}
+                                        {bulkFiles.length > 0 && (
+                                            <div className="mb-3 p-3 bg-white rounded-lg border border-rose-200">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <p className="text-sm font-medium text-rose-800">
+                                                        ✓ {bulkFiles.length} image{bulkFiles.length > 1 ? 's' : ''} selected:
+                                                    </p>
+                                                    <button
+                                                        onClick={() => {
+                                                            setBulkFiles([]);
+                                                            setError(null);
+                                                            const bulkInput = document.getElementById('bulk-upload');
+                                                            if (bulkInput) bulkInput.value = '';
+                                                        }}
+                                                        disabled={isBulkProcessing}
+                                                        className="text-xs px-2 py-1 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded transition-colors disabled:opacity-50"
+                                                    >
+                                                        Clear
+                                                    </button>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                                                    {bulkFiles.map((file, idx) => (
+                                                        <span key={idx} className="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded">
+                                                            {file.name.length > 15 ? file.name.slice(0, 12) + '...' : file.name}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Insufficient images memo */}
+                                        {bulkFiles.length > 0 && bulkFiles.length < (TARGET_IMAGE_COUNT - processedImages.length) && !isBulkProcessing && (
+                                            <div className="mb-3 p-3 bg-amber-50 rounded-lg border border-amber-300 flex items-start gap-2">
+                                                <span className="text-amber-600 font-bold">Note:</span>
+                                                <div>
+                                                    <p className="text-sm font-medium text-amber-800">
+                                                        {bulkFiles.length} of {TARGET_IMAGE_COUNT - processedImages.length} images selected
+                                                    </p>
+                                                    <p className="text-xs text-amber-700 mt-1">
+                                                        You can still process these, but for accurate results please upload {TARGET_IMAGE_COUNT - processedImages.length} images total.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Bulk Progress Display */}
+                                        {isBulkProcessing && (
+                                            <div className="mb-3 p-3 bg-rose-100 rounded-lg border border-rose-300">
+                                                <p className="text-sm font-semibold text-rose-800">
+                                                    Processed: {bulkProgress.current} / {bulkProgress.total} images
+                                                </p>
+                                                <div className="w-full h-2 bg-rose-200 rounded-full mt-2 overflow-hidden">
+                                                    <div
+                                                        className="h-full bg-rose-600 transition-all duration-300"
+                                                        style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Process Bulk Button */}
+                                        <button
+                                            onClick={handleBulkUpload}
+                                            disabled={bulkFiles.length === 0 || loading || thresholdMet || isBulkProcessing}
+                                            className={`w-full flex items-center justify-center gap-2 text-white 
+                                            bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 
+                                            transition-all font-semibold rounded-lg text-sm px-4 py-2.5
+                                            ${(bulkFiles.length === 0 || loading || thresholdMet || isBulkProcessing) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer shadow-md hover:shadow-lg'}`}
+                                        >
+                                            {isBulkProcessing ? (
+                                                <>
+                                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Processed {bulkProgress.current}/{bulkProgress.total}...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                    </svg>
+                                                    Process {bulkFiles.length > 0 ? bulkFiles.length : ''} Images at Once
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+
 
                                     {/* Analysis Progress Bar - Shows during image processing AND for 2s after completion */}
                                     {analysisProgress.stage && (
@@ -817,39 +1252,42 @@ const Homepage = () => {
                                                     style={{ width: `${analysisProgress.percentage}%` }}
                                                 />
                                             </div>
-                                            <div className={`mt-3 flex items-center justify-between text-xs ${analysisProgress.stage === 'complete'
-                                                ? 'text-emerald-700'
-                                                : 'text-rose-700'
-                                                }`}>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 10 ? 'font-semibold scale-105' : 'opacity-50'
+                                            {/* Only show step indicators for single image processing, not bulk */}
+                                            {analysisProgress.stage !== 'bulk' && (
+                                                <div className={`mt-3 flex items-center justify-between text-xs ${analysisProgress.stage === 'complete'
+                                                    ? 'text-emerald-700'
+                                                    : 'text-rose-700'
                                                     }`}>
-                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 10 ? 'text-emerald-500' : ''}`}>
-                                                        {analysisProgress.percentage >= 10 ? '✓' : '○'}
-                                                    </span>
-                                                    <span>Upload</span>
+                                                    <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 10 ? 'font-semibold scale-105' : 'opacity-50'
+                                                        }`}>
+                                                        <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 10 ? 'text-emerald-500' : ''}`}>
+                                                            {analysisProgress.percentage >= 10 ? '✓' : '○'}
+                                                        </span>
+                                                        <span>Upload</span>
+                                                    </div>
+                                                    <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 30 ? 'font-semibold scale-105' : 'opacity-50'
+                                                        }`}>
+                                                        <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 30 ? 'text-emerald-500' : ''}`}>
+                                                            {analysisProgress.percentage >= 30 ? '✓' : '○'}
+                                                        </span>
+                                                        <span>Detection</span>
+                                                    </div>
+                                                    <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 60 ? 'font-semibold scale-105' : 'opacity-50'
+                                                        }`}>
+                                                        <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 60 ? 'text-emerald-500' : ''}`}>
+                                                            {analysisProgress.percentage >= 60 ? '✓' : '○'}
+                                                        </span>
+                                                        <span>Classification</span>
+                                                    </div>
+                                                    <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 85 ? 'font-semibold scale-105' : 'opacity-50'
+                                                        }`}>
+                                                        <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 85 ? 'text-emerald-500' : ''}`}>
+                                                            {analysisProgress.percentage >= 85 ? '✓' : '○'}
+                                                        </span>
+                                                        <span>Analysis</span>
+                                                    </div>
                                                 </div>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 30 ? 'font-semibold scale-105' : 'opacity-50'
-                                                    }`}>
-                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 30 ? 'text-emerald-500' : ''}`}>
-                                                        {analysisProgress.percentage >= 30 ? '✓' : '○'}
-                                                    </span>
-                                                    <span>Detection</span>
-                                                </div>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 60 ? 'font-semibold scale-105' : 'opacity-50'
-                                                    }`}>
-                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 60 ? 'text-emerald-500' : ''}`}>
-                                                        {analysisProgress.percentage >= 60 ? '✓' : '○'}
-                                                    </span>
-                                                    <span>Classification</span>
-                                                </div>
-                                                <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 85 ? 'font-semibold scale-105' : 'opacity-50'
-                                                    }`}>
-                                                    <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 85 ? 'text-emerald-500' : ''}`}>
-                                                        {analysisProgress.percentage >= 85 ? '✓' : '○'}
-                                                    </span>
-                                                    <span>Analysis</span>
-                                                </div>
-                                            </div>
+                                            )}
                                         </div>
                                     )}
 
@@ -925,7 +1363,7 @@ const Homepage = () => {
                             </div>
 
                             {/* Results Section */}
-                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm flex flex-col max-h-[calc(100vh-200px)]">
+                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm flex flex-col">
                                 <div className="px-6 py-4 border-b border-rose-200 bg-rose-50 flex items-center justify-between flex-shrink-0">
                                     <div>
                                         <h2 className="text-lg font-semibold text-rose-800">
@@ -962,24 +1400,31 @@ const Homepage = () => {
                                             {/* View Cell Classifications Button */}
                                             {currentResults.cropped_cells && currentResults.cropped_cells.length > 0 && (
                                                 <button
-                                                    onClick={() => navigate('/classifications', {
-                                                        state: {
-                                                            croppedCells: currentResults.cropped_cells,
-                                                            wbcClassifications: currentResults.stage2_classification,
-                                                            summary: currentResults.summary,
-                                                            results: currentResults,
-                                                            previewUrl: previewUrl,
-                                                            // Pass session state for restoration
-                                                            sessionState: {
-                                                                processedImages,
-                                                                aggregatedCounts,
-                                                                aggregatedClassifications,
-                                                                aggregatedRBCClassifications,
-                                                                thresholdMet,
-                                                                finalResults
-                                                            }
+                                                    onClick={() => {
+                                                        if (isBulkProcessing || loading) {
+                                                            // During processing, open modal instead of navigating
+                                                            setShowClassificationsModal(true);
+                                                        } else {
+                                                            // When not processing, navigate normally
+                                                            navigate('/classifications', {
+                                                                state: {
+                                                                    croppedCells: currentResults.cropped_cells,
+                                                                    wbcClassifications: currentResults.stage2_classification,
+                                                                    summary: currentResults.summary,
+                                                                    results: currentResults,
+                                                                    previewUrl: previewUrl,
+                                                                    sessionState: {
+                                                                        processedImages,
+                                                                        aggregatedCounts,
+                                                                        aggregatedClassifications,
+                                                                        aggregatedRBCClassifications,
+                                                                        thresholdMet,
+                                                                        finalResults
+                                                                    }
+                                                                }
+                                                            });
                                                         }
-                                                    })}
+                                                    }}
                                                     className="w-full px-4 py-3 bg-rose-50 text-rose-600 rounded-lg 
                                                     hover:bg-rose-100 font-medium flex items-center justify-center gap-2 
                                                     border border-rose-200 transition-colors"
@@ -1063,6 +1508,77 @@ const Homepage = () => {
                 </div>
             </main>
             <Footer />
+
+            {/* Cell Classifications Modal - Shows during processing instead of navigating */}
+            {showClassificationsModal && currentResults?.cropped_cells && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowClassificationsModal(false)}>
+                    <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] overflow-hidden" onClick={e => e.stopPropagation()}>
+                        {/* Modal Header */}
+                        <div className="bg-rose-700 text-white px-6 py-4 flex items-center justify-between">
+                            <h2 className="text-lg font-bold">Cell Classifications ({currentResults.cropped_cells.length} cells)</h2>
+                            <button
+                                onClick={() => setShowClassificationsModal(false)}
+                                className="text-white hover:bg-rose-600 rounded-full p-1 transition-colors"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Modal Body - Scrollable Grid */}
+                        <div className="p-4 overflow-y-auto max-h-[calc(85vh-120px)]">
+                            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                                {currentResults.cropped_cells.map((cell, idx) => {
+                                    // Get classification from stage2_classification if available
+                                    const wbcClassification = currentResults.stage2_classification?.find(c => c.wbc_id === cell.wbc_id);
+                                    // Use cell.classification (from cropped_cells) or fallback to stage2 classification
+                                    const displayClassification = cell.classification || wbcClassification?.classification || wbcClassification?.predicted_class || 'Unknown';
+
+                                    // Determine color based on classification
+                                    const isAbnormal = displayClassification && !displayClassification.toLowerCase().includes('normal');
+                                    const borderColor = isAbnormal ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-slate-50';
+
+                                    return (
+                                        <div key={cell.wbc_id || idx} className={`rounded-lg overflow-hidden border-2 ${borderColor}`}>
+                                            {cell.cropped_image && (
+                                                <div className="aspect-square">
+                                                    <img
+                                                        src={`data:image/png;base64,${cell.cropped_image}`}
+                                                        alt={`${cell.cell_type} - ${displayClassification}`}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                </div>
+                                            )}
+                                            <div className="p-2">
+                                                <p className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                                                    {cell.cell_type || 'WBC'}
+                                                </p>
+                                                <p className="text-xs font-medium text-slate-800 truncate" title={displayClassification}>
+                                                    {displayClassification}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Modal Footer */}
+                        <div className="border-t border-slate-200 px-6 py-3 bg-slate-50 flex justify-between items-center">
+                            <p className="text-sm text-slate-600">
+                                {isBulkProcessing ? 'Processing in progress...' : 'Processing complete'}
+                            </p>
+                            <button
+                                onClick={() => setShowClassificationsModal(false)}
+                                className="px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors font-medium"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

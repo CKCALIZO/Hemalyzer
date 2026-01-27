@@ -23,7 +23,8 @@ import autoTable from "jspdf-autotable";
 export const FinalResults = ({
     aggregatedResults,
     processedImages,
-    onReset
+    onReset,
+    saveReport
 }) => {
     const navigate = useNavigate();
     const [showWBCExamination, setShowWBCExamination] = useState(false);
@@ -159,23 +160,7 @@ export const FinalResults = ({
                 return '';
         }
     };
-
-    // Save report to localStorage
-    const saveReport = () => {
-        const reports = JSON.parse(localStorage.getItem('hemalyzer_reports') || '[]');
-        const newReport = {
-            id: Date.now(),
-            timestamp: new Date().toLocaleString(),
-            data: aggregatedResults,
-            imagesCount: processedImages.length
-        };
-
-        reports.unshift(newReport);
-        localStorage.setItem('hemalyzer_reports', JSON.stringify(reports));
-
-        alert('Report saved successfully!');
-        navigate('/reports');
-    };
+    // saveReport is now passed as a prop from Homepage.jsx
 
     // Generate PDF Report
     const generatePDF = () => {
@@ -382,7 +367,7 @@ export const FinalResults = ({
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-xl font-bold flex items-center gap-2">
-                            <span className="text-2xl">🔬</span>
+                            <span className="text-2xl"></span>
                             Final Analysis Report
                         </h2>
                         <p className="text-slate-300 text-sm mt-1">
@@ -471,8 +456,8 @@ export const FinalResults = ({
                                                 {finding.condition || finding.type}:
                                             </span>
                                             <span className={`px-2 py-0.5 rounded font-semibold ${finding.severity === 'HIGH' ? 'bg-red-100 text-red-800' :
-                                                    finding.severity === 'MODERATE' ? 'bg-amber-100 text-amber-800' :
-                                                        'bg-yellow-100 text-yellow-800'
+                                                finding.severity === 'MODERATE' ? 'bg-amber-100 text-amber-800' :
+                                                    'bg-yellow-100 text-yellow-800'
                                                 }`}>
                                                 {finding.percentage?.toFixed(1)}% - {finding.severity}
                                             </span>
@@ -485,8 +470,8 @@ export const FinalResults = ({
                         {/* Sickle Cell Condition if detected */}
                         {sickleCell && sickleCell.count > 0 && (
                             <div className={`bg-white rounded-lg p-3 border mt-2 ${sickleCell.percentage > 30 ? 'border-red-300' :
-                                    sickleCell.percentage >= 10 ? 'border-amber-300' :
-                                        'border-yellow-300'
+                                sickleCell.percentage >= 10 ? 'border-amber-300' :
+                                    'border-yellow-300'
                                 }`}>
                                 <p className="text-xs font-semibold text-red-800 mb-1">
                                     🩸 Sickle Cell Analysis:
@@ -494,9 +479,9 @@ export const FinalResults = ({
                                 <div className="flex justify-between items-center text-xs">
                                     <span className="font-medium">{sickleCell.interpretation}</span>
                                     <span className={`px-2 py-0.5 rounded font-semibold ${sickleCell.severity === 'SEVERE' ? 'bg-red-100 text-red-800' :
-                                            sickleCell.severity === 'MODERATE' ? 'bg-amber-100 text-amber-800' :
-                                                sickleCell.severity === 'MILD' ? 'bg-yellow-100 text-yellow-800' :
-                                                    'bg-green-100 text-green-800'
+                                        sickleCell.severity === 'MODERATE' ? 'bg-amber-100 text-amber-800' :
+                                            sickleCell.severity === 'MILD' ? 'bg-yellow-100 text-yellow-800' :
+                                                'bg-green-100 text-green-800'
                                         }`}>
                                         {sickleCell.severity || 'NORMAL'}
                                     </span>
@@ -613,8 +598,8 @@ export const FinalResults = ({
                                     <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
                                         <div
                                             className={`h-full transition-all duration-500 ${data.status === 'high' ? 'bg-red-500' :
-                                                    data.status === 'low' ? 'bg-blue-500' :
-                                                        'bg-green-500'
+                                                data.status === 'low' ? 'bg-blue-500' :
+                                                    'bg-green-500'
                                                 }`}
                                             style={{ width: `${Math.min(100, data.percentage)}%` }}
                                         />
@@ -624,8 +609,8 @@ export const FinalResults = ({
                                 <div className="w-16 text-right font-mono text-sm">{data.percentage.toFixed(1)}%</div>
                                 <div className="w-20 text-right text-xs text-slate-500">{data.normalRange}</div>
                                 <div className={`w-16 text-center text-xs px-2 py-1 rounded font-medium ${data.status === 'high' ? 'bg-red-100 text-red-700' :
-                                        data.status === 'low' ? 'bg-blue-100 text-blue-700' :
-                                            'bg-green-100 text-green-700'
+                                    data.status === 'low' ? 'bg-blue-100 text-blue-700' :
+                                        'bg-green-100 text-green-700'
                                     }`}>
                                     {data.status === 'normal' ? 'Normal' : data.status === 'high' ? 'High' : 'Low'}
                                 </div>
@@ -655,9 +640,9 @@ export const FinalResults = ({
                             <div
                                 key={idx}
                                 className={`p-4 rounded-lg border-l-4 ${finding.severity === 'HIGH' ? 'bg-red-50 border-red-500' :
-                                        finding.severity === 'MODERATE' ? 'bg-amber-50 border-amber-500' :
-                                            finding.severity === 'LOW' ? 'bg-yellow-50 border-yellow-500' :
-                                                'bg-slate-50 border-slate-400'
+                                    finding.severity === 'MODERATE' ? 'bg-amber-50 border-amber-500' :
+                                        finding.severity === 'LOW' ? 'bg-yellow-50 border-yellow-500' :
+                                            'bg-slate-50 border-slate-400'
                                     }`}
                             >
                                 <div className="flex justify-between items-start">
@@ -668,8 +653,8 @@ export const FinalResults = ({
                                     <div className="text-right">
                                         <p className="text-xl font-bold">{finding.percentage?.toFixed(1)}%</p>
                                         <p className={`text-xs px-2 py-1 rounded ${finding.severity === 'HIGH' ? 'bg-red-200 text-red-800' :
-                                                finding.severity === 'MODERATE' ? 'bg-amber-200 text-amber-800' :
-                                                    'bg-slate-200 text-slate-800'
+                                            finding.severity === 'MODERATE' ? 'bg-amber-200 text-amber-800' :
+                                                'bg-slate-200 text-slate-800'
                                             }`}>{finding.severity}</p>
                                     </div>
                                 </div>
@@ -684,9 +669,9 @@ export const FinalResults = ({
                 <div className="px-6 py-4 border-b border-slate-200">
                     <h3 className="text-lg font-semibold text-slate-700 mb-3">Sickle Cell Analysis</h3>
                     <div className={`p-4 rounded-lg border-l-4 ${sickleCell.percentage > 30 ? 'bg-red-50 border-red-500' :
-                            sickleCell.percentage >= 10 ? 'bg-amber-50 border-amber-500' :
-                                sickleCell.percentage >= 3 ? 'bg-yellow-50 border-yellow-500' :
-                                    'bg-green-50 border-green-500'
+                        sickleCell.percentage >= 10 ? 'bg-amber-50 border-amber-500' :
+                            sickleCell.percentage >= 3 ? 'bg-yellow-50 border-yellow-500' :
+                                'bg-green-50 border-green-500'
                         }`}>
                         <div className="flex justify-between items-center">
                             <div>
@@ -695,9 +680,9 @@ export const FinalResults = ({
                                     {sickleCell.count} sickle cells / {sickleCell.totalRBC} RBCs analyzed
                                 </p>
                                 <p className={`text-xs mt-1 px-2 py-1 rounded inline-block ${sickleCell.severity === 'SEVERE' ? 'bg-red-200 text-red-800' :
-                                        sickleCell.severity === 'MODERATE' ? 'bg-amber-200 text-amber-800' :
-                                            sickleCell.severity === 'MILD' ? 'bg-yellow-200 text-yellow-800' :
-                                                'bg-green-200 text-green-800'
+                                    sickleCell.severity === 'MODERATE' ? 'bg-amber-200 text-amber-800' :
+                                        sickleCell.severity === 'MILD' ? 'bg-yellow-200 text-yellow-800' :
+                                            'bg-green-200 text-green-800'
                                     }`}>{sickleCell.severity || 'NORMAL'}</p>
                             </div>
                             <p className="text-2xl font-bold">{sickleCell.percentage?.toFixed(2)}%</p>
@@ -707,10 +692,10 @@ export const FinalResults = ({
             )}
 
             {/* Actions */}
-            <div className="px-6 py-4 bg-red-50 flex gap-4 flex-wrap">
+            <div className="px-6 py-4 bg-rose-50 flex gap-4 flex-wrap">
                 <button
                     onClick={generatePDF}
-                    className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-red-700 text-white rounded-lg hover:bg-red-800 transition-colors font-semibold"
+                    className="flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-2 bg-rose-700 text-white rounded-lg hover:bg-rose-800 transition-colors font-medium text-sm"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -718,8 +703,16 @@ export const FinalResults = ({
                     Print PDF Report
                 </button>
                 <button
-                    onClick={saveReport}
-                    className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+                    onClick={() => {
+                        console.log('Save Report button clicked, saveReport prop:', typeof saveReport);
+                        if (typeof saveReport === 'function') {
+                            saveReport();
+                        } else {
+                            console.error('saveReport is not a function:', saveReport);
+                            alert('Error: Save Report function is not properly connected');
+                        }
+                    }}
+                    className="flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors font-medium text-sm"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
@@ -730,7 +723,7 @@ export const FinalResults = ({
                 {abnormalWBCs && abnormalWBCs.length > 0 && (
                     <button
                         onClick={() => setShowAbnormalWBCs(!showAbnormalWBCs)}
-                        className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-semibold"
+                        className="flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors font-medium text-sm"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -740,7 +733,7 @@ export const FinalResults = ({
                 )}
                 <button
                     onClick={() => setShowWBCExamination(!showWBCExamination)}
-                    className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-red-800 text-white rounded-lg hover:bg-red-900 transition-colors font-semibold"
+                    className="flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-2 bg-rose-800 text-white rounded-lg hover:bg-rose-900 transition-colors font-medium text-sm"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -750,7 +743,7 @@ export const FinalResults = ({
                 </button>
                 <button
                     onClick={() => setShowRBCExamination(!showRBCExamination)}
-                    className="flex-1 min-w-[150px] flex items-center justify-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+                    className="flex-1 min-w-[120px] flex items-center justify-center gap-2 px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors font-medium text-sm"
                 >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -760,7 +753,7 @@ export const FinalResults = ({
                 </button>
                 <button
                     onClick={onReset}
-                    className="px-6 py-3 bg-white border-2 border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors font-semibold"
+                    className="px-4 py-2 bg-white border-2 border-rose-300 text-rose-700 rounded-lg hover:bg-rose-50 transition-colors font-medium text-sm"
                 >
                     New Analysis
                 </button>
@@ -768,16 +761,16 @@ export const FinalResults = ({
 
             {/* WBC Manual Examination Section */}
             {showWBCExamination && wbcClassifications && wbcClassifications.length > 0 && (
-                <div className="border-t border-red-200">
-                    <div className="px-6 py-4 bg-red-50">
+                <div className="border-t border-rose-200">
+                    <div className="px-6 py-4 bg-rose-50">
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-lg font-semibold text-red-900 flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-rose-900 flex items-center gap-2">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                                 </svg>
                                 WBC Manual Examination
                             </h3>
-                            <p className="text-sm text-red-600">
+                            <p className="text-sm text-rose-600">
                                 {filteredWBCs.length} of {wbcClassifications.length} cells shown
                             </p>
                         </div>
@@ -989,8 +982,8 @@ export const FinalResults = ({
                         <button
                             onClick={() => setRbcFilter('all')}
                             className={`px-4 py-2 rounded-lg font-medium transition-colors ${rbcFilter === 'all'
-                                    ? 'bg-slate-600 text-white'
-                                    : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'
+                                ? 'bg-slate-600 text-white'
+                                : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'
                                 }`}
                         >
                             All RBCs ({aggregatedResults.rbcClassifications.length})
@@ -998,8 +991,8 @@ export const FinalResults = ({
                         <button
                             onClick={() => setRbcFilter('sickle')}
                             className={`px-4 py-2 rounded-lg font-medium transition-colors ${rbcFilter === 'sickle'
-                                    ? 'bg-red-600 text-white'
-                                    : 'bg-white text-red-600 border border-red-300 hover:bg-red-50'
+                                ? 'bg-red-600 text-white'
+                                : 'bg-white text-red-600 border border-red-300 hover:bg-red-50'
                                 }`}
                         >
                             Sickle Cells Only ({aggregatedResults.rbcClassifications.filter(rbc => rbc.is_abnormal).length})
@@ -1007,8 +1000,8 @@ export const FinalResults = ({
                         <button
                             onClick={() => setRbcFilter('normal')}
                             className={`px-4 py-2 rounded-lg font-medium transition-colors ${rbcFilter === 'normal'
-                                    ? 'bg-green-600 text-white'
-                                    : 'bg-white text-green-600 border border-green-300 hover:bg-green-50'
+                                ? 'bg-green-600 text-white'
+                                : 'bg-white text-green-600 border border-green-300 hover:bg-green-50'
                                 }`}
                         >
                             Normal RBCs ({aggregatedResults.rbcClassifications.filter(rbc => !rbc.is_abnormal).length})

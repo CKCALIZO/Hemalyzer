@@ -234,23 +234,23 @@ export const ProcessedImagesThumbnails = ({
     return (
         <>
             {/* Thumbnail Bar */}
-            <div className="bg-red-700 rounded-lg overflow-hidden mb-4">
+            <div className="bg-rose-100 rounded-lg overflow-hidden mb-4 border border-rose-200">
                 {/* Header with progress */}
                 <div
-                    className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-red-800 transition-colors"
+                    className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-rose-200 transition-colors"
                     onClick={() => setIsExpanded(!isExpanded)}
                 >
                     <div className="flex items-center gap-3">
                         <div className="flex items-center gap-2">
                             <svg
-                                className={`w-4 h-4 text-white transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+                                className={`w-4 h-4 text-rose-700 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                                 fill="none"
                                 stroke="currentColor"
                                 viewBox="0 0 24 24"
                             >
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                             </svg>
-                            <span className="text-white font-medium text-sm">
+                            <span className="text-rose-800 font-medium text-sm">
                                 Processed Images ({processedImages.length})
                             </span>
                         </div>
@@ -261,7 +261,7 @@ export const ProcessedImagesThumbnails = ({
                                 {processedImages.slice(0, 5).map((img, idx) => (
                                     <div
                                         key={idx}
-                                        className="w-8 h-8 rounded border-2 border-red-500 overflow-hidden"
+                                        className="w-8 h-8 rounded border-2 border-rose-300 overflow-hidden"
                                     >
                                         <img
                                             src={img.preview || `data:image/jpeg;base64,${img.annotated}`}
@@ -271,7 +271,7 @@ export const ProcessedImagesThumbnails = ({
                                     </div>
                                 ))}
                                 {processedImages.length > 5 && (
-                                    <span className="text-red-200 text-xs ml-1">+{processedImages.length - 5}</span>
+                                    <span className="text-rose-600 text-xs ml-1">+{processedImages.length - 5}</span>
                                 )}
                             </div>
                         )}
@@ -280,14 +280,14 @@ export const ProcessedImagesThumbnails = ({
                     {/* Image Progress */}
                     <div className="flex items-center gap-3">
                         <div className="text-right">
-                            <p className="text-xs text-red-200">Total WBC</p>
-                            <p className="text-sm font-bold text-white">
+                            <p className="text-xs text-rose-600">Total WBC</p>
+                            <p className="text-sm font-bold text-rose-900">
                                 {currentWBCCount} cells
                             </p>
                         </div>
-                        <div className="w-24 h-2 bg-red-900 rounded-full overflow-hidden">
+                        <div className="w-24 h-2 bg-rose-200 rounded-full overflow-hidden">
                             <div
-                                className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${progress >= 100 ? 'bg-green-400' : 'bg-gradient-to-r from-white/80 to-white'
+                                className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${progress >= 100 ? 'bg-green-500' : 'bg-rose-500'
                                     }`}
                                 style={{ width: `${progress}%` }}
                             />
@@ -300,20 +300,20 @@ export const ProcessedImagesThumbnails = ({
 
                 {/* Expanded thumbnail grid with per-image results */}
                 {isExpanded && (
-                    <div className="px-4 pb-4 border-t border-red-600">
+                    <div className="px-4 pb-4 border-t border-rose-200">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-3">
                             {processedImages.map((img, idx) => {
                                 const breakdown = getWBCBreakdown(img.classifications);
                                 return (
                                     <div
                                         key={idx}
-                                        className="bg-red-800 rounded-lg p-3 cursor-pointer hover:bg-red-700 transition-colors"
+                                        className="bg-white rounded-lg p-3 cursor-pointer hover:bg-rose-50 transition-colors border border-rose-200"
                                         onClick={() => handleImageClick(img, idx)}
                                     >
                                         {/* Image header with thumbnail */}
                                         <div className="flex items-center gap-3 mb-3">
                                             <div className="relative">
-                                                <div className="w-14 h-14 rounded-lg overflow-hidden border-2 border-red-400">
+                                                <div className="w-14 h-14 rounded-lg overflow-hidden border-2 border-rose-300">
                                                     <img
                                                         src={img.preview || `data:image/jpeg;base64,${img.annotated}`}
                                                         alt={`Image ${idx + 1}`}
@@ -321,32 +321,32 @@ export const ProcessedImagesThumbnails = ({
                                                     />
                                                 </div>
                                                 {/* Image number badge */}
-                                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-white rounded-full flex items-center justify-center shadow">
-                                                    <span className="text-red-700 text-xs font-bold">{idx + 1}</span>
+                                                <div className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center shadow">
+                                                    <span className="text-white text-xs font-bold">{idx + 1}</span>
                                                 </div>
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-white font-semibold text-sm truncate">{img.fileName || `Image ${idx + 1}`}</p>
-                                                <p className="text-red-200 text-xs">Blood Smear Analysis</p>
+                                                <p className="text-rose-900 font-semibold text-sm truncate">{img.fileName || `Image ${idx + 1}`}</p>
+                                                <p className="text-rose-600 text-xs">Blood Smear Analysis</p>
                                             </div>
                                         </div>
 
                                         {/* Cell counts row */}
                                         <div className="grid grid-cols-2 gap-2 mb-3">
-                                            <div className="bg-red-900/50 rounded px-2 py-1.5 text-center">
-                                                <p className="text-red-200 text-xs">RBC</p>
-                                                <p className="text-white font-bold text-sm">{img.rbcCount || 0}</p>
+                                            <div className="bg-slate-50 rounded px-2 py-1.5 text-center border border-slate-200">
+                                                <p className="text-slate-500 text-xs">RBC</p>
+                                                <p className="text-rose-700 font-bold text-sm">{img.rbcCount || 0}</p>
                                             </div>
-                                            <div className="bg-red-900/50 rounded px-2 py-1.5 text-center">
-                                                <p className="text-red-200 text-xs">WBC</p>
-                                                <p className="text-white font-bold text-sm">{img.wbcCount || 0}</p>
+                                            <div className="bg-slate-50 rounded px-2 py-1.5 text-center border border-slate-200">
+                                                <p className="text-slate-500 text-xs">WBC</p>
+                                                <p className="text-rose-700 font-bold text-sm">{img.wbcCount || 0}</p>
                                             </div>
                                         </div>
 
                                         {/* 5 WBC Categories */}
                                         {breakdown && breakdown.totalWBC > 0 && (
-                                            <div className="bg-red-900/30 rounded-lg p-2">
-                                                <p className="text-red-200 text-xs mb-2 font-medium">WBC Distribution</p>
+                                            <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
+                                                <p className="text-slate-600 text-xs mb-2 font-medium">WBC Distribution</p>
                                                 <div className="space-y-1">
                                                     {[
                                                         { name: 'Neu', count: breakdown.neutrophil, color: 'bg-blue-500' },
@@ -358,15 +358,15 @@ export const ProcessedImagesThumbnails = ({
                                                         const pct = breakdown.totalWBC > 0 ? (wbc.count / breakdown.totalWBC) * 100 : 0;
                                                         return (
                                                             <div key={i} className="flex items-center gap-2">
-                                                                <span className="text-red-200 text-xs w-8">{wbc.name}</span>
-                                                                <div className="flex-1 h-2 bg-red-900 rounded-full overflow-hidden">
+                                                                <span className="text-slate-600 text-xs w-8">{wbc.name}</span>
+                                                                <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                                                                     <div
                                                                         className={`h-full ${wbc.color} transition-all duration-500`}
                                                                         style={{ width: `${pct}%` }}
                                                                     />
                                                                 </div>
-                                                                <span className="text-white text-xs font-medium w-12 text-right">
-                                                                    {wbc.count} <span className="text-red-300">({pct.toFixed(0)}%)</span>
+                                                                <span className="text-slate-700 text-xs font-medium w-12 text-right">
+                                                                    {wbc.count} <span className="text-slate-500">({pct.toFixed(0)}%)</span>
                                                                 </span>
                                                             </div>
                                                         );
@@ -374,7 +374,7 @@ export const ProcessedImagesThumbnails = ({
                                                 </div>
                                                 {/* Abnormal indicator */}
                                                 {breakdown.abnormalWBCs.length > 0 && (
-                                                    <div className="mt-2 pt-2 border-t border-red-700">
+                                                    <div className="mt-2 pt-2 border-t border-slate-200">
                                                         <div className="flex items-center gap-1 text-amber-400 text-xs">
                                                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -387,7 +387,7 @@ export const ProcessedImagesThumbnails = ({
                                         )}
 
                                         {/* Click hint */}
-                                        <p className="text-red-300 text-xs text-center mt-2 opacity-70">
+                                        <p className="text-rose-500 text-xs text-center mt-2 opacity-70">
                                             Click for detailed view
                                         </p>
                                     </div>
@@ -396,26 +396,26 @@ export const ProcessedImagesThumbnails = ({
                         </div>
 
                         {/* Summary stats */}
-                        <div className="mt-4 pt-3 border-t border-red-600 grid grid-cols-4 gap-4 text-center">
+                        <div className="mt-4 pt-3 border-t border-rose-200 grid grid-cols-4 gap-4 text-center">
                             <div>
-                                <p className="text-red-200 text-xs">Total WBC</p>
-                                <p className="text-white font-bold">{currentWBCCount}</p>
+                                <p className="text-rose-600 text-xs">Total WBC</p>
+                                <p className="text-rose-900 font-bold">{currentWBCCount}</p>
                             </div>
                             <div>
-                                <p className="text-red-200 text-xs">Total RBC</p>
-                                <p className="text-white font-bold">
+                                <p className="text-rose-600 text-xs">Total RBC</p>
+                                <p className="text-rose-900 font-bold">
                                     {processedImages.reduce((sum, img) => sum + (img.rbcCount || 0), 0)}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-red-200 text-xs">Images</p>
-                                <p className={`font-bold ${processedImages.length >= MIN_IMAGES_FOR_AVERAGE ? 'text-green-300' : 'text-yellow-300'}`}>
+                                <p className="text-rose-600 text-xs">Images</p>
+                                <p className={`font-bold ${processedImages.length >= MIN_IMAGES_FOR_AVERAGE ? 'text-green-600' : 'text-amber-600'}`}>
                                     {processedImages.length} / {MIN_IMAGES_FOR_AVERAGE}
                                 </p>
                             </div>
                             <div>
-                                <p className="text-red-200 text-xs">Image Progress</p>
-                                <p className={`font-bold ${progress >= 100 ? 'text-green-300' : 'text-yellow-300'}`}>
+                                <p className="text-rose-600 text-xs">Image Progress</p>
+                                <p className={`font-bold ${progress >= 100 ? 'text-green-600' : 'text-amber-600'}`}>
                                     {progress.toFixed(0)}%
                                 </p>
                             </div>
@@ -423,62 +423,62 @@ export const ProcessedImagesThumbnails = ({
 
                         {/* Estimated Cell Counts (only after 10 images) */}
                         {estimates ? (
-                            <div className="mt-4 pt-3 border-t border-red-600 bg-red-900/50 rounded-lg p-4">
-                                <h4 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-                                    <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="mt-4 pt-3 border-t border-rose-200 bg-white rounded-lg p-4 border border-rose-100">
+                                <h4 className="text-rose-900 font-bold text-sm mb-3 flex items-center gap-2">
+                                    <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
                                     Estimated Cell Counts ({estimates.imagesAnalyzed} images analyzed)
                                 </h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* WBC Estimate */}
-                                    <div className={`rounded-lg p-3 ${estimates.wbcStatus === 'normal' ? 'bg-green-900/50' :
-                                            estimates.wbcStatus === 'high' ? 'bg-red-900/70' : 'bg-yellow-900/50'
+                                    <div className={`rounded-lg p-3 border ${estimates.wbcStatus === 'normal' ? 'bg-green-50 border-green-200' :
+                                        estimates.wbcStatus === 'high' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
                                         }`}>
-                                        <p className="text-red-200 text-xs mb-1">Estimated WBC</p>
-                                        <p className="text-white font-bold text-lg">
+                                        <p className="text-slate-600 text-xs mb-1">Estimated WBC</p>
+                                        <p className="text-slate-900 font-bold text-lg">
                                             {estimates.estimatedWBCPerUL.toLocaleString()} cells/μL
                                         </p>
-                                        <p className="text-red-200 text-xs">
+                                        <p className="text-slate-500 text-xs">
                                             SI: {estimates.wbcSIUnits}
                                         </p>
                                         <p className="text-xs mt-1">
                                             <span className={`px-2 py-0.5 rounded ${estimates.wbcStatus === 'normal' ? 'bg-green-600 text-white' :
-                                                    estimates.wbcStatus === 'high' ? 'bg-red-600 text-white' : 'bg-yellow-600 text-white'
+                                                estimates.wbcStatus === 'high' ? 'bg-red-600 text-white' : 'bg-yellow-600 text-white'
                                                 }`}>
                                                 {estimates.wbcStatus === 'normal' ? '✓ Normal' :
                                                     estimates.wbcStatus === 'high' ? '↑ High' : '↓ Low'}
                                             </span>
-                                            <span className="text-red-300 ml-2">
+                                            <span className="text-slate-500 ml-2">
                                                 (Normal: 4,000-6,000/μL)
                                             </span>
                                         </p>
-                                        <p className="text-red-300 text-xs mt-2">
+                                        <p className="text-slate-500 text-xs mt-2">
                                             Formula: (Total {estimates.totalWBC} / 10) × {WBC_MULTIPLIER.toLocaleString()}
                                         </p>
                                     </div>
 
                                     {/* RBC Estimate */}
-                                    <div className="bg-red-900/30 rounded-lg p-3">
-                                        <p className="text-red-200 text-xs mb-1">Estimated RBC</p>
-                                        <p className="text-white font-bold text-lg">
+                                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                        <p className="text-slate-600 text-xs mb-1">Estimated RBC</p>
+                                        <p className="text-slate-900 font-bold text-lg">
                                             {(estimates.estimatedRBCPerUL / 1e6).toFixed(2)} × 10⁶ cells/μL
                                         </p>
-                                        <p className="text-red-200 text-xs">
+                                        <p className="text-slate-500 text-xs">
                                             SI: {estimates.rbcSIUnits}
                                         </p>
-                                        <p className="text-xs mt-1 text-red-300">
+                                        <p className="text-xs mt-1 text-slate-500">
                                             (Normal Male: 4.5-6.0 × 10⁶, Female: 4.0-5.5 × 10⁶)
                                         </p>
-                                        <p className="text-red-300 text-xs mt-2">
+                                        <p className="text-slate-500 text-xs mt-2">
                                             Formula: Avg {estimates.avgRBCPerField}/10HPF × {RBC_MULTIPLIER.toLocaleString()}
                                         </p>
                                     </div>
                                 </div>
                             </div>
                         ) : (
-                            <div className="mt-4 pt-3 border-t border-red-600 bg-yellow-900/30 rounded-lg p-4">
-                                <p className="text-yellow-200 text-sm flex items-center gap-2">
+                            <div className="mt-4 pt-3 border-t border-rose-200 bg-amber-50 rounded-lg p-4 border border-amber-200">
+                                <p className="text-amber-800 text-sm flex items-center gap-2">
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
@@ -502,10 +502,10 @@ export const ProcessedImagesThumbnails = ({
                         onClick={(e) => e.stopPropagation()}
                     >
                         {/* Modal Header */}
-                        <div className="sticky top-0 bg-slate-800 text-white px-6 py-4 flex items-center justify-between">
+                        <div className="sticky top-0 bg-rose-50 border-b border-rose-200 text-rose-900 px-6 py-4 flex items-center justify-between">
                             <div>
                                 <h3 className="text-lg font-bold">Blood Smear Image #{selectedImage.index + 1}</h3>
-                                <p className="text-sm text-slate-300">{selectedImage.fileName || 'Blood Smear Image'}</p>
+                                <p className="text-sm text-rose-600">{selectedImage.fileName || 'Blood Smear Image'}</p>
                             </div>
                             <button
                                 onClick={closeModal}

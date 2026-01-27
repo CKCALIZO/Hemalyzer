@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Header} from "../components/Header.jsx";
+import { Header } from "../components/Header.jsx";
 import { Footer } from "../components/Footer.jsx";
 import { ThresholdResults } from "../components/ThresholdResults.jsx";
 
@@ -30,7 +30,7 @@ export const Reports = () => {
         }
     };
 
-    return(
+    return (
         <div className="flex flex-col min-h-screen bg-red-50">
             <Header />
             <main className="flex grow flex-col items-start justify-start p-8">
@@ -62,11 +62,10 @@ export const Reports = () => {
                                         <div
                                             key={report.id}
                                             onClick={() => setSelectedReport(report)}
-                                            className={`p-4 rounded-lg cursor-pointer border-2 transition-all ${
-                                                selectedReport?.id === report.id
+                                            className={`p-4 rounded-lg cursor-pointer border-2 transition-all ${selectedReport?.id === report.id
                                                     ? 'border-red-600 bg-red-50'
                                                     : 'border-red-200 hover:border-red-400 bg-white'
-                                            }`}
+                                                }`}
                                         >
                                             <div className="flex justify-between items-start">
                                                 <div className="flex-1">
@@ -157,7 +156,7 @@ export const Reports = () => {
                                                     </p>
                                                 </div>
                                             </div>
-                                            
+
                                             {/* Estimated Counts Section */}
                                             {selectedReport.summary && (selectedReport.summary.estimatedWBCCount > 0 || selectedReport.summary.estimatedRBCCount > 0) && (
                                                 <div className="mt-4 pt-4 border-t border-slate-200">
@@ -190,52 +189,105 @@ export const Reports = () => {
                                             )}
                                         </div>
 
-                                        {/* Detailed Metrics */}
-                                        <div className="bg-slate-50 p-4 rounded-lg">
-                                            <h3 className="font-semibold text-lg mb-3 text-slate-800">Analysis Details</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                                <div className="space-y-2 text-sm">
-                                                    <div className="flex justify-between text-slate-700">
-                                                        <span>Detection Model:</span>
-                                                        <span className="font-mono">Roboflow bloodcell-hema/5</span>
-                                                    </div>
-                                                    <div className="flex justify-between text-slate-700">
-                                                        <span>Confidence Threshold:</span>
-                                                        <span className="font-mono">20%</span>
-                                                    </div>
-                                                    <div className="flex justify-between text-slate-700">
-                                                        <span>Overlap Threshold:</span>
-                                                        <span className="font-mono">20%</span>
-                                                    </div>
-                                                    <div className="flex justify-between text-slate-700">
-                                                        <span>Analysis Date:</span>
-                                                        <span>{selectedReport.timestamp}</span>
-                                                    </div>
+                                        {/* WBC Differential Counts */}
+                                        {selectedReport.data?.wbcDifferential && Object.keys(selectedReport.data.wbcDifferential).length > 0 && (
+                                            <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-200">
+                                                <h3 className="font-semibold text-lg mb-3 text-blue-800">WBC Differential Count</h3>
+                                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                                    {Object.entries(selectedReport.data.wbcDifferential).map(([cellType, data]) => (
+                                                        <div key={cellType} className="bg-white p-3 rounded border border-blue-100">
+                                                            <p className="text-xs text-blue-600 font-medium">{cellType}</p>
+                                                            <p className="text-lg font-bold text-blue-800">{data.percentage?.toFixed(1) || 0}%</p>
+                                                            <p className="text-xs text-slate-500">({data.count || 0} cells)</p>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                {selectedReport.sessionData && (
-                                                    <div className="space-y-2 text-sm">
-                                                        <div className="flex justify-between text-slate-700">
-                                                            <span>Images Analyzed:</span>
-                                                            <span className="font-semibold">
-                                                                {selectedReport.sessionData.totalImagesAnalyzed || selectedReport.imagesCount}/10
-                                                            </span>
+                                            </div>
+                                        )}
+
+                                        {/* Abnormal Cells Summary */}
+                                        <div className="bg-amber-50 p-4 rounded-lg mb-6 border border-amber-200">
+                                            <h3 className="font-semibold text-lg mb-3 text-amber-800">Cell Classification Summary</h3>
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                <div className="bg-white p-3 rounded border border-amber-200">
+                                                    <p className="text-sm text-amber-600">Abnormal WBCs</p>
+                                                    <p className="text-2xl font-bold text-amber-700">
+                                                        {selectedReport.data?.abnormalWBCs || 0}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-white p-3 rounded border border-green-200">
+                                                    <p className="text-sm text-green-600">Normal WBCs</p>
+                                                    <p className="text-2xl font-bold text-green-700">
+                                                        {(selectedReport.summary?.wbcCount || 0) - (selectedReport.data?.abnormalWBCs || 0)}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-white p-3 rounded border border-red-200">
+                                                    <p className="text-sm text-red-600">Sickle Cells</p>
+                                                    <p className="text-2xl font-bold text-red-700">
+                                                        {selectedReport.data?.sickleCount || selectedReport.summary?.sickleCount || 0}
+                                                    </p>
+                                                </div>
+                                                <div className="bg-white p-3 rounded border border-slate-200">
+                                                    <p className="text-sm text-slate-600">Images Analyzed</p>
+                                                    <p className="text-2xl font-bold text-slate-700">
+                                                        {selectedReport.sessionData?.totalImagesAnalyzed || selectedReport.imagesCount || 0}/10
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Disease Findings / Patient Condition */}
+                                        {selectedReport.data?.diseaseFindings && selectedReport.data.diseaseFindings.length > 0 && (
+                                            <div className="bg-rose-50 p-4 rounded-lg mb-6 border border-rose-200">
+                                                <h3 className="font-semibold text-lg mb-3 text-rose-800">Patient Condition Assessment</h3>
+                                                <div className="space-y-3">
+                                                    {selectedReport.data.diseaseFindings.map((finding, idx) => (
+                                                        <div key={idx} className="bg-white p-4 rounded-lg border border-rose-200">
+                                                            <div className="flex justify-between items-center mb-2">
+                                                                <span className="font-bold text-rose-800 text-lg">{finding.condition || finding.name}</span>
+                                                                <span className={`px-3 py-1 rounded-full text-sm font-semibold ${finding.severity === 'HIGH' ? 'bg-red-100 text-red-700' :
+                                                                        finding.severity === 'MODERATE' ? 'bg-amber-100 text-amber-700' :
+                                                                            'bg-green-100 text-green-700'
+                                                                    }`}>
+                                                                    {finding.severity || 'DETECTED'}
+                                                                </span>
+                                                            </div>
+                                                            {finding.confidence && (
+                                                                <p className="text-sm text-slate-600">
+                                                                    Confidence: {(finding.confidence * 100).toFixed(1)}%
+                                                                </p>
+                                                            )}
+                                                            {finding.description && (
+                                                                <p className="text-sm text-slate-600 mt-1">{finding.description}</p>
+                                                            )}
                                                         </div>
-                                                        <div className="flex justify-between text-slate-700">
-                                                            <span>Analysis Status:</span>
-                                                            <span className={`font-semibold ${selectedReport.sessionData.analysisComplete ? 'text-green-600' : 'text-amber-600'}`}>
-                                                                {selectedReport.sessionData.analysisComplete ? 'Complete' : 'In Progress'}
-                                                            </span>
-                                                        </div>
-                                                        <div className="flex justify-between text-slate-700">
-                                                            <span>WBC Classifications:</span>
-                                                            <span className="font-semibold">{selectedReport.sessionData.aggregatedClassifications?.length || 0}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-slate-700">
-                                                            <span>RBC Classifications:</span>
-                                                            <span className="font-semibold">{selectedReport.sessionData.aggregatedRBCClassifications?.length || 0}</span>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Analysis Summary */}
+                                        <div className="bg-slate-50 p-4 rounded-lg">
+                                            <h3 className="font-semibold text-lg mb-3 text-slate-800">Analysis Summary</h3>
+                                            <div className="grid grid-cols-2 gap-4 text-sm">
+                                                <div className="flex justify-between text-slate-700">
+                                                    <span>Analysis Date:</span>
+                                                    <span>{selectedReport.timestamp}</span>
+                                                </div>
+                                                <div className="flex justify-between text-slate-700">
+                                                    <span>Analysis Status:</span>
+                                                    <span className={`font-semibold ${selectedReport.sessionData?.analysisComplete ? 'text-green-600' : 'text-amber-600'}`}>
+                                                        {selectedReport.sessionData?.analysisComplete ? 'Complete' : 'In Progress'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between text-slate-700">
+                                                    <span>Total Cells Detected:</span>
+                                                    <span className="font-semibold">{selectedReport.summary?.totalCells || 0}</span>
+                                                </div>
+                                                <div className="flex justify-between text-slate-700">
+                                                    <span>WBC Classifications:</span>
+                                                    <span className="font-semibold">{selectedReport.sessionData?.wbcClassificationCount || 0}</span>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -243,7 +295,7 @@ export const Reports = () => {
                                         {selectedReport.data?.disease_interpretation && (
                                             <div className="mt-6 bg-slate-50 border border-slate-200 p-4 rounded-lg">
                                                 <h3 className="font-semibold text-lg mb-3 text-slate-800">Clinical Thresholds & Interpretation</h3>
-                                                <ThresholdResults 
+                                                <ThresholdResults
                                                     diseaseInterpretation={selectedReport.data.disease_interpretation}
                                                     clinicalThresholds={selectedReport.data.clinical_thresholds}
                                                 />
