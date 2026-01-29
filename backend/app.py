@@ -21,6 +21,7 @@ from convnext_classifier import (
     load_convnext_model,
     classify_cell_crop,
     get_classifier_info,
+    classify_cell_crops_batch,
     classifier
 )
 
@@ -650,6 +651,21 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         predictions = result.get('predictions', [])
         
         print(f"Raw detections: {len(predictions)}")
+
+        # VALIDATION: Check if this is likely a blood smear
+        # User requested minimum 100 cells to accept as valid
+        MIN_CELLS_THRESHOLD = 100
+        if len(predictions) < MIN_CELLS_THRESHOLD:
+            print(f"   ⚠️ REJECTED: Only {len(predictions)} cells detected (Min: {MIN_CELLS_THRESHOLD})")
+            return {
+                'success': False,
+                'error': 'Blood smear validation failed: Insufficient cells detected.\n\n'
+                         'The image does not appear to be a valid 100x oil immersion blood smear.\n'
+                         'Please ensure:\n'
+                         '1. Image is taken at 100x Magnification\n'
+                         '2. Image is in focus and not blank\n'
+                         '3. Field of view contains a standard spread of cells'
+            }
         
         # ========== STAGE 1: YOLOv8 Cell Detection & Counting ==========
         print(f"\n{'='*60}")
@@ -753,15 +769,24 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         
         wbc_classifications = []
         rbc_classifications = []
-        cropped_cells = []  # Store cropped images for frontend
         
         if classifier.is_loaded():
             print(f"Starting ConvNeXt classification for detected cells...")
             
-            wbc_idx = 0
-            rbc_idx = 0
+            # --- BATCH PROCESSING IMPLEMENTATION ---
+            # 1. Collect all crops first
+            wbc_crops = []
+            wbc_indices = [] # Indices into detections['cells']
+            rbc_crops = []
+            rbc_indices = []
+            cropped_cells = []  # Initialize cropped_cells
             
-            for detection in detections['cells']:
+            # Store crop base64 for display
+            crop_display_data = {} # {detection_idx: base64_str}
+
+            print(f"   > Preparing crops for {len(detections['cells'])} cells...")
+
+            for idx, detection in enumerate(detections['cells']):
                 cell_type = detection.get('cell_type', 'Unknown')
                 x1, y1, x2, y2 = map(int, detection['bbox'])
                 
@@ -776,316 +801,203 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 cell_center_y = (y1 + y2) // 2
                 
                 # Create SQUARE crop centered on cell with optimal padding
-                # The classifier's preprocessing pipeline (matching training EXACTLY):
-                #   1. pre_transform: Resize to 384x384
-                #   2. AdaptiveCellPreprocessing:
-                #      a. Stain normalization (OD space)
-                #      b. CLAHE contrast enhancement (YUV space, clipLimit=3.0)
-                #      c. Cell detection and centering (Otsu thresholding)
-                #   3. ToTensor + Normalize (ImageNet stats)
-                # 
-                # Padding strategy: Use enough context for cell detection to work
-                # - Use 2.5x for WBC (larger cells need more context)
-                # - Use 1.5x for RBC (smaller, more uniform cells)
+                # Matches classifier preprocessing EXACTLY
                 max_dim = max(cell_width, cell_height)
                 
                 if cell_type == 'WBC':
-                    crop_size = int(max_dim * 2.5)  # Increased from 1.8x - more context for WBC
+                    crop_size = int(max_dim * 2.5)  # 2.5x for WBC context
                 else:
-                    crop_size = int(max_dim * 1.5)  # Standard padding for RBC
+                    crop_size = int(max_dim * 1.5)  # 1.5x for RBC context
                 
-                # Ensure minimum crop size for quality preprocessing
-                # Crops smaller than 180px can cause Platelet misclassification
-                MIN_CROP_DIM = 180  # Increased from 120px for better quality and consistency
+                MIN_CROP_DIM = 180
                 crop_size = max(crop_size, MIN_CROP_DIM)
                 
                 h, w = image_rgb_clean.shape[:2]
                 
-                # Calculate square crop bounds centered on cell
+                # Calculate square crop bounds
                 half_size = crop_size // 2
                 x1_padded = cell_center_x - half_size
                 y1_padded = cell_center_y - half_size
                 x2_padded = cell_center_x + half_size
                 y2_padded = cell_center_y + half_size
                 
-                # Handle edge cases with padding (instead of shrinking crop)
-                # This maintains consistent crop size even at image edges
+                # Handle edge padding
                 pad_left = max(0, -x1_padded)
                 pad_top = max(0, -y1_padded)
                 pad_right = max(0, x2_padded - w)
                 pad_bottom = max(0, y2_padded - h)
                 
-                # Clamp to image bounds
-                x1_padded = max(0, x1_padded)
-                y1_padded = max(0, y1_padded)
-                x2_padded = min(w, x2_padded)
-                y2_padded = min(h, y2_padded)
+                image_x1 = max(0, x1_padded)
+                image_y1 = max(0, y1_padded)
+                image_x2 = min(w, x2_padded)
+                image_y2 = min(h, y2_padded)
                 
-                # Crop cell from CLEAN image (no bounding boxes)
-                cell_crop = image_rgb_clean[y1_padded:y2_padded, x1_padded:x2_padded]
+                cell_crop = image_rgb_clean[image_y1:image_y2, image_x1:image_x2]
                 
                 if cell_crop.size == 0:
                     continue
                 
-                # Add padding with light gray background if crop was at image edge
-                # This matches the training data background (240, 240, 240)
+                # Add padding if needed
                 if pad_left > 0 or pad_top > 0 or pad_right > 0 or pad_bottom > 0:
                     padded_crop = np.full((crop_size, crop_size, 3), 240, dtype=np.uint8)
-                    padded_crop[pad_top:pad_top+cell_crop.shape[0], 
-                               pad_left:pad_left+cell_crop.shape[1]] = cell_crop
+                    target_y = pad_top
+                    target_x = pad_left
+                    padded_crop[target_y:target_y+cell_crop.shape[0], 
+                               target_x:target_x+cell_crop.shape[1]] = cell_crop
                     cell_crop = padded_crop
                 
-                # Convert to PIL Image
-                # CRITICAL: Pass the raw crop to the classifier - do NOT resize here!
-                # The classifier's pipeline handles all preprocessing:
-                #   1. pre_transform: Resize to 384x384
-                #   2. AdaptiveCellPreprocessing: stain normalization + CLAHE + cell detection
-                #   3. transform: ToTensor + Normalize
-                # This matches the training val_transform EXACTLY.
                 cell_crop_pil = Image.fromarray(cell_crop)
                 
-                # Log crop info for debugging
-                crop_w, crop_h = cell_crop_pil.size
-                
-                # Convert crop to base64 for frontend display
-                # Create a display version (384x384) for frontend only
-                display_crop = cell_crop_pil.resize((384, 384), Image.LANCZOS)
-                crop_buffer = io.BytesIO()
-                display_crop.save(crop_buffer, format='PNG')
-                crop_base64 = base64.b64encode(crop_buffer.getvalue()).decode('utf-8')
-                
-                # Classify WBC
+                # Store crop for batch processing
                 if cell_type == 'WBC':
-                    wbc_idx += 1
+                    wbc_crops.append(cell_crop_pil)
+                    wbc_indices.append(idx)
                     
-                    # Debug: Log crop dimensions for analysis
-                    print(f"   WBC #{wbc_idx}: crop size {cell_crop_pil.size}, bbox={cell_width}x{cell_height}")
-
-                    # Ensure ConvNeXt model is loaded
-                    if not classifier.is_loaded():
-                        print("ConvNeXt model not loaded - attempting to load now...")
-                        load_convnext_model()
-
-                    # Optional processing debug: run pre_transform + preprocessor and log mean RGB
-                    if os.getenv('PROCESSING_DEBUG', '0') == '1':
-                        try:
-                            pre_img = classifier.pre_transform(cell_crop_pil)
-                            preprocessed_debug = classifier.preprocessor(pre_img)
-                            arr = np.array(preprocessed_debug)
-                            mean_rgb = list(np.mean(arr, axis=(0,1)).round(1))
-                            print(f"      [DEBUG] Preprocessed mean RGB: {mean_rgb}")
-                        except Exception as e:
-                            print(f"      [DEBUG] Preprocessing debug failed: {e}")
-
-                    classification = classify_cell_crop(cell_crop_pil, 'WBC')
-                    
-                    if classification:
-                        wbc_class = classification['class']
-                        wbc_confidence = classification['confidence']
-                        probs = classification['probabilities']
-                        
-                        # DIAGNOSTIC: Log top 3 predictions for debugging CML over-prediction
-                        sorted_probs = sorted(probs.items(), key=lambda x: x[1], reverse=True)[:3]
-                        print(f"      Top 3 predictions:")
-                        for cls_name, prob in sorted_probs:
-                            print(f"        {cls_name}: {prob:.3f} ({prob*100:.1f}%)")
-                        
-                        # CRITICAL: Exclude ALL non-WBC classes when classifying WBC crops
-                        # The model contains RBC and Platelet classes that should NEVER be returned for WBCs
-                        # Non-WBC classes to exclude: RBC: Normal, Platelet: Normal, RBC: Sickle Cell Anemia
-                        NON_WBC_CLASSES = {
-                            'rbc: normal',
-                            'platelet: normal', 
-                            'rbc: sickle cell anemia'
-                        }
-                        
-                        is_non_wbc_class = wbc_class.lower() in NON_WBC_CLASSES
-                        
-                        if is_non_wbc_class:
-                            print(f"   WBC #{wbc_idx} predicted as {wbc_class} (non-WBC class) - filtering to WBC classes only")
-                            
-                            # Get only valid WBC probabilities (exclude all non-WBC classes)
-                            wbc_only_probs = {
-                                cls_name: prob 
-                                for cls_name, prob in probs.items() 
-                                if cls_name.lower() not in NON_WBC_CLASSES
-                            }
-                            
-                            if wbc_only_probs:
-                                # Re-normalize probabilities to sum to 1.0 (100%)
-                                total_prob = sum(wbc_only_probs.values())
-                                if total_prob > 0:
-                                    normalized_probs = {
-                                        cls_name: prob / total_prob 
-                                        for cls_name, prob in wbc_only_probs.items()
-                                    }
-                                    
-                                    # Find highest probability WBC class after normalization
-                                    best_wbc_class = max(normalized_probs.items(), key=lambda x: x[1])
-                                    wbc_class = best_wbc_class[0]
-                                    wbc_confidence = best_wbc_class[1]
-                                    
-                                    print(f"      → Using {wbc_class} (normalized confidence: {wbc_confidence:.3f})")
-                                else:
-                                    # Fallback if normalization fails
-                                    wbc_class = 'Neutrophil: Normal'
-                                    wbc_confidence = 0.5
-                            else:
-                                # Ultimate fallback if no WBC classes found
-                                wbc_class = 'Neutrophil: Normal'
-                                wbc_confidence = 0.5
-                        
-                        # ENHANCED DISEASE-SPECIFIC CONFIDENCE THRESHOLDS
-                        # Different thresholds based on disease type to prevent over-prediction
-                        # CML is commonly over-predicted, so we use 95% threshold
-                        DISEASE_CONFIDENCE_THRESHOLDS = {
-                            'cml': 0.90,   # 90% for CML (very strict - user requested)
-                            'aml': 0.80,   # 80% for AML (high confidence needed)
-                            'all': 0.80,   # 80% for ALL (high confidence needed)
-                            'cll': 0.80,   # 80% for CLL (slightly lower as it's less over-predicted)
-                            'default': 0.75  # 75% for other conditions
-                        }
-                        
-                        is_disease_prediction = ': normal' not in wbc_class.lower()
-                        
-                        if is_disease_prediction:
-                            # Extract condition from "CellType: Condition" format
-                            condition = wbc_class.split(':')[1].strip().lower() if ':' in wbc_class else ''
-                            
-                            # Get appropriate threshold for this disease type
-                            threshold = DISEASE_CONFIDENCE_THRESHOLDS.get(condition, DISEASE_CONFIDENCE_THRESHOLDS['default'])
-                            
-                            if wbc_confidence < threshold:
-                                print(f"   WBC #{wbc_idx} predicted as {wbc_class} with confidence {wbc_confidence:.3f}")
-                                print(f"      → Applying {condition.upper()} threshold ({threshold*100:.0f}%) - defaulting to normal cell type")
-                                
-                                # Extract cell type (e.g., "Basophil: CML" → "Basophil", "Neutrophils: CML" → "Neutrophils")
-                                cell_type_name = wbc_class.split(':')[0].strip() if ':' in wbc_class else wbc_class
-                                
-                                # Normalize cell type name to handle:
-                                # 1. Plural/singular variations: "Neutrophils" → "Neutrophil"
-                                # 2. Typos in model class names: "Eosonophil" → "Eosinophil"
-                                cell_type_corrections = {
-                                    'neutrophils': 'Neutrophil',
-                                    'eosonophil': 'Eosinophil',  # Fix typo in model class names
-                                }
-                                cell_type_base = cell_type_corrections.get(cell_type_name.lower(), 
-                                                  cell_type_name.rstrip('s') if cell_type_name.endswith('s') and cell_type_name.lower() not in ['basophils'] else cell_type_name)
-                                
-                                # Find the corresponding ': Normal' class in probabilities
-                                # Try multiple variations to handle dataset naming inconsistencies
-                                normal_variant_candidates = [
-                                    f"{cell_type_base}: Normal",      # Corrected form first (e.g., "Neutrophil: Normal")
-                                    f"{cell_type_name}: Normal",      # Exact match (e.g., "Neutrophils: Normal")
-                                    f"{cell_type_name}s: Normal",     # Plural form (e.g., "Basophils: Normal")
-                                ]
-                                
-                                # Find the best matching normal variant
-                                matched_normal = None
-                                for candidate in normal_variant_candidates:
-                                    if candidate in probs:
-                                        matched_normal = candidate
-                                        break
-                                
-                                if matched_normal:
-                                    wbc_class = matched_normal
-                                    wbc_confidence = probs[matched_normal]
-                                    print(f"      → Reclassified as {wbc_class} (confidence: {wbc_confidence:.3f})")
-                                else:
-                                    # If no exact match, find any normal class for this cell type base name
-                                    # Check for partial matches (e.g., "neutrophil" in "Neutrophil: Normal")
-                                    normal_classes = {k: v for k, v in probs.items() 
-                                                    if (cell_type_base.lower() in k.lower() or cell_type_name.lower() in k.lower()) 
-                                                    and ': normal' in k.lower()}
-                                    if normal_classes:
-                                        best_normal = max(normal_classes.items(), key=lambda x: x[1])
-                                        wbc_class = best_normal[0]
-                                        wbc_confidence = best_normal[1]
-                                        print(f"      → Reclassified as {wbc_class} (confidence: {wbc_confidence:.3f})")
-                                    else:
-                                        # Ultimate fallback: Create a normal class name from the original cell type
-                                        # This ensures abnormal cells ALWAYS become normal variants
-                                        wbc_class = f"{cell_type_base}: Normal"
-                                        wbc_confidence = 0.5  # Default confidence for fallback
-                                        print(f"      → Created fallback normal class: {wbc_class} (confidence: {wbc_confidence:.3f})")
-                        
-                        # Note: Additional basophil validation removed - handled by disease threshold logic above
-                        
-                        wbc_result = {
-                            'wbc_id': wbc_idx,
-                            'bbox': detection['bbox'],
-                            'detection_confidence': detection['confidence'],
-                            'classification': wbc_class,
-                            'classification_confidence': wbc_confidence,
-                            'probabilities': classification['probabilities'],
-                            'cropped_image': crop_base64
-                        }
-                        wbc_classifications.append(wbc_result)
-                        
-                        # Add to cropped cells for display - ONLY ABNORMAL WBCs
-                        # Check if classification contains ': Normal' suffix (not just != 'Normal')
-                        is_normal_cell = ': normal' in wbc_class.lower()
-                        
-                        if not is_normal_cell:
-                            cropped_cells.append({
-                                'id': f'WBC_{wbc_idx}',
-                                'cell_type': 'WBC',
-                                'classification': wbc_class,
-                                'confidence': wbc_confidence,
-                                'cropped_image': crop_base64,
-                                'is_abnormal': True
-                            })
-                
-                # Classify RBC - only show if it's a Sickle Cell with HIGH confidence (>=95%)
                 elif cell_type == 'RBC':
-                    rbc_idx += 1
+                    rbc_crops.append(cell_crop_pil)
+                    rbc_indices.append(idx)
 
-                    # Ensure ConvNeXt model is loaded
-                    if not classifier.is_loaded():
-                        print("ConvNeXt model not loaded - attempting to load now...")
-                        load_convnext_model()
-
-                    # Optional processing debug
-                    if os.getenv('PROCESSING_DEBUG', '0') == '1':
-                        try:
-                            pre_img = classifier.pre_transform(cell_crop_pil)
-                            preprocessed_debug = classifier.preprocessor(pre_img)
-                            arr = np.array(preprocessed_debug)
-                            mean_rgb = list(np.mean(arr, axis=(0,1)).round(1))
-                            print(f"      [DEBUG] Preprocessed mean RGB (RBC): {mean_rgb}")
-                        except Exception as e:
-                            print(f"      [DEBUG] Preprocessing debug failed: {e}")
-
-                    classification = classify_cell_crop(cell_crop_pil, 'RBC')
+            # 2. Batch Classify WBCs
+            if wbc_crops:
+                # Ensure model loaded
+                if not classifier.is_loaded():
+                    load_convnext_model()
                     
-                    if classification:
-                        # Use the is_sickle_cell flag from classification (requires 95% confidence)
-                        is_sickle_cell = classification.get('is_sickle_cell', False)
-                        sickle_confidence = classification.get('sickle_cell_confidence', 0.0)
+                print(f"   > Batch classifying {len(wbc_crops)} WBCs...")
+                wbc_results = classifier.classify_batch(wbc_crops, ['WBC']*len(wbc_crops), batch_size=32)
+                
+                for i, result in enumerate(wbc_results):
+                    if not result: continue
+                    
+                    idx = wbc_indices[i]
+                    detection = detections['cells'][idx]
+                    crop_pil = wbc_crops[i]
+                    
+                    wbc_class = result['class']
+                    wbc_confidence = result['confidence']
+                    probs = result['probabilities']
+                    
+                    # --- DISEASE THRESHOLD LOGIC (Ported from sequential loop) ---
+                    
+                    # Exclude non-WBC classes
+                    NON_WBC_CLASSES = {'rbc: normal', 'platelet: normal', 'rbc: sickle cell anemia'}
+                    if wbc_class.lower() in NON_WBC_CLASSES:
+                        wbc_only_probs = {k: v for k, v in probs.items() if k.lower() not in NON_WBC_CLASSES}
+                        if wbc_only_probs:
+                            total_prob = sum(wbc_only_probs.values())
+                            if total_prob > 0:
+                                best = max(wbc_only_probs.items(), key=lambda x: x[1])
+                                wbc_class, wbc_confidence = best[0], best[1] / total_prob
+                            else:
+                                wbc_class, wbc_confidence = 'Neutrophil: Normal', 0.5
+                        else:
+                            wbc_class, wbc_confidence = 'Neutrophil: Normal', 0.5
+
+                    # Disease thresholds
+                    DISEASE_THRESHOLDS_CONF = {'cml': 0.90, 'aml': 0.80, 'all': 0.80, 'cll': 0.80, 'default': 0.75}
+                    is_disease = ': normal' not in wbc_class.lower()
+                    
+                    if is_disease:
+                        condition = wbc_class.split(':')[1].strip().lower() if ':' in wbc_class else ''
+                        threshold = DISEASE_THRESHOLDS_CONF.get(condition, DISEASE_THRESHOLDS_CONF['default'])
                         
-                        rbc_result = {
-                            'rbc_id': rbc_idx,
-                            'bbox': detection['bbox'],
-                            'detection_confidence': detection['confidence'],
-                            'classification': classification['class'],
-                            'classification_confidence': classification['confidence'],
-                            'sickle_cell_confidence': sickle_confidence,
-                            'probabilities': classification['probabilities'],
-                            'cropped_image': crop_base64,
-                            'is_sickle_cell': is_sickle_cell
-                        }
-                        rbc_classifications.append(rbc_result)
-                        
-                        # Only add to cropped cells display if it's CONFIRMED Sickle Cell (>=95% confidence)
-                        if is_sickle_cell:
-                            cropped_cells.append({
-                                'id': f'RBC_{rbc_idx}',
-                                'cell_type': 'RBC',
-                                'classification': 'Sickle Cell',
-                                'confidence': sickle_confidence,
-                                'cropped_image': crop_base64,
-                                'is_abnormal': True
-                            })
+                        if wbc_confidence < threshold:
+                            # Fallback logic
+                            cell_type_name = wbc_class.split(':')[0].strip()
+                            cell_type_corrections = {'neutrophils': 'Neutrophil', 'eosonophil': 'Eosinophil'}
+                            base = cell_type_corrections.get(cell_type_name.lower(), cell_type_name.rstrip('s') if not cell_type_name.lower() == 'basophils' else cell_type_name)
+                            
+                            # Find normal variant
+                            candidates = [f"{base}: Normal", f"{cell_type_name}: Normal", f"{cell_type_name}s: Normal"]
+                            matched = next((c for c in candidates if c in probs), None)
+                            
+                            if matched:
+                                wbc_class, wbc_confidence = matched, probs[matched]
+                            else:
+                                normal_classes = {k: v for k, v in probs.items() if (base.lower() in k.lower()) and ': normal' in k.lower()}
+                                if normal_classes:
+                                    best = max(normal_classes.items(), key=lambda x: x[1])
+                                    wbc_class, wbc_confidence = best
+                                else:
+                                    wbc_class, wbc_confidence = f"{base}: Normal", 0.5
+
+                    # Prepare result
+                    # Generate base64 only now
+                    display_crop = crop_pil.resize((384, 384), Image.LANCZOS)
+                    c_buf = io.BytesIO()
+                    display_crop.save(c_buf, format='PNG')
+                    crop_b64 = base64.b64encode(c_buf.getvalue()).decode('utf-8')
+
+                    wbc_res = {
+                        'wbc_id': len(wbc_classifications) + 1,
+                        'bbox': detection['bbox'],
+                        'detection_confidence': detection['confidence'],
+                        'classification': wbc_class,
+                        'classification_confidence': wbc_confidence,
+                        'probabilities': probs,
+                        'cropped_image': crop_b64
+                    }
+                    wbc_classifications.append(wbc_res)
+                    
+                    # Add to cropped_cells if abnormal
+                    if ': normal' not in wbc_class.lower():
+                        cropped_cells.append({
+                            'id': f"WBC_{len(wbc_classifications)}",
+                            'cell_type': 'WBC',
+                            'classification': wbc_class,
+                            'confidence': wbc_confidence,
+                            'cropped_image': crop_b64,
+                            'is_abnormal': True
+                        })
+
+            # 3. Batch Classify RBCs
+            if rbc_crops:
+                if not classifier.is_loaded(): 
+                    load_convnext_model()
+                print(f"   > Batch classifying {len(rbc_crops)} RBCs...")
+                rbc_results = classifier.classify_batch(rbc_crops, ['RBC']*len(rbc_crops), batch_size=32)
+                
+                for i, result in enumerate(rbc_results):
+                    if not result: continue
+                    
+                    idx = rbc_indices[i]
+                    detection = detections['cells'][idx]
+                    crop_pil = rbc_crops[i]
+                    
+                    # Only keep sickle cells
+                    is_sickle = result.get('is_sickle_cell', False)
+                    sickle_conf = result.get('sickle_cell_confidence', 0.0)
+                    
+                    # Generate base64 only if needed (for all RBC results we store them, but display mainly sickle)
+                    # To save space, we might only generate base64 for sickle cells? 
+                    # The original code generated it for ALL results it appended to rbc_classifications.
+                    display_crop = crop_pil.resize((384, 384), Image.LANCZOS)
+                    c_buf = io.BytesIO()
+                    display_crop.save(c_buf, format='PNG')
+                    crop_b64 = base64.b64encode(c_buf.getvalue()).decode('utf-8')
+                    
+                    rbc_res = {
+                        'rbc_id': len(rbc_classifications) + 1,
+                        'bbox': detection['bbox'],
+                        'detection_confidence': detection['confidence'],
+                        'classification': result['class'],
+                        'classification_confidence': result['confidence'],
+                        'sickle_cell_confidence': sickle_conf,
+                        'probabilities': result['probabilities'],
+                        'cropped_image': crop_b64,
+                        'is_sickle_cell': is_sickle
+                    }
+                    rbc_classifications.append(rbc_res)
+                    
+                    if is_sickle:
+                         cropped_cells.append({
+                            'id': f"RBC_{len(rbc_classifications)}",
+                            'cell_type': 'RBC',
+                            'classification': 'Sickle Cell',
+                            'confidence': sickle_conf,
+                            'cropped_image': crop_b64,
+                            'is_abnormal': True
+                        })
             
             print(f"Classified {len(wbc_classifications)} WBCs")
             print(f"Classified {len(rbc_classifications)} RBCs")
@@ -1275,6 +1187,15 @@ def analyze_blood_smear():
             return jsonify({
                 'success': False,
                 'error': 'Empty filename'
+            }), 400
+
+        # Validate file extension
+        allowed_extensions = {'.jpg', '.jpeg', '.png'}
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext not in allowed_extensions:
+            return jsonify({
+                'success': False,
+                'error': f'Invalid file type: {ext}. Allowed: JPG, PNG only.'
             }), 400
         
         # Get optional parameters
@@ -2145,7 +2066,7 @@ if __name__ == '__main__':
     
     # Load ConvNeXt model for cell classification
     print("\nLoading ConvNeXt classification model...")
-    if load_convnext_model():
+    if load_convnext_model(use_mixed_precision=True, compile_model=True):
         print("ConvNeXt model loaded successfully!")
     else:
         print("ConvNeXt model not loaded - classification will be disabled")

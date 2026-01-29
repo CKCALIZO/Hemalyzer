@@ -451,16 +451,65 @@ export const FinalResults = ({
                                 <p className="text-xs font-semibold text-red-800 mb-2">⚠️ Detected Conditions (Based on Thresholds):</p>
                                 <div className="space-y-1">
                                     {diseaseFindings.map((finding, idx) => (
-                                        <div key={idx} className="flex justify-between items-center text-xs">
-                                            <span className="font-medium">
-                                                {finding.condition || finding.type}:
-                                            </span>
-                                            <span className={`px-2 py-0.5 rounded font-semibold ${finding.severity === 'HIGH' ? 'bg-red-100 text-red-800' :
-                                                finding.severity === 'MODERATE' ? 'bg-amber-100 text-amber-800' :
-                                                    'bg-yellow-100 text-yellow-800'
-                                                }`}>
-                                                {finding.percentage?.toFixed(1)}% - {finding.severity}
-                                            </span>
+                                        <div key={idx} className={`text-xs ${idx > 0 ? 'mt-3 border-t pt-2 border-dashed border-red-200' : ''}`}>
+                                            <div className="flex justify-between items-center mb-1">
+                                                <span className="font-medium">
+                                                    {finding.condition || finding.type}:
+                                                </span>
+                                                <span className={`px-2 py-0.5 rounded font-semibold ${finding.severity === 'HIGH' ? 'bg-red-100 text-red-800' :
+                                                    finding.severity === 'MODERATE' ? 'bg-amber-100 text-amber-800' :
+                                                        'bg-yellow-100 text-yellow-800'
+                                                    }`}>
+                                                    {finding.percentage?.toFixed(1)}% - {finding.severity}
+                                                </span>
+                                            </div>
+
+                                            {/* Interpretation Text */}
+                                            <p className="text-slate-600 mb-2 truncate" title={finding.interpretation}>
+                                                {finding.interpretation}
+                                            </p>
+
+                                            {/* CML Granulocyte Breakdown */}
+                                            {finding.type === 'CML Analysis' && finding.breakdown && (
+                                                <div className="bg-slate-50 rounded p-2 mt-1">
+                                                    <p className="text-[10px] font-semibold text-slate-500 mb-1 uppercase tracking-wider">Granulocyte Breakdown</p>
+                                                    <div className="grid grid-cols-4 gap-1 text-center">
+                                                        <div className="bg-white rounded border border-slate-100 p-1">
+                                                            <div className="font-bold text-slate-700">{finding.breakdown.basophil || 0}</div>
+                                                            <div className="text-[9px] text-slate-500">Baso</div>
+                                                        </div>
+                                                        <div className="bg-white rounded border border-slate-100 p-1">
+                                                            <div className="font-bold text-slate-700">{finding.breakdown.eosinophil || 0}</div>
+                                                            <div className="text-[9px] text-slate-500">Eos</div>
+                                                        </div>
+                                                        <div className="bg-white rounded border border-slate-100 p-1">
+                                                            <div className="font-bold text-slate-700">{finding.breakdown.myeloblast || 0}</div>
+                                                            <div className="text-[9px] text-slate-500">Myelo</div>
+                                                        </div>
+                                                        <div className="bg-white rounded border border-slate-100 p-1">
+                                                            <div className="font-bold text-slate-700">{finding.breakdown.neutrophil || 0}</div>
+                                                            <div className="text-[9px] text-slate-500">Neutro</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* AML/ALL Blast Breakdown */}
+                                            {finding.type === 'Acute Leukemia (AML/ALL)' && finding.breakdown && (
+                                                <div className="bg-slate-50 rounded p-2 mt-1">
+                                                    <p className="text-[10px] font-semibold text-slate-500 mb-1 uppercase tracking-wider">Blast Cell Breakdown</p>
+                                                    <div className="grid grid-cols-2 gap-2 text-center">
+                                                        <div className="bg-white rounded border border-slate-100 p-1">
+                                                            <div className="font-bold text-slate-700">{finding.breakdown.lymphoblasts || 0}</div>
+                                                            <div className="text-[9px] text-slate-500">Lymphoblasts (ALL)</div>
+                                                        </div>
+                                                        <div className="bg-white rounded border border-slate-100 p-1">
+                                                            <div className="font-bold text-slate-700">{finding.breakdown.myeloblasts || 0}</div>
+                                                            <div className="text-[9px] text-slate-500">Myeloblasts (AML)</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -494,7 +543,6 @@ export const FinalResults = ({
                             (!sickleCell || sickleCell.count === 0) && (
                                 <div className="bg-green-50 rounded-lg p-3 border border-green-200 mt-3">
                                     <p className="text-xs font-semibold text-green-800 flex items-center gap-2">
-                                        <span>✅</span>
                                         <span>No significant disease markers detected. Results within normal thresholds.</span>
                                     </p>
                                 </div>
@@ -586,47 +634,96 @@ export const FinalResults = ({
             {/* WBC Differential - 5 Main Categories */}
             {wbcDifferential && Object.keys(wbcDifferential).length > 0 && (
                 <div className="px-6 py-4 border-b border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-2">WBC Differential (5 Main Categories)</h3>
-                    <p className="text-xs text-slate-500 mb-3">
-                        Cells are categorized by type regardless of condition (e.g., "Basophil: CML" counts as Basophil)
-                    </p>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-semibold text-slate-700">WBC Differential</h3>
+                        <span className="text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded">Hover rows for detailed interpretation</span>
+                    </div>
+
+                    {/* Header Row */}
+                    <div className="flex items-center gap-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-2">
+                        <div className="w-28">Cell Type</div>
+                        <div className="flex-1">Distribution</div>
+                        <div className="w-12 text-right">Count</div>
+                        <div className="w-16 text-right">%</div>
+                        <div className="w-24 text-right">Normal Range</div>
+                        <div className="w-20 text-center">Status</div>
+                    </div>
+
                     <div className="space-y-3">
-                        {Object.entries(wbcDifferential).map(([name, data]) => (
-                            <div key={name} className="flex items-center gap-4">
-                                <div className="w-28 text-sm font-medium text-slate-700">{name}</div>
-                                <div className="flex-1">
-                                    <div className="h-4 bg-slate-100 rounded-full overflow-hidden">
-                                        <div
-                                            className={`h-full transition-all duration-500 ${data.status === 'high' ? 'bg-red-500' :
-                                                data.status === 'low' ? 'bg-blue-500' :
-                                                    'bg-green-500'
-                                                }`}
-                                            style={{ width: `${Math.min(100, data.percentage)}%` }}
-                                        />
+                        {Object.entries(wbcDifferential).map(([name, data]) => {
+                            // Define Interpretations
+                            const interpretations = {
+                                'Neutrophil': {
+                                    high: 'Neutrophilia: Common in bacterial infections, acute inflammation, stress, or tissue necrosis.',
+                                    low: 'Neutropenia: May indicate viral infections, chemotherapy side effects, aplastic anemia, or severe overwhelming infection.',
+                                    normal: 'Neutrophil count is within the healthy reference range.'
+                                },
+                                'Lymphocyte': {
+                                    high: 'Lymphocytosis: Often associated with viral infections (e.g., Mono), CLL, or recovery from illness.',
+                                    low: 'Lymphocytopenia: Can occur in HIV/AIDS, steroid therapy, radiation, or intense stress.',
+                                    normal: 'Lymphocyte count is within the healthy reference range.'
+                                },
+                                'Monocyte': {
+                                    high: 'Monocytosis: Seen in chronic infections (TB), autoimmune disorders, or recovery phase of acute infections.',
+                                    low: 'Monocytopenia: Rare, but may be seen in acute stress, severe aplastic anemia, or hairy cell leukemia.',
+                                    normal: 'Monocyte count is within the healthy reference range.'
+                                },
+                                'Eosinophil': {
+                                    high: 'Eosinophilia: Classic sign of parasitic infections, allergic reactions (asthma, hay fever), or drug reactions.',
+                                    low: 'Eosinopenia: Often seen in Cushing\'s syndrome, stress, or acute bacterial infection.',
+                                    normal: 'Eosinophil count is within the healthy reference range.'
+                                },
+                                'Basophil': {
+                                    high: 'Basophilia: rare, but associated with CML (Chronic Myeloid Leukemia), allergic reactions, or hypothyroidism.',
+                                    low: 'Basopenia: Difficult to define as normal zero is common; may occur in acute infection or hyperthyroidism.',
+                                    normal: 'Basophil count is within the healthy reference range.'
+                                }
+                            };
+
+                            const interpretation = interpretations[name]?.[data.status] || 'Clinical correlation recommended.';
+
+                            return (
+                                <div key={name} className="group relative">
+                                    {/* Hover Tooltip */}
+                                    <div className="absolute z-10 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-72 bg-slate-800 text-white text-xs rounded-lg p-3 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
+                                        <p className="font-bold mb-1 border-b border-slate-600 pb-1">{name} ({data.status === 'normal' ? 'Normal' : data.status === 'high' ? 'High' : 'Low'})</p>
+                                        <p className="mb-2">{interpretation}</p>
+                                        <div className="bg-slate-700/50 p-1.5 rounded">
+                                            <span className="text-slate-400 block text-[10px] uppercase">Normal Range:</span>
+                                            <span className="font-mono text-emerald-300">{data.normalRange}</span>
+                                        </div>
+                                        {/* Chevron/Arrow */}
+                                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800"></div>
+                                    </div>
+
+                                    <div className="flex items-center gap-4 p-2 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200">
+                                        <div className="w-28 text-sm font-medium text-slate-700">{name}</div>
+                                        <div className="flex-1">
+                                            <div className="h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-100">
+                                                <div
+                                                    className={`h-full transition-all duration-500 ${data.status === 'high' ? 'bg-red-500' :
+                                                            data.status === 'low' ? 'bg-blue-500' :
+                                                                'bg-green-500'
+                                                        }`}
+                                                    style={{ width: `${Math.min(100, data.percentage)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="w-12 text-right font-mono text-sm font-bold">{data.count}</div>
+                                        <div className="w-16 text-right font-mono text-sm">{data.percentage.toFixed(1)}%</div>
+                                        <div className="w-24 text-right text-xs font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-100">
+                                            {data.normalRange}
+                                        </div>
+                                        <div className={`w-20 text-center text-xs px-2 py-1 rounded font-medium border ${data.status === 'high' ? 'bg-red-50 text-red-700 border-red-100' :
+                                                data.status === 'low' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                                    'bg-green-50 text-green-700 border-green-100'
+                                            }`}>
+                                            {data.status === 'normal' ? 'Normal' : data.status === 'high' ? 'High' : 'Low'}
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="w-12 text-right font-mono text-sm font-bold">{data.count}</div>
-                                <div className="w-16 text-right font-mono text-sm">{data.percentage.toFixed(1)}%</div>
-                                <div className="w-20 text-right text-xs text-slate-500">{data.normalRange}</div>
-                                <div className={`w-16 text-center text-xs px-2 py-1 rounded font-medium ${data.status === 'high' ? 'bg-red-100 text-red-700' :
-                                    data.status === 'low' ? 'bg-blue-100 text-blue-700' :
-                                        'bg-green-100 text-green-700'
-                                    }`}>
-                                    {data.status === 'normal' ? 'Normal' : data.status === 'high' ? 'High' : 'Low'}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    {/* Normal Value Reference */}
-                    <div className="mt-4 p-3 bg-slate-50 rounded-lg">
-                        <p className="text-xs font-medium text-slate-600 mb-2">Normal Value Thresholds:</p>
-                        <div className="flex flex-wrap gap-2 text-xs">
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Neutrophil: 45-65%</span>
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Lymphocyte: 20-35%</span>
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Monocyte: 2-6%</span>
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Eosinophil: 2-4%</span>
-                            <span className="px-2 py-1 bg-white rounded border border-slate-200">Basophil: 0-1%</span>
-                        </div>
+                            );
+                        })}
                     </div>
                 </div>
             )}

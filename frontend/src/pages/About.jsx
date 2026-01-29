@@ -1,4 +1,4 @@
-import { Header} from "../components/Header.jsx";
+import { Header } from "../components/Header.jsx";
 import { Footer } from "../components/Footer.jsx";
 import { useState } from "react";
 
@@ -9,7 +9,7 @@ export const About = () => {
         setActiveTable(activeTable === tableName ? null : tableName);
     };
 
-    return(
+    return (
         <div className="flex flex-col min-h-screen bg-red-50">
             <Header />
             <main className="flex grow flex-col items-center justify-start p-8">
@@ -17,9 +17,9 @@ export const About = () => {
                     <h1 className="text-3xl font-bold text-center text-red-900 mb-4">About Hemalyzer</h1>
                     <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-red-700">
                         <p className="text-base text-red-800 leading-relaxed mb-3">
-                            Hemalyzer is a thesis project designed to assist in the classification of 
-                            hematological diseases, particularly leukemia and its subtypes 
-                            (AML, ALL, CML, CLL), using NAS-optimized YOLOv8 with attention-enhanced 
+                            Hemalyzer is a thesis project designed to assist in the classification of
+                            hematological diseases, particularly leukemia and its subtypes
+                            (AML, ALL, CML, CLL), using NAS-optimized YOLOv8 with attention-enhanced
                             feature pyramids for ConvNeXt classification.
                         </p>
                         <div className="bg-red-50 p-4 rounded border-l-4 border-red-600">
@@ -34,6 +34,75 @@ export const About = () => {
                     </div>
                 </div>
 
+                {/* How Hemalyzer Works Section */}
+                <div className="max-w-6xl w-full mb-8">
+                    <h2 className="text-2xl font-bold text-red-900 mb-4">How Hemalyzer Works</h2>
+                    <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-red-700">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Analysis Pipeline */}
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-red-800 flex items-center">
+                                    <span className="bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm mr-2">1</span>
+                                    Analysis Pipeline
+                                </h3>
+                                <ol className="text-sm text-red-700 space-y-2 ml-8">
+                                    <li><strong>Image Upload:</strong> Upload 10 blood smear images (100x magnification)</li>
+                                    <li><strong>Cell Detection:</strong> NAS-optimized YOLOv8 detects and locates blood cells</li>
+                                    <li><strong>Cell Classification:</strong> ConvNeXt classifier identifies cell type and disease markers</li>
+                                    <li><strong>WBC Differential:</strong> Calculates percentages of Neutrophils, Lymphocytes, Monocytes, Eosinophils, Basophils</li>
+                                    <li><strong>Disease Analysis:</strong> Evaluates AML/ALL, CML, CLL, and Sickle Cell indicators</li>
+                                    <li><strong>Report Generation:</strong> Produces comprehensive analysis report with interpretations</li>
+                                </ol>
+                            </div>
+
+                            {/* Technical Enhancements */}
+                            <div className="space-y-4">
+                                <h3 className="text-lg font-bold text-red-800 flex items-center">
+                                    <span className="bg-red-700 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm mr-2">2</span>
+                                    Technical Enhancements
+                                </h3>
+                                <div className="text-sm text-red-700 space-y-3 ml-8">
+                                    <div className="bg-red-50 p-3 rounded">
+                                        <strong className="text-red-800">NAS-Optimized YOLOv8:</strong>
+                                        <p className="mt-1">Neural Architecture Search (NAS) optimized detection model for accurate cell localization in blood smear images.</p>
+                                    </div>
+                                    <div className="bg-red-50 p-3 rounded">
+                                        <strong className="text-red-800">Attention-Enhanced FPN:</strong>
+                                        <p className="mt-1">Feature Pyramid Network with attention mechanisms for improved multi-scale cell detection.</p>
+                                    </div>
+                                    <div className="bg-red-50 p-3 rounded">
+                                        <strong className="text-red-800">ConvNeXt Classification:</strong>
+                                        <p className="mt-1">State-of-the-art convolutional network for precise 20-class cell type and disease classification.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Disease Analysis Summary */}
+                        <div className="mt-6 pt-4 border-t border-red-200">
+                            <h3 className="text-lg font-bold text-red-800 mb-3">Disease Analysis Methodology</h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
+                                <div className="bg-slate-50 p-3 rounded border-l-4 border-slate-600">
+                                    <strong className="text-slate-800">AML/ALL Analysis</strong>
+                                    <p className="text-slate-600 mt-1">Based on blast cell percentage. Differentiates between AML (Myeloblasts) and ALL (Lymphoblasts).</p>
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded border-l-4 border-slate-600">
+                                    <strong className="text-slate-800">CML Analysis</strong>
+                                    <p className="text-slate-600 mt-1">Based on CML-marked granulocytes (Basophil, Eosinophil, Myeloblast, Neutrophils) percentage.</p>
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded border-l-4 border-slate-600">
+                                    <strong className="text-slate-800">CLL Analysis</strong>
+                                    <p className="text-slate-600 mt-1">Based on CLL-marked lymphocyte percentage. Normal lymphocyte range: 20%-35%.</p>
+                                </div>
+                                <div className="bg-slate-50 p-3 rounded border-l-4 border-slate-600">
+                                    <strong className="text-slate-800">Sickle Cell Analysis</strong>
+                                    <p className="text-slate-600 mt-1">Based on sickle cell percentage in RBC count. Detects trait (HbAS) and disease (HbSS).</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div className="max-w-6xl w-full mb-6">
                     <h2 className="text-2xl font-bold text-red-900 mb-2">Classification Reference Tables</h2>
                     <p className="text-red-600 text-sm">Click on any category below to view detailed classification criteria</p>
@@ -42,11 +111,10 @@ export const About = () => {
                 <div className="max-w-6xl w-full mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <button
                         onClick={() => toggleTable('aml-all')}
-                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${
-                            activeTable === 'aml-all' 
-                            ? 'bg-red-700 text-white border-red-700' 
+                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${activeTable === 'aml-all'
+                            ? 'bg-red-700 text-white border-red-700'
                             : 'bg-white text-red-800 hover:bg-red-50 border-red-200 cursor-pointer'
-                        }`}
+                            }`}
                     >
                         <h3 className="text-lg font-bold mb-1">AML / ALL Leukemia</h3>
                         <p className={`text-sm ${activeTable === 'aml-all' ? 'text-red-200' : 'text-red-600'}`}>
@@ -56,11 +124,10 @@ export const About = () => {
 
                     <button
                         onClick={() => toggleTable('cml')}
-                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${
-                            activeTable === 'cml' 
-                            ? 'bg-red-700 text-white border-red-700' 
+                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${activeTable === 'cml'
+                            ? 'bg-red-700 text-white border-red-700'
                             : 'bg-white text-red-800 hover:bg-red-50 border-red-200 cursor-pointer'
-                        }`}
+                            }`}
                     >
                         <h3 className="text-lg font-bold mb-1">CML Leukemia</h3>
                         <p className={`text-sm ${activeTable === 'cml' ? 'text-red-200' : 'text-red-600'}`}>
@@ -70,11 +137,10 @@ export const About = () => {
 
                     <button
                         onClick={() => toggleTable('cll')}
-                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${
-                            activeTable === 'cll' 
-                            ? 'bg-red-700 text-white border-red-700' 
+                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${activeTable === 'cll'
+                            ? 'bg-red-700 text-white border-red-700'
                             : 'bg-white text-red-800 hover:bg-red-50 border-red-200 cursor-pointer'
-                        }`}
+                            }`}
                     >
                         <h3 className="text-lg font-bold mb-1">CLL Leukemia</h3>
                         <p className={`text-sm ${activeTable === 'cll' ? 'text-red-200' : 'text-red-600'}`}>
@@ -84,11 +150,10 @@ export const About = () => {
 
                     <button
                         onClick={() => toggleTable('sickle')}
-                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${
-                            activeTable === 'sickle' 
-                            ? 'bg-red-700 text-white border-red-700' 
+                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${activeTable === 'sickle'
+                            ? 'bg-red-700 text-white border-red-700'
                             : 'bg-white text-red-800 hover:bg-red-50 border-red-200 cursor-pointer'
-                        }`}
+                            }`}
                     >
                         <h3 className="text-lg font-bold mb-1">Sickle Cell Anemia</h3>
                         <p className={`text-sm ${activeTable === 'sickle' ? 'text-red-200' : 'text-red-600'}`}>
@@ -98,11 +163,10 @@ export const About = () => {
 
                     <button
                         onClick={() => setActiveTable(null)}
-                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${
-                            activeTable === null 
-                            ? 'bg-red-700 text-white border-red-700' 
+                        className={`p-5 rounded-lg shadow-sm transition-all duration-200 border ${activeTable === null
+                            ? 'bg-red-700 text-white border-red-700'
                             : 'bg-white text-red-700 hover:bg-red-50 border-red-200 cursor-pointer'
-                        }`}
+                            }`}
                     >
                         <h3 className="text-lg font-bold mb-1">View All</h3>
                         <p className={`text-sm ${activeTable === null ? 'text-red-200' : 'text-red-600'}`}>
@@ -189,12 +253,12 @@ export const About = () => {
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Suspicious for Early Chronic Myeloid Leukemia (CML - Chronic Phase)</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors bg-slate-50/50">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">90% - 95% <br/><span className="text-sm text-slate-500">(Blast cells usually &lt; 5%)</span></td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">90% - 95% <br /><span className="text-sm text-slate-500">(Blast cells usually &lt; 5%)</span></td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Granulocytes dominate differential; significant left shift with numerous granulocytes; circulating blasts usually &lt; 5%.</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Typical Chronic Phase CML</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">&gt; 95% <br/><span className="text-sm text-slate-500">(Blasts &ge; 10%)</span></td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">&gt; 95% <br /><span className="text-sm text-slate-500">(Blasts &ge; 10%)</span></td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Extreme granulocytic proliferation with increased granulocytes; increasing blast count indicates transition.</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Accelerated Phase CML</td>
                                         </tr>
@@ -219,22 +283,22 @@ export const About = () => {
                                     </thead>
                                     <tbody>
                                         <tr className="hover:bg-slate-50 transition-colors">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">&lt; 20%</td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">&lt; 35%</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Normal lymphocyte count; balanced white cell differential.</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Normal</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors bg-slate-50/50">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">20% - 40%</td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">35% - 50%</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Slight lymphocytosis; may occur with viral infections (e.g., EBV, CMV) or stress.</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Reactive / Secondary Lymphocytosis</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">41% - 60%</td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">51% - 65%</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Persistent lymphocytosis with many small, mature lymphocytes.</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Suspicious for Early / Smoldering CLL</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors bg-slate-50/50">
-                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">61% - 80%</td>
+                                            <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">66% - 80%</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Marked lymphocytic predominance; numerous lymphocytes visible on smear.</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Typical Chronic Lymphocytic Leukemia (CLL)</td>
                                         </tr>

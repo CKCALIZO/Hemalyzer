@@ -67,11 +67,12 @@ DISEASE_THRESHOLDS = {
     
     # CLL - Lymphocyte Analysis
     # Reference: CLL Leukemia Classification table
+    # Normal lymphocyte range: 20%-35% (standard differential count reference)
     'cll': {
-        'normal': {'max_percent': 20, 'interpretation': 'Normal lymphocyte count - balanced white cell differential'},
-        'reactive': {'min_percent': 20, 'max_percent': 40, 'interpretation': 'Reactive / Secondary Lymphocytosis - may occur with viral infections'},
-        'early_cll': {'min_percent': 41, 'max_percent': 60, 'interpretation': 'Suspicious for Early / Smoldering CLL'},
-        'typical_cll': {'min_percent': 61, 'max_percent': 80, 'interpretation': 'Typical Chronic Lymphocytic Leukemia (CLL)'},
+        'normal': {'max_percent': 35, 'interpretation': 'Normal lymphocyte count - balanced white cell differential'},
+        'reactive': {'min_percent': 35, 'max_percent': 50, 'interpretation': 'Reactive / Secondary Lymphocytosis - may occur with viral infections'},
+        'early_cll': {'min_percent': 51, 'max_percent': 65, 'interpretation': 'Suspicious for Early / Smoldering CLL'},
+        'typical_cll': {'min_percent': 66, 'max_percent': 80, 'interpretation': 'Typical Chronic Lymphocytic Leukemia (CLL)'},
         'advanced_cll': {'min_percent': 80, 'interpretation': 'Advanced / Progressive CLL - lymphocytes dominate smear'}
     }
 }

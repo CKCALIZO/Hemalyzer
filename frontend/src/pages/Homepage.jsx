@@ -169,9 +169,146 @@ const Homepage = () => {
     }, [processedImages.length, thresholdMet, finalResults, aggregatedClassifications.length, aggregatedCounts, aggregatedRBCClassifications]);
 
     // Handle file selection
-    const handleFileChange = (e) => {
+
+    // Client-side image validation helper
+    const validateImageContent = (file) => {
+        return new Promise((resolve, reject) => {
+            // 0. File Size Check (Limit: 2MB)
+            const maxSize = 2 * 1024 * 1024; // 2MB
+            if (file.size > maxSize) {
+                resolve({
+                    valid: false,
+                    error: `File size too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Maximum allowed size is 2MB per image.`
+                });
+                return;
+            }
+
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                const width = img.naturalWidth;
+                const height = img.naturalHeight;
+
+                // 1. Resolution Check
+                if (width < 400 || height < 400) {
+                    resolve({
+                        valid: false,
+                        error: 'Image resolution too low. Microscope images must be high definition (min 400x400).'
+                    });
+                    return;
+                }
+
+                // 2. Flatness/Blank Check (Pixel Variance)
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    // Resize to small size for fast processing
+                    canvas.width = 50;
+                    canvas.height = 50;
+                    ctx.drawImage(img, 0, 0, 50, 50);
+
+                    const imageData = ctx.getImageData(0, 0, 50, 50);
+                    const data = imageData.data;
+                    let rTotal = 0, gTotal = 0, bTotal = 0;
+                    const pixelCount = data.length / 4;
+
+                    // Calculate mean
+                    for (let i = 0; i < data.length; i += 4) {
+                        rTotal += data[i];
+                        gTotal += data[i + 1];
+                        bTotal += data[i + 2];
+                    }
+                    const rMean = rTotal / pixelCount;
+                    const gMean = gTotal / pixelCount;
+                    const bMean = bTotal / pixelCount;
+
+                    // Calculate variance
+                    let varianceSum = 0;
+                    for (let i = 0; i < data.length; i += 4) {
+                        varianceSum += Math.abs(data[i] - rMean) + Math.abs(data[i + 1] - gMean) + Math.abs(data[i + 2] - bMean);
+                    }
+
+                    const avgVariance = varianceSum / pixelCount;
+
+                    // Threshold: Very low variance means solid color or near-solid
+                    // 15 is a conservative threshold for "basically blank"
+                    if (avgVariance < 15) {
+                        resolve({
+                            valid: false,
+                            error: 'Image appears to be blank or a solid color. Please upload a valid blood smear.'
+                        });
+                        return;
+                    }
+
+                    // 3. Stain Color Check (Simple Heuristic for Client-Side Rejection)
+                    // Blood smears (Wright/Giemsa stain) should have significant Red/Purple/Pink components.
+                    // Logos/diagrams are often B&W or beige.
+
+                    let stainedPixelCount = 0;
+                    const stainThreshold = pixelCount * 0.02; // Require at least 2% of image to be "stained" colors
+
+                    for (let i = 0; i < data.length; i += 4) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+
+                        // Check for Purple/Pink dominance (Red or Blue > Green) which is typical of stained nucleus/cytoplasm
+                        // Or Red dominance (RBCs)
+                        // Heuristic: (R > G + 15) OR (B > G + 15)
+                        if ((r > g + 15) || (b > g + 15)) {
+                            stainedPixelCount++;
+                        }
+                    }
+
+                    // Only reject if it's DRASTICALLY clearly not a blood smear (< 2% stained pixels)
+                    if (stainedPixelCount < stainThreshold) {
+                        resolve({
+                            valid: false,
+                            error: 'Image rejected: No characteristic cell stain colors detected.\n\n' +
+                                'Please ensure you are uploading a standard blood smear (Wright-Giemsa stain).\n' +
+                                'Logos, diagrams, or non-medical images will be rejected.'
+                        });
+                        return;
+                    }
+
+                    resolve({ valid: true });
+
+                } catch (e) {
+                    console.error("Validation error:", e);
+                    // If canvas fails (e.g. security), default to allow
+                    resolve({ valid: true });
+                }
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                resolve({ valid: false, error: 'Failed to load image file. It may be corrupted.' });
+            };
+
+            img.src = url;
+        });
+    };
+    const handleFileChange = async (e) => {
         const file = e.target.files[0];
         if (file) {
+            // Validate file extension
+            const allowedExtensions = /\.(jpg|jpeg|png)$/i;
+            if (!allowedExtensions.test(file.name)) {
+                alert('Invalid file format. Please upload a JPG or PNG image.');
+                e.target.value = ''; // Reset input
+                return;
+            }
+
+            // Validate content (resolution, flatness)
+            const validation = await validateImageContent(file);
+            if (!validation.valid) {
+                alert(`Invalid Image: ${validation.error}`);
+                e.target.value = ''; // Reset input
+                return;
+            }
+
             setSelectedFile(file);
             setPreviewUrl(URL.createObjectURL(file));
             setCurrentResults(null);
@@ -179,7 +316,6 @@ const Homepage = () => {
             setShowCurrentResults(true);
         }
     };
-
     // Calculate aggregated results when threshold is met
     const calculateFinalResults = useCallback((allClassifications, allProcessedImages, counts, allRBCClassifications = []) => {
         // Count WBC types from ConvNeXt classifications
@@ -198,11 +334,25 @@ const Homepage = () => {
             'Basophil': 0
         };
 
-        // Disease counts
+        // Disease counts - track by cell type for proper breakdown
         let cmlCount = 0;
         let cllCount = 0;
         let allCount = 0;
         let amlCount = 0;
+
+        // CML granulocyte breakdown (Basophil, Eosinophil, Myeloblast, Neutrophils with :CML condition)
+        const cmlGranulocyteBreakdown = {
+            basophil: 0,
+            eosinophil: 0,
+            myeloblast: 0,
+            neutrophil: 0
+        };
+
+        // Blast cell type breakdown for AML/ALL (track by cell type)
+        const blastBreakdown = {
+            lymphoblast: 0,  // B_Lymphoblast or Lymphoblast -> indicates ALL
+            myeloblast: 0    // Myeloblast -> indicates AML
+        };
 
         // Track abnormal WBCs (for Abnormal WBCs button)
         const abnormalWBCs = [];
@@ -221,7 +371,7 @@ const Homepage = () => {
             // Map detailed cell types to main categories
             if (cellTypeLower.includes('neutrophil') || cellTypeLower.includes('neutrophils')) {
                 differentialCounts['Neutrophil']++;
-            } else if (cellTypeLower.includes('lymphocyte') || cellTypeLower.includes('b_lymphoblast')) {
+            } else if (cellTypeLower.includes('lymphocyte') || cellTypeLower.includes('b_lymphoblast') || cellTypeLower.includes('lymphoblast')) {
                 differentialCounts['Lymphocyte']++;
             } else if (cellTypeLower.includes('monocyte')) {
                 differentialCounts['Monocyte']++;
@@ -242,11 +392,31 @@ const Homepage = () => {
                 abnormalWBCs.push(cls);
             }
 
-            // Count disease markers
-            if (conditionPart === 'cml') cmlCount++;
+            // Count disease markers with cell type breakdown
+            if (conditionPart === 'cml') {
+                cmlCount++;
+                // Track which granulocyte type has CML
+                if (cellTypeLower.includes('basophil')) cmlGranulocyteBreakdown.basophil++;
+                else if (cellTypeLower.includes('eosinophil') || cellTypeLower.includes('eosonophil')) cmlGranulocyteBreakdown.eosinophil++;
+                else if (cellTypeLower.includes('myeloblast') || cellTypeLower.includes('myelocyte') ||
+                    cellTypeLower.includes('metamyelocyte') || cellTypeLower.includes('promyelocyte')) cmlGranulocyteBreakdown.myeloblast++;
+                else if (cellTypeLower.includes('neutrophil')) cmlGranulocyteBreakdown.neutrophil++;
+            }
             if (conditionPart === 'cll') cllCount++;
-            if (conditionPart === 'all') allCount++;
-            if (conditionPart === 'aml') amlCount++;
+            if (conditionPart === 'all') {
+                allCount++;
+                // Track blast cell type for ALL
+                if (cellTypeLower.includes('lymphoblast') || cellTypeLower.includes('b_lymphoblast')) {
+                    blastBreakdown.lymphoblast++;
+                }
+            }
+            if (conditionPart === 'aml') {
+                amlCount++;
+                // Track blast cell type for AML
+                if (cellTypeLower.includes('myeloblast')) {
+                    blastBreakdown.myeloblast++;
+                }
+            }
         });
 
         // Calculate estimated cell counts using standard formulas
@@ -298,7 +468,7 @@ const Homepage = () => {
         const blastPercentage = totalWBC > 0 ? (blastCount / totalWBC) * 100 : 0;
 
         // === CML ANALYSIS ===
-        // Count cells classified as CML (e.g., "Basophil: CML", "Neutrophils: CML")
+        // Count CML-marked granulocyte cells (Basophil:CML, Eosinophil:CML, Myeloblast:CML, Neutrophils:CML)
         const cmlPercentage = totalWBC > 0 ? (cmlCount / totalWBC) * 100 : 0;
 
         // === CLL ANALYSIS ===
@@ -306,24 +476,25 @@ const Homepage = () => {
         const cllPercentage = totalWBC > 0 ? (cllCount / totalWBC) * 100 : 0;
 
         // Calculate disease findings based on About page thresholds
+        // ALWAYS display all disease analyses regardless of detection
         const diseaseFindings = [];
 
         // AML/ALL Analysis (based on blast percentage thresholds from About page)
         // < 5% = Normal, 6-10% = Slightly Increased, 11-19% = Suspicious, >= 20% = Acute Leukemia
-        if (blastCount > 0) {
+        {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
 
             if (blastPercentage >= 20) {
-                // Determine if it's more likely AML or ALL based on cell types
-                if (amlCount > allCount) {
-                    interpretation = 'Diagnostic level for Acute Myeloid Leukemia (AML)';
+                // Determine if it's more likely AML or ALL based on blast cell types
+                if (blastBreakdown.myeloblast > blastBreakdown.lymphoblast) {
+                    interpretation = 'Diagnostic level for Acute Myeloid Leukemia (AML) - Myeloblasts predominate';
                     condition = 'Acute Myeloid Leukemia (AML)';
-                } else if (allCount > amlCount) {
-                    interpretation = 'Diagnostic level for Acute Lymphoblastic Leukemia (ALL)';
+                } else if (blastBreakdown.lymphoblast > blastBreakdown.myeloblast) {
+                    interpretation = 'Diagnostic level for Acute Lymphoblastic Leukemia (ALL) - Lymphoblasts predominate';
                     condition = 'Acute Lymphoblastic Leukemia (ALL)';
-                } else {
+                } else if (blastCount > 0) {
                     interpretation = 'Diagnostic level for Acute Leukemia (>= 20% blasts)';
                     condition = 'Acute Leukemia (AML/ALL)';
                 }
@@ -336,9 +507,13 @@ const Homepage = () => {
                 interpretation = 'Slightly Increased - possibly reactive, may be normal/reactive condition';
                 condition = 'Possibly reactive condition';
                 severity = 'LOW';
-            } else {
+            } else if (blastCount > 0) {
                 interpretation = 'Normal Blood - with some blast cells (< 5%)';
                 condition = 'Normal with blast cells';
+                severity = 'INFO';
+            } else {
+                interpretation = 'No blast cells detected - Normal blood';
+                condition = 'Normal';
                 severity = 'INFO';
             }
 
@@ -351,15 +526,17 @@ const Homepage = () => {
                 breakdown: {
                     amlCount,
                     allCount,
+                    lymphoblasts: blastBreakdown.lymphoblast,
+                    myeloblasts: blastBreakdown.myeloblast,
                     total: blastCount
                 }
             });
         }
 
-        // CML Analysis - based on granulocyte (CML-classified cells) percentage
+        // CML Analysis - based on CML-marked granulocyte cells percentage
         // Thresholds from disease_thresholds.py:
         // <60% = Normal, 60-75% = Reactive, 76-89% = Early CML, 90-95% = Chronic Phase, >95% = Accelerated
-        if (cmlCount > 0) {
+        {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
@@ -380,9 +557,13 @@ const Homepage = () => {
                 interpretation = 'Reactive / Secondary Leukocytosis (CML) - mild granulocytic predominance';
                 condition = 'Reactive Leukocytosis';
                 severity = 'LOW';
+            } else if (cmlCount > 0) {
+                interpretation = 'CML-marked cells detected but below threshold levels';
+                condition = 'Monitor for CML';
+                severity = 'INFO';
             } else {
-                interpretation = 'Normal differential count - balanced white cell maturation';
-                condition = 'Normal granulocyte count';
+                interpretation = 'No CML-marked granulocytes detected - Normal differential';
+                condition = 'Normal';
                 severity = 'INFO';
             }
 
@@ -393,6 +574,10 @@ const Homepage = () => {
                 severity,
                 condition,
                 breakdown: {
+                    basophil: cmlGranulocyteBreakdown.basophil,
+                    eosinophil: cmlGranulocyteBreakdown.eosinophil,
+                    myeloblast: cmlGranulocyteBreakdown.myeloblast,
+                    neutrophil: cmlGranulocyteBreakdown.neutrophil,
                     cmlCells: cmlCount,
                     totalWBC: totalWBC
                 }
@@ -401,8 +586,9 @@ const Homepage = () => {
 
         // CLL Analysis - based on lymphocyte (CLL-classified cells) percentage
         // Thresholds from disease_thresholds.py:
-        // <20% = Normal, 20-40% = Reactive, 41-60% = Early CLL, 61-80% = Typical CLL, >80% = Advanced CLL
-        if (cllCount > 0) {
+        // <35% = Normal, 35-50% = Reactive, 51-65% = Early CLL, 66-80% = Typical CLL, >80% = Advanced CLL
+        // Normal lymphocyte range: 20%-35% (standard differential count reference)
+        {
             let interpretation = '';
             let severity = 'INFO';
             let condition = 'Normal';
@@ -411,21 +597,25 @@ const Homepage = () => {
                 interpretation = 'Advanced / Progressive CLL - lymphocytes dominate smear';
                 condition = 'Chronic Lymphocytic Leukemia (Advanced/Progressive)';
                 severity = 'HIGH';
-            } else if (cllPercentage >= 61) {
+            } else if (cllPercentage >= 66) {
                 interpretation = 'Typical Chronic Lymphocytic Leukemia (CLL)';
                 condition = 'Chronic Lymphocytic Leukemia (CLL)';
                 severity = 'HIGH';
-            } else if (cllPercentage >= 41) {
+            } else if (cllPercentage >= 51) {
                 interpretation = 'Suspicious for Early / Smoldering CLL';
                 condition = 'Suspicious for Early CLL';
                 severity = 'MODERATE';
-            } else if (cllPercentage >= 20) {
+            } else if (cllPercentage >= 35) {
                 interpretation = 'Reactive / Secondary Lymphocytosis - may occur with viral infections';
                 condition = 'Reactive Lymphocytosis';
                 severity = 'LOW';
+            } else if (cllCount > 0) {
+                interpretation = 'CLL-marked cells detected but below threshold levels';
+                condition = 'Monitor for CLL';
+                severity = 'INFO';
             } else {
-                interpretation = 'Normal lymphocyte count - balanced white cell differential';
-                condition = 'Normal lymphocyte count';
+                interpretation = 'No CLL-marked lymphocytes detected - Normal lymphocyte count';
+                condition = 'Normal';
                 severity = 'INFO';
             }
 
@@ -697,24 +887,55 @@ const Homepage = () => {
     };
 
     // Handle bulk file selection
-    const handleBulkFileChange = (e) => {
+    const handleBulkFileChange = async (e) => {
         const files = Array.from(e.target.files);
         if (files.length > 0) {
-            // Calculate remaining images needed
+            // 1. Extension Validation
+            const allowedExtensions = /\.(jpg|jpeg|png)$/i;
+            const invalidExtFiles = files.filter(file => !allowedExtensions.test(file.name));
+
+            if (invalidExtFiles.length > 0) {
+                alert(`Invalid file format detected in ${invalidExtFiles.length} file(s). Please upload only JPG or PNG images.`);
+                e.target.value = '';
+                return;
+            }
+
+            // 2. Count Validation
             const remaining = TARGET_IMAGE_COUNT - processedImages.length;
             const maxAllowed = Math.min(remaining, 10);
 
-            // Check if user tried to select more than allowed
             if (files.length > maxAllowed) {
-                // Show warning about file limit
                 setError(`Only ${maxAllowed} more image${maxAllowed !== 1 ? 's' : ''} needed. Selected first ${maxAllowed} of ${files.length} images.`);
             } else {
                 setError(null);
             }
 
-            // Limit to allowed max
+            // 3. Content Validation (Check the files to be processed)
             const filesToProcess = files.slice(0, maxAllowed);
-            setBulkFiles(filesToProcess);
+            const validFiles = [];
+            const invalidContentFiles = [];
+
+            for (const file of filesToProcess) {
+                const validation = await validateImageContent(file);
+                if (validation.valid) {
+                    validFiles.push(file);
+                } else {
+                    invalidContentFiles.push({ name: file.name, error: validation.error });
+                }
+            }
+
+            if (invalidContentFiles.length > 0) {
+                const errorMsg = `Skipped ${invalidContentFiles.length} invalid images:\n` +
+                    invalidContentFiles.map(f => `- ${f.name}: ${f.error}`).join('\n');
+                alert(errorMsg);
+                // If all were invalid, reset input
+                if (validFiles.length === 0) {
+                    e.target.value = '';
+                    return;
+                }
+            }
+
+            setBulkFiles(validFiles);
         }
     };
 
@@ -1041,324 +1262,375 @@ const Homepage = () => {
                     {/* Main Content Grid */}
                     {!thresholdMet && (
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-                            {/* Upload Section */}
-                            <div className="bg-white rounded-lg border border-rose-200 shadow-sm h-fit">
-                                <div className="px-6 py-4 border-b border-rose-200 bg-rose-50">
-                                    <h2 className="text-lg font-semibold text-rose-800">
-                                        Upload Blood Smear Image
-                                    </h2>
-                                    <p className="text-sm text-rose-600 mt-1">
-                                        {processedImages.length} / {TARGET_IMAGE_COUNT} images analyzed
-                                    </p>
+                            {/* Left Column: Instructions & Upload */}
+                            <div className="space-y-6">
+                                {/* Instructions & Requirements Card */}
+                                <div className="bg-white rounded-lg border border-blue-200 shadow-sm overflow-hidden">
+                                    <div className="px-6 py-4 bg-blue-50 border-b border-blue-200 flex items-center gap-2">
+                                        <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        <h2 className="text-lg font-semibold text-blue-900">Instructions & Requirements</h2>
+                                    </div>
+                                    <div className="p-6 space-y-4">
+                                        {/* Critical Requirement */}
+                                        <div className="p-3 bg-red-50 border border-red-100 rounded-lg flex gap-3">
+                                            <span className="text-xl">🔬</span>
+                                            <div>
+                                                <h3 className="font-bold text-red-800 text-sm uppercase">Critical Requirement</h3>
+                                                <p className="text-sm text-red-700 leading-relaxed">
+                                                    Images <strong>MUST</strong> be taken at <strong>x100 Magnification (Oil Immersion)</strong>.
+                                                    Lower magnifications (x10, x40) will result in inaccurate classification.
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <h3 className="font-semibold text-slate-800 text-sm mb-2 flex items-center gap-1">
+                                                    <span className="w-5 h-5 flex items-center justify-center bg-slate-100 rounded-full text-xs">1</span>
+                                                    Image Acquisition
+                                                </h3>
+                                                <ul className="text-sm text-slate-600 space-y-1 list-disc pl-5">
+                                                    <li>Standard Wright-Giemsa stained PBS</li>
+                                                    <li>Avoid blurred or over-exposed images</li>
+                                                    <li>Supported formats: <strong>JPG, PNG</strong></li>
+                                                </ul>
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-slate-800 text-sm mb-2 flex items-center gap-1">
+                                                    <span className="w-5 h-5 flex items-center justify-center bg-slate-100 rounded-full text-xs">2</span>
+                                                    Analysis Workflow
+                                                </h3>
+                                                <ul className="text-sm text-slate-600 space-y-1 list-disc pl-5">
+                                                    <li>Upload <strong>10 distinct fields</strong> of view</li>
+                                                    <li>System accumulates cell counts per field</li>
+                                                    <li>Final report generates automatically</li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <div className="p-6">
-                                    {/* Progress Indicator */}
-                                    <div className="mb-6 bg-rose-50 rounded-lg p-4 border border-rose-100">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-sm font-medium text-rose-700">Analysis Progress</span>
-                                            <span className="text-sm text-rose-600">
-                                                {processedImages.length} / {TARGET_IMAGE_COUNT} Images
-                                            </span>
-                                        </div>
-                                        <div className="w-full h-3 bg-rose-200 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-gradient-to-r from-rose-400 to-rose-600 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
-                                                style={{ width: `${progress}%` }}
-                                            />
-                                        </div>
-                                        {remainingImages > 0 ? (
-                                            <p className="text-xs text-rose-600 mt-2">
-                                                Need {remainingImages} more image{remainingImages > 1 ? 's' : ''} for reliable differential
-                                            </p>
-                                        ) : (
-                                            <p className="text-xs text-emerald-600 mt-2 font-medium">
-                                                Threshold met! Processing final results...
-                                            </p>
-                                        )}
+                                {/* Upload Section */}
+                                <div className="bg-white rounded-lg border border-rose-200 shadow-sm h-fit">
+                                    <div className="px-6 py-4 border-b border-rose-200 bg-rose-50">
+                                        <h2 className="text-lg font-semibold text-rose-800">
+                                            Upload Blood Smear Image
+                                        </h2>
+                                        <p className="text-sm text-rose-600 mt-1">
+                                            {processedImages.length} / {TARGET_IMAGE_COUNT} images analyzed
+                                        </p>
                                     </div>
 
-                                    {/* Image Preview */}
-                                    {previewUrl && (
-                                        <div className="mb-4 rounded-lg overflow-hidden border border-red-200">
-                                            <img
-                                                src={previewUrl}
-                                                alt="Preview"
-                                                className="w-full h-64 object-contain bg-rose-50"
-                                            />
+                                    <div className="p-6">
+                                        {/* Progress Indicator */}
+                                        <div className="mb-6 bg-rose-50 rounded-lg p-4 border border-rose-100">
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-sm font-medium text-rose-700">Analysis Progress</span>
+                                                <span className="text-sm text-rose-600">
+                                                    {processedImages.length} / {TARGET_IMAGE_COUNT} Images
+                                                </span>
+                                            </div>
+                                            <div className="w-full h-3 bg-rose-200 rounded-full overflow-hidden">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-rose-400 to-rose-600 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                                                    style={{ width: `${progress}%` }}
+                                                />
+                                            </div>
+                                            {remainingImages > 0 ? (
+                                                <p className="text-xs text-rose-600 mt-2">
+                                                    Need {remainingImages} more image{remainingImages > 1 ? 's' : ''} for reliable differential
+                                                </p>
+                                            ) : (
+                                                <p className="text-xs text-emerald-600 mt-2 font-medium">
+                                                    Threshold met! Processing final results...
+                                                </p>
+                                            )}
                                         </div>
-                                    )}
 
-                                    {/* Single File Input */}
-                                    <div className="mb-4">
-                                        <label className="block text-sm font-medium text-rose-700 mb-2">Single Image Upload</label>
-                                        <input
-                                            className="block w-full text-sm text-rose-700 border border-rose-300 
+                                        {/* Image Preview */}
+                                        {previewUrl && (
+                                            <div className="mb-4 rounded-lg overflow-hidden border border-red-200">
+                                                <img
+                                                    src={previewUrl}
+                                                    alt="Preview"
+                                                    className="w-full h-64 object-contain bg-rose-50"
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* Single File Input */}
+                                        <div className="mb-4">
+                                            <label className="block text-sm font-medium text-rose-700 mb-2">Single Image Upload</label>
+                                            <input
+                                                className="block w-full text-sm text-rose-700 border border-rose-300 
                                             rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 
                                             focus:ring-rose-400 p-2"
-                                            id="pbs-upload"
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handleFileChange}
-                                            disabled={loading || thresholdMet || isBulkProcessing}
-                                        />
-                                    </div>
-
-                                    {/* Divider */}
-                                    <div className="relative my-6">
-                                        <div className="absolute inset-0 flex items-center">
-                                            <div className="w-full border-t border-rose-200"></div>
+                                                id="pbs-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleFileChange}
+                                                disabled={loading || thresholdMet || isBulkProcessing}
+                                            />
                                         </div>
-                                        <div className="relative flex justify-center text-sm">
-                                            <span className="bg-white px-3 text-rose-500 font-medium">OR</span>
-                                        </div>
-                                    </div>
 
-                                    {/* Bulk Upload Section */}
-                                    <div className="mb-4 p-4 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg border border-rose-200">
-                                        <label className="block text-sm font-medium text-rose-700 mb-2">
-                                            Bulk Upload (up to {TARGET_IMAGE_COUNT - processedImages.length} images)
-                                        </label>
-                                        <input
-                                            className="block w-full text-sm text-rose-700 border border-rose-300 
+                                        {/* Divider */}
+                                        <div className="relative my-6">
+                                            <div className="absolute inset-0 flex items-center">
+                                                <div className="w-full border-t border-rose-200"></div>
+                                            </div>
+                                            <div className="relative flex justify-center text-sm">
+                                                <span className="bg-white px-3 text-rose-500 font-medium">OR</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Bulk Upload Section */}
+                                        <div className="mb-4 p-4 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg border border-rose-200">
+                                            <label className="block text-sm font-medium text-rose-700 mb-2">
+                                                Bulk Upload (up to {TARGET_IMAGE_COUNT - processedImages.length} images)
+                                            </label>
+                                            <input
+                                                className="block w-full text-sm text-rose-700 border border-rose-300 
                                             rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 
                                             focus:ring-rose-400 p-2 mb-3"
-                                            id="bulk-upload"
-                                            type="file"
-                                            accept="image/*"
-                                            multiple
-                                            onChange={handleBulkFileChange}
-                                            disabled={loading || thresholdMet || isBulkProcessing}
-                                        />
+                                                id="bulk-upload"
+                                                type="file"
+                                                accept="image/*"
+                                                multiple
+                                                onChange={handleBulkFileChange}
+                                                disabled={loading || thresholdMet || isBulkProcessing}
+                                            />
 
-                                        {/* Selected files preview */}
-                                        {bulkFiles.length > 0 && (
-                                            <div className="mb-3 p-3 bg-white rounded-lg border border-rose-200">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <p className="text-sm font-medium text-rose-800">
-                                                        ✓ {bulkFiles.length} image{bulkFiles.length > 1 ? 's' : ''} selected:
+                                            {/* Selected files preview */}
+                                            {bulkFiles.length > 0 && (
+                                                <div className="mb-3 p-3 bg-white rounded-lg border border-rose-200">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <p className="text-sm font-medium text-rose-800">
+                                                            ✓ {bulkFiles.length} image{bulkFiles.length > 1 ? 's' : ''} selected:
+                                                        </p>
+                                                        <button
+                                                            onClick={() => {
+                                                                setBulkFiles([]);
+                                                                setError(null);
+                                                                const bulkInput = document.getElementById('bulk-upload');
+                                                                if (bulkInput) bulkInput.value = '';
+                                                            }}
+                                                            disabled={isBulkProcessing}
+                                                            className="text-xs px-2 py-1 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded transition-colors disabled:opacity-50"
+                                                        >
+                                                            Clear
+                                                        </button>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                                                        {bulkFiles.map((file, idx) => (
+                                                            <span key={idx} className="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded">
+                                                                {file.name.length > 15 ? file.name.slice(0, 12) + '...' : file.name}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Insufficient images memo */}
+                                            {bulkFiles.length > 0 && bulkFiles.length < (TARGET_IMAGE_COUNT - processedImages.length) && !isBulkProcessing && (
+                                                <div className="mb-3 p-3 bg-amber-50 rounded-lg border border-amber-300 flex items-start gap-2">
+                                                    <span className="text-amber-600 font-bold">Note:</span>
+                                                    <div>
+                                                        <p className="text-sm font-medium text-amber-800">
+                                                            {bulkFiles.length} of {TARGET_IMAGE_COUNT - processedImages.length} images selected
+                                                        </p>
+                                                        <p className="text-xs text-amber-700 mt-1">
+                                                            You can still process these, but for accurate results please upload {TARGET_IMAGE_COUNT - processedImages.length} images total.
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {/* Bulk Progress Display */}
+                                            {isBulkProcessing && (
+                                                <div className="mb-3 p-3 bg-rose-100 rounded-lg border border-rose-300">
+                                                    <p className="text-sm font-semibold text-rose-800">
+                                                        Processed: {bulkProgress.current} / {bulkProgress.total} images
                                                     </p>
-                                                    <button
-                                                        onClick={() => {
-                                                            setBulkFiles([]);
-                                                            setError(null);
-                                                            const bulkInput = document.getElementById('bulk-upload');
-                                                            if (bulkInput) bulkInput.value = '';
-                                                        }}
-                                                        disabled={isBulkProcessing}
-                                                        className="text-xs px-2 py-1 bg-rose-100 text-rose-700 hover:bg-rose-200 rounded transition-colors disabled:opacity-50"
-                                                    >
-                                                        Clear
-                                                    </button>
+                                                    <div className="w-full h-2 bg-rose-200 rounded-full mt-2 overflow-hidden">
+                                                        <div
+                                                            className="h-full bg-rose-600 transition-all duration-300"
+                                                            style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
+                                                        />
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
-                                                    {bulkFiles.map((file, idx) => (
-                                                        <span key={idx} className="text-xs bg-rose-100 text-rose-700 px-2 py-1 rounded">
-                                                            {file.name.length > 15 ? file.name.slice(0, 12) + '...' : file.name}
-                                                        </span>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                            )}
 
-                                        {/* Insufficient images memo */}
-                                        {bulkFiles.length > 0 && bulkFiles.length < (TARGET_IMAGE_COUNT - processedImages.length) && !isBulkProcessing && (
-                                            <div className="mb-3 p-3 bg-amber-50 rounded-lg border border-amber-300 flex items-start gap-2">
-                                                <span className="text-amber-600 font-bold">Note:</span>
-                                                <div>
-                                                    <p className="text-sm font-medium text-amber-800">
-                                                        {bulkFiles.length} of {TARGET_IMAGE_COUNT - processedImages.length} images selected
-                                                    </p>
-                                                    <p className="text-xs text-amber-700 mt-1">
-                                                        You can still process these, but for accurate results please upload {TARGET_IMAGE_COUNT - processedImages.length} images total.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Bulk Progress Display */}
-                                        {isBulkProcessing && (
-                                            <div className="mb-3 p-3 bg-rose-100 rounded-lg border border-rose-300">
-                                                <p className="text-sm font-semibold text-rose-800">
-                                                    Processed: {bulkProgress.current} / {bulkProgress.total} images
-                                                </p>
-                                                <div className="w-full h-2 bg-rose-200 rounded-full mt-2 overflow-hidden">
-                                                    <div
-                                                        className="h-full bg-rose-600 transition-all duration-300"
-                                                        style={{ width: `${(bulkProgress.current / bulkProgress.total) * 100}%` }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Process Bulk Button */}
-                                        <button
-                                            onClick={handleBulkUpload}
-                                            disabled={bulkFiles.length === 0 || loading || thresholdMet || isBulkProcessing}
-                                            className={`w-full flex items-center justify-center gap-2 text-white 
+                                            {/* Process Bulk Button */}
+                                            <button
+                                                onClick={handleBulkUpload}
+                                                disabled={bulkFiles.length === 0 || loading || thresholdMet || isBulkProcessing}
+                                                className={`w-full flex items-center justify-center gap-2 text-white 
                                             bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 
                                             transition-all font-semibold rounded-lg text-sm px-4 py-2.5
                                             ${(bulkFiles.length === 0 || loading || thresholdMet || isBulkProcessing) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer shadow-md hover:shadow-lg'}`}
-                                        >
-                                            {isBulkProcessing ? (
-                                                <>
-                                                    <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                    </svg>
-                                                    Processed {bulkProgress.current}/{bulkProgress.total}...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                                                    </svg>
-                                                    Process {bulkFiles.length > 0 ? bulkFiles.length : ''} Images at Once
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
-
-
-                                    {/* Analysis Progress Bar - Shows during image processing AND for 2s after completion */}
-                                    {analysisProgress.stage && (
-                                        <div className={`mb-4 p-4 rounded-lg border ${analysisProgress.stage === 'complete'
-                                            ? 'bg-emerald-50 border-emerald-300'
-                                            : 'bg-rose-50 border-rose-300'
-                                            }`}>
-                                            <div className="flex justify-between items-center mb-2">
-                                                <span className={`text-sm font-medium ${analysisProgress.stage === 'complete'
-                                                    ? 'text-emerald-800'
-                                                    : 'text-rose-800'
-                                                    }`}>
-                                                    {analysisProgress.message}
-                                                </span>
-                                                <span className={`text-sm font-semibold ${analysisProgress.stage === 'complete'
-                                                    ? 'text-emerald-600'
-                                                    : 'text-rose-600'
-                                                    }`}>
-                                                    {analysisProgress.percentage}%
-                                                </span>
-                                            </div>
-                                            <div className={`w-full h-2.5 rounded-full overflow-hidden ${analysisProgress.stage === 'complete'
-                                                ? 'bg-emerald-200'
-                                                : 'bg-rose-200'
-                                                }`}>
-                                                <div
-                                                    className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${analysisProgress.stage === 'complete'
-                                                        ? 'bg-emerald-500'
-                                                        : 'bg-gradient-to-r from-rose-400 to-rose-600'
-                                                        }`}
-                                                    style={{ width: `${analysisProgress.percentage}%` }}
-                                                />
-                                            </div>
-                                            {/* Only show step indicators for single image processing, not bulk */}
-                                            {analysisProgress.stage !== 'bulk' && (
-                                                <div className={`mt-3 flex items-center justify-between text-xs ${analysisProgress.stage === 'complete'
-                                                    ? 'text-emerald-700'
-                                                    : 'text-rose-700'
-                                                    }`}>
-                                                    <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 10 ? 'font-semibold scale-105' : 'opacity-50'
-                                                        }`}>
-                                                        <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 10 ? 'text-emerald-500' : ''}`}>
-                                                            {analysisProgress.percentage >= 10 ? '✓' : '○'}
-                                                        </span>
-                                                        <span>Upload</span>
-                                                    </div>
-                                                    <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 30 ? 'font-semibold scale-105' : 'opacity-50'
-                                                        }`}>
-                                                        <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 30 ? 'text-emerald-500' : ''}`}>
-                                                            {analysisProgress.percentage >= 30 ? '✓' : '○'}
-                                                        </span>
-                                                        <span>Detection</span>
-                                                    </div>
-                                                    <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 60 ? 'font-semibold scale-105' : 'opacity-50'
-                                                        }`}>
-                                                        <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 60 ? 'text-emerald-500' : ''}`}>
-                                                            {analysisProgress.percentage >= 60 ? '✓' : '○'}
-                                                        </span>
-                                                        <span>Classification</span>
-                                                    </div>
-                                                    <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 85 ? 'font-semibold scale-105' : 'opacity-50'
-                                                        }`}>
-                                                        <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 85 ? 'text-emerald-500' : ''}`}>
-                                                            {analysisProgress.percentage >= 85 ? '✓' : '○'}
-                                                        </span>
-                                                        <span>Analysis</span>
-                                                    </div>
-                                                </div>
-                                            )}
+                                            >
+                                                {isBulkProcessing ? (
+                                                    <>
+                                                        <svg className="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                        </svg>
+                                                        Processed {bulkProgress.current}/{bulkProgress.total}...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                                        </svg>
+                                                        Process {bulkFiles.length > 0 ? bulkFiles.length : ''} Images at Once
+                                                    </>
+                                                )}
+                                            </button>
                                         </div>
-                                    )}
 
-                                    {/* Analyze Button */}
-                                    <button
-                                        onClick={handleAnalyze}
-                                        disabled={!selectedFile || loading || thresholdMet}
-                                        className={`w-full flex items-center justify-center gap-2 text-white 
+
+                                        {/* Analysis Progress Bar - Shows during image processing AND for 2s after completion */}
+                                        {analysisProgress.stage && (
+                                            <div className={`mb-4 p-4 rounded-lg border ${analysisProgress.stage === 'complete'
+                                                ? 'bg-emerald-50 border-emerald-300'
+                                                : 'bg-rose-50 border-rose-300'
+                                                }`}>
+                                                <div className="flex justify-between items-center mb-2">
+                                                    <span className={`text-sm font-medium ${analysisProgress.stage === 'complete'
+                                                        ? 'text-emerald-800'
+                                                        : 'text-rose-800'
+                                                        }`}>
+                                                        {analysisProgress.message}
+                                                    </span>
+                                                    <span className={`text-sm font-semibold ${analysisProgress.stage === 'complete'
+                                                        ? 'text-emerald-600'
+                                                        : 'text-rose-600'
+                                                        }`}>
+                                                        {analysisProgress.percentage}%
+                                                    </span>
+                                                </div>
+                                                <div className={`w-full h-2.5 rounded-full overflow-hidden ${analysisProgress.stage === 'complete'
+                                                    ? 'bg-emerald-200'
+                                                    : 'bg-rose-200'
+                                                    }`}>
+                                                    <div
+                                                        className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${analysisProgress.stage === 'complete'
+                                                            ? 'bg-emerald-500'
+                                                            : 'bg-gradient-to-r from-rose-400 to-rose-600'
+                                                            }`}
+                                                        style={{ width: `${analysisProgress.percentage}%` }}
+                                                    />
+                                                </div>
+                                                {/* Only show step indicators for single image processing, not bulk */}
+                                                {analysisProgress.stage !== 'bulk' && (
+                                                    <div className={`mt-3 flex items-center justify-between text-xs ${analysisProgress.stage === 'complete'
+                                                        ? 'text-emerald-700'
+                                                        : 'text-rose-700'
+                                                        }`}>
+                                                        <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 10 ? 'font-semibold scale-105' : 'opacity-50'
+                                                            }`}>
+                                                            <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 10 ? 'text-emerald-500' : ''}`}>
+                                                                {analysisProgress.percentage >= 10 ? '✓' : '○'}
+                                                            </span>
+                                                            <span>Upload</span>
+                                                        </div>
+                                                        <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 30 ? 'font-semibold scale-105' : 'opacity-50'
+                                                            }`}>
+                                                            <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 30 ? 'text-emerald-500' : ''}`}>
+                                                                {analysisProgress.percentage >= 30 ? '✓' : '○'}
+                                                            </span>
+                                                            <span>Detection</span>
+                                                        </div>
+                                                        <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 60 ? 'font-semibold scale-105' : 'opacity-50'
+                                                            }`}>
+                                                            <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 60 ? 'text-emerald-500' : ''}`}>
+                                                                {analysisProgress.percentage >= 60 ? '✓' : '○'}
+                                                            </span>
+                                                            <span>Classification</span>
+                                                        </div>
+                                                        <div className={`flex items-center gap-1 transition-all duration-300 ${analysisProgress.percentage >= 85 ? 'font-semibold scale-105' : 'opacity-50'
+                                                            }`}>
+                                                            <span className={`transition-colors duration-300 ${analysisProgress.percentage >= 85 ? 'text-emerald-500' : ''}`}>
+                                                                {analysisProgress.percentage >= 85 ? '✓' : '○'}
+                                                            </span>
+                                                            <span>Analysis</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Analyze Button */}
+                                        <button
+                                            onClick={handleAnalyze}
+                                            disabled={!selectedFile || loading || thresholdMet}
+                                            className={`w-full flex items-center justify-center gap-2 text-white 
                                         bg-rose-600 hover:bg-rose-500 transition-colors font-semibold 
                                         rounded-lg text-base px-6 py-3
                                         ${(!selectedFile || loading || thresholdMet) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                                    >
-                                        {loading ? (
-                                            <>
-                                                <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                                                </svg>
-                                                Analyzing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                </svg>
-                                                Analyze Image
-                                            </>
+                                        >
+                                            {loading ? (
+                                                <>
+                                                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                                    </svg>
+                                                    Analyzing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                                                    </svg>
+                                                    Analyze Image
+                                                </>
+                                            )}
+                                        </button>
+
+                                        {/* Error Display */}
+                                        {error && (
+                                            <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg">
+                                                <p className="font-semibold text-sm">Error</p>
+                                                <p className="text-sm whitespace-pre-wrap">{error}</p>
+                                            </div>
                                         )}
-                                    </button>
 
-                                    {/* Error Display */}
-                                    {error && (
-                                        <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg">
-                                            <p className="font-semibold text-sm">Error</p>
-                                            <p className="text-sm">{error}</p>
-                                        </div>
-                                    )}
-
-                                    {/* Aggregated Stats */}
-                                    {processedImages.length > 0 && (
-                                        <div className="mt-6 pt-6 border-t border-rose-200">
-                                            <h3 className="text-sm font-semibold text-rose-700 mb-3">
-                                                Session Totals ({processedImages.length} images)
-                                            </h3>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
-                                                    <p className="text-xl font-bold text-rose-700">{aggregatedCounts.wbc}</p>
-                                                    <p className="text-xs text-rose-600">WBC</p>
-                                                </div>
-                                                <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
-                                                    <p className="text-xl font-bold text-rose-600">{aggregatedCounts.rbc}</p>
-                                                    <p className="text-xs text-rose-600">RBC</p>
-                                                </div>
-                                                <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
-                                                    <p className="text-xl font-bold text-rose-500">{aggregatedCounts.platelets}</p>
-                                                    <p className="text-xs text-rose-600">Platelets</p>
+                                        {/* Aggregated Stats */}
+                                        {processedImages.length > 0 && (
+                                            <div className="mt-6 pt-6 border-t border-rose-200">
+                                                <h3 className="text-sm font-semibold text-rose-700 mb-3">
+                                                    Session Totals ({processedImages.length} images)
+                                                </h3>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
+                                                        <p className="text-xl font-bold text-rose-700">{aggregatedCounts.wbc}</p>
+                                                        <p className="text-xs text-rose-600">WBC</p>
+                                                    </div>
+                                                    <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
+                                                        <p className="text-xl font-bold text-rose-600">{aggregatedCounts.rbc}</p>
+                                                        <p className="text-xs text-rose-600">RBC</p>
+                                                    </div>
+                                                    <div className="bg-rose-50 rounded-lg p-3 text-center border border-rose-100">
+                                                        <p className="text-xl font-bold text-rose-500">{aggregatedCounts.platelets}</p>
+                                                        <p className="text-xs text-rose-600">Platelets</p>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    )}
+                                        )}
 
-                                    {/* Reset Button */}
-                                    {processedImages.length > 0 && (
-                                        <button
-                                            onClick={handleReset}
-                                            className="w-full mt-4 px-4 py-2 bg-white border border-rose-300 text-rose-600 
+                                        {/* Reset Button */}
+                                        {processedImages.length > 0 && (
+                                            <button
+                                                onClick={handleReset}
+                                                className="w-full mt-4 px-4 py-2 bg-white border border-rose-300 text-rose-600 
                                             rounded-lg hover:bg-rose-50 transition-colors text-sm font-medium"
-                                        >
-                                            Reset Analysis Session
-                                        </button>
-                                    )}
+                                            >
+                                                Reset Analysis Session
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 
