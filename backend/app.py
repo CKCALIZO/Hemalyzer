@@ -805,12 +805,15 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 max_dim = max(cell_width, cell_height)
                 
                 if cell_type == 'WBC':
-                    crop_size = int(max_dim * 2.5)  # 2.5x for WBC context
+                    # WBC: Keep original wide context
+                    crop_size = int(max_dim * 2.5)  
+                    min_crop_dim = 180
                 else:
-                    crop_size = int(max_dim * 1.5)  # 1.5x for RBC context
+                    # RBC: Tighter crop for focus (Sickle Cell detection)
+                    crop_size = int(max_dim * 1.2)  
+                    min_crop_dim = 80
                 
-                MIN_CROP_DIM = 180
-                crop_size = max(crop_size, MIN_CROP_DIM)
+                crop_size = max(crop_size, min_crop_dim)
                 
                 h, w = image_rgb_clean.shape[:2]
                 
@@ -2074,3 +2077,4 @@ if __name__ == '__main__':
     
     print("\nStarting Flask server on http://localhost:5000\n")
     app.run(debug=True, host='0.0.0.0', port=5000)
+    

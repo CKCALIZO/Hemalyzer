@@ -24,7 +24,12 @@ export const FinalResults = ({
     aggregatedResults,
     processedImages,
     onReset,
-    saveReport
+    saveReport,
+    patientName,
+    patientId,
+    patientAge,
+    patientGender,
+    patientPhone
 }) => {
     const navigate = useNavigate();
     const [showWBCExamination, setShowWBCExamination] = useState(false);
@@ -191,6 +196,28 @@ export const FinalResults = ({
 
         yPos = 50;
 
+        // Patient Information
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(margin, 45, pageWidth - 2 * margin, 25, 2, 2, 'F');
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(margin, 45, pageWidth - 2 * margin, 25, 2, 2, 'S');
+
+        doc.setTextColor(30, 58, 95);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("PATIENT INFORMATION:", margin + 5, 53);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFont("helvetica", "normal");
+        doc.text(`Name: ${patientName || 'N/A'}`, margin + 5, 62);
+        doc.text(`ID: ${patientId || 'N/A'}`, pageWidth / 2, 62);
+
+        doc.text(`Age: ${patientAge || 'N/A'}`, margin + 5, 68);
+        doc.text(`Gender: ${patientGender || 'N/A'}`, margin + 50, 68);
+        doc.text(`Phone: ${patientPhone || 'N/A'}`, pageWidth / 2, 68);
+
+        yPos = 80;
+
         // Patient Status Banner
         doc.setFillColor(
             patientStatus === 'Critical' ? 220 : patientStatus === 'Abnormal' ? 245 : 220,
@@ -337,6 +364,61 @@ export const FinalResults = ({
             yPos = doc.lastAutoTable.finalY + 15;
         }
 
+        // Analysis Justification & Methodology
+        if (yPos > 200) {
+            doc.addPage();
+            yPos = 20;
+        }
+
+        doc.setFillColor(240, 249, 255);
+        doc.rect(margin, yPos, pageWidth - 2 * margin, 25, 'F');
+        doc.setDrawColor(186, 230, 253);
+        doc.rect(margin, yPos, pageWidth - 2 * margin, 25, 'S');
+
+        doc.setTextColor(30, 58, 95);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("ANALYSIS METHODOLOGY & JUSTIFICATION", margin + 5, yPos + 8);
+
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        const methodology = "This analysis is derived from automated computer vision processing of 10 high-power field (100x) images. Cell counts are extrapolated using standard conversion formulas. Disease markers are identified based on specific cellular morphological features consistent with clinical hematology standards.";
+        const splitMethod = doc.splitTextToSize(methodology, pageWidth - 2 * margin - 10);
+        doc.text(splitMethod, margin + 5, yPos + 14);
+
+        yPos += 35;
+
+        // Clinical Recommendations
+        doc.setTextColor(30, 58, 95);
+        doc.setFontSize(12);
+        doc.setFont("helvetica", "bold");
+        doc.text("Clinical Recommendations & Interpretation", margin, yPos);
+        yPos += 8;
+
+        let recommendations = [];
+        if (patientStatus === 'Critical' || patientStatus === 'Abnormal') {
+            recommendations.push("• IMPERATIVE: Immediate review of peripheral blood smear by a qualified hematologist.");
+            recommendations.push("• Correlate findings with patient's clinical presentation, CBC, and other laboratory markers.");
+            if (diseaseFindings.some(f => f.type.includes('Leukemia'))) {
+                recommendations.push("• Consider Flow Cytometry and Bone Marrow Biopsy for definitive diagnosis/classification.");
+            }
+            if (sickleCell && sickleCell.count > 0) {
+                recommendations.push("• Confirm Sickle Cell presence with Hemoglobin Electrophoresis or HPLC.");
+            }
+        } else {
+            recommendations.push("• Results appear within normal limits; however, clinical correlation is always advised.");
+            recommendations.push("• Routine follow-up as per standard clinical protocols.");
+        }
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        recommendations.forEach(rec => {
+            doc.text(rec, margin, yPos);
+            yPos += 6;
+        });
+
+        yPos += 15;
+
         // Footer / Disclaimer
         if (yPos > 250) {
             doc.addPage();
@@ -346,17 +428,19 @@ export const FinalResults = ({
         doc.setFillColor(245, 245, 245);
         doc.roundedRect(margin, yPos, pageWidth - 2 * margin, 30, 2, 2, 'F');
 
-        doc.setTextColor(100, 100, 100);
+        doc.setTextColor(190, 20, 20); // Red hue for disclaimer title
         doc.setFontSize(8);
-        doc.setFont("helvetica", "italic");
-        doc.text("CLINICAL DISCLAIMER", margin + 5, yPos + 8);
+        doc.setFont("helvetica", "bold");
+        doc.text("MEDICAL DISCLAIMER - PLEASE READ CAREFULLY", margin + 5, yPos + 8);
+
+        doc.setTextColor(80, 80, 80);
         doc.setFont("helvetica", "normal");
-        const disclaimer = "This report is generated by an automated blood cell analysis system for research and educational purposes. Results should be verified by a qualified hematologist. Additional diagnostic tests may be required for confirmation.";
+        const disclaimer = "This report is generated by an Artificial Intelligence (AI) system and is intended for RESEARCH AND EDUCATIONAL PURPOSES ONLY. It is NOT a diagnostic tool and must NOT be used as a substitute for professional medical advice, diagnosis, or treatment. All results must be verified by a board-certified pathologist or hematologist. The developers assume no liability for the use of this data in clinical decision-making.";
         const splitDisclaimer = doc.splitTextToSize(disclaimer, pageWidth - 2 * margin - 10);
         doc.text(splitDisclaimer, margin + 5, yPos + 15);
 
         // Save the PDF
-        const fileName = `Hemalyzer_Report_${new Date().toISOString().split('T')[0]}_${Date.now()}.pdf`;
+        const fileName = `Hemalyzer_Report_${patientId ? patientId + '_' : ''}${new Date().toISOString().split('T')[0]}.pdf`;
         doc.save(fileName);
     };
 
@@ -387,9 +471,20 @@ export const FinalResults = ({
                     {/* Main Status and WBC Count Row */}
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <span className="text-4xl">
-                                {patientStatus === 'Critical' ? '🛑' :
-                                    patientStatus === 'Abnormal' ? '⚠️' : '✅'}
+                            <span className="text-4xl shadow-sm rounded-full bg-white p-2">
+                                {patientStatus === 'Critical' ? (
+                                    <svg className="w-8 h-8 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                ) : patientStatus === 'Abnormal' ? (
+                                    <svg className="w-8 h-8 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                ) : (
+                                    <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                )}
                             </span>
                             <div>
                                 <p className="text-sm font-medium opacity-75">Overall Patient Status</p>
@@ -448,7 +543,12 @@ export const FinalResults = ({
                         {/* Condition Assessment Based on Thresholds */}
                         {diseaseFindings && diseaseFindings.length > 0 && (
                             <div className="bg-white rounded-lg p-3 border border-red-200 mt-3">
-                                <p className="text-xs font-semibold text-red-800 mb-2">⚠️ Detected Conditions (Based on Thresholds):</p>
+                                <p className="text-xs font-semibold text-red-800 mb-2 flex items-center gap-1">
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                    </svg>
+                                    Detected Conditions (Based on Thresholds):
+                                </p>
                                 <div className="space-y-1">
                                     {diseaseFindings.map((finding, idx) => (
                                         <div key={idx} className={`text-xs ${idx > 0 ? 'mt-3 border-t pt-2 border-dashed border-red-200' : ''}`}>
@@ -516,18 +616,22 @@ export const FinalResults = ({
                             </div>
                         )}
 
-                        {/* Sickle Cell Condition if detected */}
-                        {sickleCell && sickleCell.count > 0 && (
-                            <div className={`bg-white rounded-lg p-3 border mt-2 ${sickleCell.percentage > 30 ? 'border-red-300' :
-                                sickleCell.percentage >= 10 ? 'border-amber-300' :
-                                    'border-yellow-300'
+                        {/* Sickle Cell Condition Analysis */}
+                        {sickleCell && (
+                            <div className={`bg-white rounded-lg p-3 border mt-2 ${sickleCell.count > 0 ? (
+                                sickleCell.percentage > 30 ? 'border-red-300' :
+                                    sickleCell.percentage >= 10 ? 'border-amber-300' :
+                                        'border-yellow-300'
+                            ) : 'border-green-200'
                                 }`}>
-                                <p className="text-xs font-semibold text-red-800 mb-1">
-                                    🩸 Sickle Cell Analysis:
-                                </p>
-                                <div className="flex justify-between items-center text-xs">
-                                    <span className="font-medium">{sickleCell.interpretation}</span>
-                                    <span className={`px-2 py-0.5 rounded font-semibold ${sickleCell.severity === 'SEVERE' ? 'bg-red-100 text-red-800' :
+                                <div className="flex justify-between items-center mb-1">
+                                    <p className={`text-xs font-semibold flex items-center gap-1 ${sickleCell.count > 0 ? 'text-red-800' : 'text-green-800'}`}>
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                        </svg>
+                                        Sickle Cell Analysis:
+                                    </p>
+                                    <span className={`px-2 py-0.5 rounded font-semibold text-xs ${sickleCell.severity === 'SEVERE' ? 'bg-red-100 text-red-800' :
                                         sickleCell.severity === 'MODERATE' ? 'bg-amber-100 text-amber-800' :
                                             sickleCell.severity === 'MILD' ? 'bg-yellow-100 text-yellow-800' :
                                                 'bg-green-100 text-green-800'
@@ -535,6 +639,13 @@ export const FinalResults = ({
                                         {sickleCell.severity || 'NORMAL'}
                                     </span>
                                 </div>
+                                <div className="flex justify-between items-center text-xs mt-2 pl-5">
+                                    <span className="text-slate-600">Count: <span className="font-bold text-slate-900">{sickleCell.count || 0}</span> / {sickleCell.totalRBC || 0} RBCs</span>
+                                    <span className="text-slate-500">({sickleCell.percentage?.toFixed(2) || 0}%)</span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-1 pl-5 italic">
+                                    {sickleCell.interpretation}
+                                </p>
                             </div>
                         )}
 
@@ -702,8 +813,8 @@ export const FinalResults = ({
                                             <div className="h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-100">
                                                 <div
                                                     className={`h-full transition-all duration-500 ${data.status === 'high' ? 'bg-red-500' :
-                                                            data.status === 'low' ? 'bg-blue-500' :
-                                                                'bg-green-500'
+                                                        data.status === 'low' ? 'bg-blue-500' :
+                                                            'bg-green-500'
                                                         }`}
                                                     style={{ width: `${Math.min(100, data.percentage)}%` }}
                                                 />
@@ -715,8 +826,8 @@ export const FinalResults = ({
                                             {data.normalRange}
                                         </div>
                                         <div className={`w-20 text-center text-xs px-2 py-1 rounded font-medium border ${data.status === 'high' ? 'bg-red-50 text-red-700 border-red-100' :
-                                                data.status === 'low' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                    'bg-green-50 text-green-700 border-green-100'
+                                            data.status === 'low' ? 'bg-blue-50 text-blue-700 border-blue-100' :
+                                                'bg-green-50 text-green-700 border-green-100'
                                             }`}>
                                             {data.status === 'normal' ? 'Normal' : data.status === 'high' ? 'High' : 'Low'}
                                         </div>
@@ -729,30 +840,76 @@ export const FinalResults = ({
             )}
 
             {/* Disease Findings */}
+            {/* Disease Findings - Card Grid Layout */}
+            {/* Disease Findings - Card Grid Layout */}
             {diseaseFindings && diseaseFindings.length > 0 && (
                 <div className="px-6 py-4 border-b border-slate-200">
-                    <h3 className="text-lg font-semibold text-slate-700 mb-3">Disease Analysis</h3>
-                    <div className="space-y-3">
+                    <h3 className="text-lg font-semibold text-slate-700 mb-3 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        Disease Analysis
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                         {diseaseFindings.map((finding, idx) => (
                             <div
                                 key={idx}
-                                className={`p-4 rounded-lg border-l-4 ${finding.severity === 'HIGH' ? 'bg-red-50 border-red-500' :
-                                    finding.severity === 'MODERATE' ? 'bg-amber-50 border-amber-500' :
-                                        finding.severity === 'LOW' ? 'bg-yellow-50 border-yellow-500' :
-                                            'bg-slate-50 border-slate-400'
+                                className={`relative p-4 rounded-xl border transition-all duration-300 overflow-hidden ${finding.severity === 'HIGH' ? 'bg-red-50 border-red-200' :
+                                    finding.severity === 'MODERATE' ? 'bg-amber-50 border-amber-200' :
+                                        finding.severity === 'LOW' ? 'bg-yellow-50 border-yellow-200' :
+                                            'bg-slate-50 border-slate-200'
                                     }`}
                             >
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-semibold text-slate-800">{finding.type}</p>
-                                        <p className="text-sm text-slate-600 mt-1">{finding.interpretation}</p>
+                                {/* Main Card Content */}
+                                <div className="space-y-3 z-0 relative">
+                                    <div className="flex justify-between items-start">
+                                        <h4 className="font-bold text-slate-900 text-sm">{finding.type}</h4>
+                                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${finding.severity === 'HIGH' ? 'bg-red-200 text-red-900' :
+                                            finding.severity === 'MODERATE' ? 'bg-amber-200 text-amber-900' :
+                                                finding.severity === 'LOW' ? 'bg-yellow-200 text-yellow-900' :
+                                                    'bg-slate-200 text-slate-700'
+                                            }`}>
+                                            {finding.severity}
+                                        </span>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-xl font-bold">{finding.percentage?.toFixed(1)}%</p>
-                                        <p className={`text-xs px-2 py-1 rounded ${finding.severity === 'HIGH' ? 'bg-red-200 text-red-800' :
-                                            finding.severity === 'MODERATE' ? 'bg-amber-200 text-amber-800' :
-                                                'bg-slate-200 text-slate-800'
-                                            }`}>{finding.severity}</p>
+
+                                    <div className="flex items-baseline gap-1">
+                                        <span className="text-3xl font-extrabold text-slate-900">
+                                            {finding.percentage?.toFixed(1)}%
+                                        </span>
+                                        <span className="text-xs font-semibold text-slate-500 uppercase">confidence</span>
+                                    </div>
+
+                                    <p className="text-sm text-slate-700 font-medium leading-relaxed">
+                                        {finding.interpretation}
+                                    </p>
+                                </div>
+
+                                {/* Slide-up Insight Panel (Hover Effect) */}
+                                <div className="absolute inset-0 bg-white/95 backdrop-blur-md z-10 translate-y-full hover:translate-y-0 transition-transform duration-300 ease-out border-t border-slate-100 p-4 flex flex-col shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Analysis Breakdown</p>
+
+                                    <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                                        {finding.breakdown ? (
+                                            <ul className="space-y-1">
+                                                {Object.entries(finding.breakdown)
+                                                    .filter(([key]) => !['total', 'totalWBC', 'cmlCells', 'cllCells'].includes(key) && typeof finding.breakdown[key] === 'number')
+                                                    .map(([key, val]) => (
+                                                        <li key={key} className="flex justify-between items-center text-xs">
+                                                            <span className="text-slate-600 font-medium capitalize truncate pr-2">{key.replace(/_/g, ' ')}</span>
+                                                            <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded">{val}</span>
+                                                        </li>
+                                                    ))
+                                                }
+                                            </ul>
+                                        ) : (
+                                            <p className="text-xs text-slate-400 italic">No detailed breakdown available.</p>
+                                        )}
+                                    </div>
+
+                                    <div className="mt-3 pt-2 border-t border-slate-100 text-[10px] text-blue-600 font-bold flex items-center justify-center gap-1">
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                        Clinical correlation advised
                                     </div>
                                 </div>
                             </div>
@@ -1168,14 +1325,13 @@ export const FinalResults = ({
                     <div className="px-6 py-3 bg-red-50 border-t border-slate-200">
                         <p className="text-xs text-slate-600 font-medium mb-2">Sickle Cell Thresholds (Based on About Page):</p>
                         <div className="flex flex-wrap gap-2 text-xs">
-                            <span className="px-2 py-1 bg-green-100 text-green-800 rounded">&lt;0.3%: Normal</span>
-                            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded">0.4-0.6%: Minimal Sickling</span>
-                            <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded">0.7-1.0%: Sickle Cell Trait</span>
-                            <span className="px-2 py-1 bg-red-100 text-red-800 rounded">1.1-1.5%: Sickle Cell Disease</span>
-                            <span className="px-2 py-1 bg-red-200 text-red-900 rounded font-bold">≥1.6%: Severe Sickle Cell Disease</span>
+                            <span className="px-2 py-1 bg-green-100 text-green-800 rounded">&lt;3%: Normal</span>
+                            <span className="px-2 py-1 bg-yellow-100 text-yellow-800 rounded">3-10%: Mild (HbAS)</span>
+                            <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded">10-30%: Moderate</span>
+                            <span className="px-2 py-1 bg-red-200 text-red-900 rounded font-bold">&gt;30%: Severe (HbSS)</span>
                         </div>
                         <p className="text-xs text-slate-500 mt-2">
-                            <strong>Current Sickle Cell Percentage:</strong> {aggregatedResults.sickleCell.percentage}%
+                            <strong>Current Sickle Cell Percentage:</strong> {aggregatedResults.sickleCell.percentage.toFixed(2)}%
                             ({aggregatedResults.sickleCell.count} sickle cells / {aggregatedResults.totalRBC} total RBCs)
                         </p>
                     </div>

@@ -487,6 +487,30 @@ export const ProcessedImagesThumbnails = ({
                                 </p>
                             </div>
                         )}
+
+                        {/* Cell Type Legend */}
+                        <div className="mt-4 pt-3 border-t border-rose-200 flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-600">
+                            <div className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></span>
+                                <span>Neutrophil</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-green-500 shadow-sm"></span>
+                                <span>Lymphocyte</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-yellow-500 shadow-sm"></span>
+                                <span>Monocyte</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-orange-500 shadow-sm"></span>
+                                <span>Eosinophil</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <span className="w-3 h-3 rounded-full bg-purple-500 shadow-sm"></span>
+                                <span>Basophil</span>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>

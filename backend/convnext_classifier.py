@@ -173,7 +173,7 @@ class ConvNeXtClassifier:
         self.pre_transform = None  # Pre-preprocessor transforms
         self.transform = None  # Post-preprocessor transforms
         self.preprocessor = None
-        self.sickle_cell_confidence_threshold = 0.90  # 90% confidence threshold for sickle cell detection
+        self.sickle_cell_confidence_threshold = 0.85  # 90% confidence threshold for sickle cell detection
     
     def load_model(self, model_path='best_leukemia_model.pth', use_mixed_precision=False, compile_model=False):
         """

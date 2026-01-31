@@ -63,8 +63,8 @@ export const Reports = () => {
                                             key={report.id}
                                             onClick={() => setSelectedReport(report)}
                                             className={`p-4 rounded-lg cursor-pointer border-2 transition-all ${selectedReport?.id === report.id
-                                                    ? 'border-red-600 bg-red-50'
-                                                    : 'border-red-200 hover:border-red-400 bg-white'
+                                                ? 'border-red-600 bg-red-50'
+                                                : 'border-red-200 hover:border-red-400 bg-white'
                                                 }`}
                                         >
                                             <div className="flex justify-between items-start">
@@ -115,17 +115,41 @@ export const Reports = () => {
                                         <h2 className="text-2xl font-bold mb-4 text-red-900">Report #{selectedReport.id}</h2>
                                         <p className="text-sm text-red-500 mb-6">{selectedReport.timestamp}</p>
 
-                                        {/* Annotated Image */}
-                                        {selectedReport.data.annotated_image && (
-                                            <div className="mb-6">
-                                                <h3 className="font-semibold text-lg mb-2 text-slate-800">Annotated Image</h3>
-                                                <img
-                                                    src={`data:image/jpeg;base64,${selectedReport.data.annotated_image}`}
-                                                    alt="Analysis Result"
-                                                    className="w-full rounded-lg border border-slate-300"
-                                                />
+                                        {/* Patient Information Section */}
+                                        {selectedReport.patientData && (
+                                            <div className="bg-slate-50 p-4 rounded-lg mb-6 border border-slate-200">
+                                                <h3 className="font-semibold text-lg mb-3 text-slate-800 flex items-center gap-2">
+                                                    <svg className="w-5 h-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                                    </svg>
+                                                    Patient Information
+                                                </h3>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                                    <div className="bg-white p-3 rounded border border-slate-200">
+                                                        <p className="text-xs text-slate-500">Name</p>
+                                                        <p className="font-medium text-slate-800">{selectedReport.patientData.name || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="bg-white p-3 rounded border border-slate-200">
+                                                        <p className="text-xs text-slate-500">Patient ID</p>
+                                                        <p className="font-medium text-slate-800 font-mono">{selectedReport.patientData.id || 'N/A'}</p>
+                                                    </div>
+                                                    <div className="bg-white p-3 rounded border border-slate-200">
+                                                        <p className="text-xs text-slate-500">Demographics</p>
+                                                        <p className="font-medium text-slate-800">
+                                                            {selectedReport.patientData.age ? `${selectedReport.patientData.age} yrs` : 'Age N/A'} • {selectedReport.patientData.gender || 'N/A'}
+                                                        </p>
+                                                    </div>
+                                                    {selectedReport.patientData.phone && (
+                                                        <div className="bg-white p-3 rounded border border-slate-200">
+                                                            <p className="text-xs text-slate-500">Contact</p>
+                                                            <p className="font-medium text-slate-800">{selectedReport.patientData.phone}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
+
+
 
                                         {/* Cell Detection Summary */}
                                         <div className="bg-slate-50 p-4 rounded-lg mb-6">
@@ -246,8 +270,8 @@ export const Reports = () => {
                                                             <div className="flex justify-between items-center mb-2">
                                                                 <span className="font-bold text-rose-800 text-lg">{finding.condition || finding.name}</span>
                                                                 <span className={`px-3 py-1 rounded-full text-sm font-semibold ${finding.severity === 'HIGH' ? 'bg-red-100 text-red-700' :
-                                                                        finding.severity === 'MODERATE' ? 'bg-amber-100 text-amber-700' :
-                                                                            'bg-green-100 text-green-700'
+                                                                    finding.severity === 'MODERATE' ? 'bg-amber-100 text-amber-700' :
+                                                                        'bg-green-100 text-green-700'
                                                                     }`}>
                                                                     {finding.severity || 'DETECTED'}
                                                                 </span>
