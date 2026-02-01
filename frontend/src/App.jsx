@@ -6,6 +6,7 @@ import { Simulation } from './pages/Simulation.jsx';
 import {Routes, Route} from 'react-router-dom';
 
 function App() {
+  // Hemalyzer App Router
   return(
     <Routes>
       <Route path="/" element={<Homepage />} />

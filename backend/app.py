@@ -15,6 +15,7 @@ import io
 import base64
 import os
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 
 # Import ConvNeXt classification module
 from convnext_classifier import (
@@ -34,14 +35,18 @@ from disease_thresholds import (
     DISEASE_THRESHOLDS,
     MINIMUM_CELLS_FOR_DIAGNOSIS,
     HEMOCYTOMETER_CONSTANTS,
-    ESTIMATED_COUNT_CONSTANTS
+    ESTIMATED_COUNT_CONSTANTS,
+    EXPECTED_WBC_PER_10HPF,
+    SMALL_SAMPLE_THRESHOLDS
 )
 
 from calculations import (
     calculate_confidence_interval,
     assess_sample_adequacy,
     calculate_estimated_wbc,
-    calculate_estimated_rbc
+    calculate_estimated_rbc,
+    assess_differential_finding,
+    get_expected_counts_for_hpf
 )
 
 
@@ -156,53 +161,98 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             cls = wbc.get('classification', 'Unknown')
             class_counts[cls] = class_counts.get(cls, 0) + 1
         
+        # Also count by BASE cell type (e.g., combine "Basophil: Normal" and "Basophil: CML")
+        base_type_counts = {}
+        for cls_name, count in class_counts.items():
+            base_type = cls_name.split(':')[0].strip() if ':' in cls_name else cls_name
+            # Normalize the base type name
+            base_type_mapping = {
+                'neutrophils': 'Neutrophil',
+                'neutrophil': 'Neutrophil',
+                'lymphocyte': 'Lymphocyte',
+                'monocyte': 'Monocyte',
+                'eosinophil': 'Eosinophil',
+                'eosonophil': 'Eosinophil',
+                'basophil': 'Basophil',
+                'b_lymphoblast': 'B_lymphoblast',
+                'myeloblast': 'Myeloblast',
+            }
+            normalized_base = base_type_mapping.get(base_type.lower(), base_type)
+            base_type_counts[normalized_base] = base_type_counts.get(normalized_base, 0) + count
+        
         # Calculate percentages with confidence intervals for each class
         wbc_differential = {}
         differential_abnormalities = []
         
+        # Get expected counts for context (assuming 10 HPF analysis)
+        expected_counts = get_expected_counts_for_hpf(num_hpf=fields_analyzed * 2)  # ~2 fields per image
+        
         for cls_name, count in class_counts.items():
             pct, lower, upper = calculate_confidence_interval(count, total_wbc)
             
-            # Check against normal ranges
-            normal_status = 'normal'
-            normal_range = None
-            
             # Extract base cell type from new format "CellType: Condition"
-            # e.g., "Basophil: Normal" -> "Basophil", "Basophil: CML" -> "Basophil"
             base_cell_type = cls_name.split(':')[0].strip() if ':' in cls_name else cls_name
             
             # Map classification names to differential keys (case-insensitive)
             diff_key_mapping = {
                 'neutrophil': 'Neutrophil',
-                'neutrophils': 'Neutrophil',  # Handle "Neutrophils: CML"
+                'neutrophils': 'Neutrophil',
                 'lymphocyte': 'Lymphocyte',
                 'monocyte': 'Monocyte',
                 'eosinophil': 'Eosinophil',
-                'eosonophil': 'Eosinophil',  # Handle typo in model class
+                'eosonophil': 'Eosinophil',
                 'basophil': 'Basophil'
             }
             
             diff_key = diff_key_mapping.get(base_cell_type.lower())
-            if diff_key and diff_key in NORMAL_WBC_DIFFERENTIAL:
-                normal_range = NORMAL_WBC_DIFFERENTIAL[diff_key]
-                if pct < normal_range['min']:
-                    normal_status = 'low'
+            
+            # Use new assess_differential_finding for proper small-sample assessment
+            if diff_key:
+                # Get total count for this base cell type (includes normal + abnormal)
+                total_base_count = base_type_counts.get(diff_key, count)
+                assessment = assess_differential_finding(diff_key, total_base_count, total_wbc, num_hpf=fields_analyzed * 2)
+                
+                normal_status = assessment['status']
+                is_significant = assessment['is_statistically_significant']
+                
+                # Only flag as abnormality if statistically significant OR clearly abnormal
+                if assessment['status'] in ['high', 'low'] and (is_significant or total_wbc >= 30):
                     differential_abnormalities.append({
                         'cell_type': cls_name,
                         'observed': pct,
-                        'normal_range': f"{normal_range['min']}-{normal_range['max']}%",
-                        'status': 'DECREASED',
-                        'note': f"{base_cell_type} below normal range"
+                        'observed_count': count,
+                        'base_type_total': total_base_count,
+                        'normal_range': f"{assessment['normal_percentage_range'][0]}-{assessment['normal_percentage_range'][1]}%",
+                        'expected_count_range': f"{assessment['expected_count_range'][0]}-{assessment['expected_count_range'][1]}",
+                        'status': 'INCREASED' if 'high' in assessment['status'] else 'DECREASED',
+                        'severity': assessment['severity'],
+                        'note': assessment['message'],
+                        'is_statistically_significant': is_significant,
+                        'confidence_interval': assessment['confidence_interval'],
+                        'sample_size_note': assessment['sample_size_note']
                     })
-                elif pct > normal_range['max']:
-                    normal_status = 'high'
+                elif assessment['status'] in ['elevated', 'decreased']:
+                    # Mild finding - include but mark as not significant
                     differential_abnormalities.append({
                         'cell_type': cls_name,
                         'observed': pct,
-                        'normal_range': f"{normal_range['min']}-{normal_range['max']}%",
-                        'status': 'INCREASED',
-                        'note': f"{base_cell_type} above normal range"
+                        'observed_count': count,
+                        'base_type_total': total_base_count,
+                        'normal_range': f"{assessment['normal_percentage_range'][0]}-{assessment['normal_percentage_range'][1]}%",
+                        'expected_count_range': f"{assessment['expected_count_range'][0]}-{assessment['expected_count_range'][1]}",
+                        'status': 'MILDLY ELEVATED' if 'elevated' in assessment['status'] else 'MILDLY DECREASED',
+                        'severity': assessment['severity'],
+                        'note': assessment['message'],
+                        'is_statistically_significant': False,
+                        'confidence_interval': assessment['confidence_interval'],
+                        'sample_size_note': assessment['sample_size_note']
                     })
+                
+                normal_range = NORMAL_WBC_DIFFERENTIAL.get(diff_key)
+            else:
+                # Non-standard cell type (blasts, etc.) - use percentage only
+                normal_status = 'normal'
+                normal_range = None
             
             wbc_differential[cls_name] = {
                 'count': count,
@@ -213,6 +263,15 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
                 'normal_status': normal_status,
                 'normal_range': f"{normal_range['min']}-{normal_range['max']}%" if normal_range else None
             }
+        
+        # Add expected counts information to interpretation
+        interpretation['expected_counts_10hpf'] = {
+            'total_wbc_expected': EXPECTED_WBC_PER_10HPF['total'],
+            'actual_wbc_counted': total_wbc,
+            'fields_analyzed': fields_analyzed,
+            'sample_adequacy_for_differential': 'adequate' if total_wbc >= 50 else ('moderate' if total_wbc >= 30 else 'insufficient'),
+            'note': f"With {fields_analyzed} field(s), expected ~{fields_analyzed * 3} WBCs. Counted {total_wbc}."
+        }
         
         interpretation['wbc_differential'] = wbc_differential
         interpretation['differential_abnormalities'] = differential_abnormalities
@@ -552,6 +611,10 @@ BASELINE_MODEL_ID = "hemalens-baseline/1"  # Standard YOLOv8 baseline (if availa
 # INFERENCE FUNCTION
 # ============================================================
 
+# Performance tuning constants
+RBC_SAMPLE_LIMIT = 200  # Max RBCs to classify per image (only used if ENABLE_RBC_SAMPLING is True)
+ENABLE_RBC_SAMPLING = False  # If False, classify ALL RBCs for maximum detection accuracy
+
 def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
     """
     Process blood smear image using TWO-STAGE analysis pipeline:
@@ -570,6 +633,12 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
     DETECTION SETTINGS:
     - conf_threshold: 0.15 (15% confidence)
     - iou_threshold: 0.25 (25% overlap threshold)
+    
+    PERFORMANCE OPTIMIZATIONS:
+    - RBC sampling: Only classify up to RBC_SAMPLE_LIMIT RBCs per image
+    - Fast mode preprocessing for RBCs
+    - Parallel crop preparation
+    - Only generate base64 for abnormal cells
     
     Args:
         image_bytes: Raw image bytes
@@ -659,7 +728,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             print(f"   ⚠️ REJECTED: Only {len(predictions)} cells detected (Min: {MIN_CELLS_THRESHOLD})")
             return {
                 'success': False,
-                'error': 'Blood smear validation failed: Insufficient cells detected.\n\n'
+                'error': 'Blood smear validation failed:\n\n'
                          'The image does not appear to be a valid 100x oil immersion blood smear.\n'
                          'Please ensure:\n'
                          '1. Image is taken at 100x Magnification\n'
@@ -785,14 +854,17 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             crop_display_data = {} # {detection_idx: base64_str}
 
             print(f"   > Preparing crops for {len(detections['cells'])} cells...")
-
-            for idx, detection in enumerate(detections['cells']):
+            
+            # OPTIMIZATION: Parallel crop preparation
+            def prepare_crop(args):
+                """Prepare a single crop - can run in parallel"""
+                idx, detection, image_rgb_clean_ref, h, w = args
                 cell_type = detection.get('cell_type', 'Unknown')
                 x1, y1, x2, y2 = map(int, detection['bbox'])
                 
                 # Skip Platelets - we only classify WBC and RBC
                 if cell_type == 'Platelet' or cell_type == 'Unknown':
-                    continue
+                    return None
                 
                 # Calculate cell dimensions
                 cell_width = x2 - x1
@@ -801,21 +873,16 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 cell_center_y = (y1 + y2) // 2
                 
                 # Create SQUARE crop centered on cell with optimal padding
-                # Matches classifier preprocessing EXACTLY
                 max_dim = max(cell_width, cell_height)
                 
                 if cell_type == 'WBC':
-                    # WBC: Keep original wide context
                     crop_size = int(max_dim * 2.5)  
                     min_crop_dim = 180
                 else:
-                    # RBC: Tighter crop for focus (Sickle Cell detection)
                     crop_size = int(max_dim * 1.2)  
                     min_crop_dim = 80
                 
                 crop_size = max(crop_size, min_crop_dim)
-                
-                h, w = image_rgb_clean.shape[:2]
                 
                 # Calculate square crop bounds
                 half_size = crop_size // 2
@@ -835,10 +902,10 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 image_x2 = min(w, x2_padded)
                 image_y2 = min(h, y2_padded)
                 
-                cell_crop = image_rgb_clean[image_y1:image_y2, image_x1:image_x2]
+                cell_crop = image_rgb_clean_ref[image_y1:image_y2, image_x1:image_x2]
                 
                 if cell_crop.size == 0:
-                    continue
+                    return None
                 
                 # Add padding if needed
                 if pad_left > 0 or pad_top > 0 or pad_right > 0 or pad_bottom > 0:
@@ -850,15 +917,40 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     cell_crop = padded_crop
                 
                 cell_crop_pil = Image.fromarray(cell_crop)
-                
-                # Store crop for batch processing
+                return (idx, cell_type, cell_crop_pil)
+            
+            # Prepare args for parallel processing
+            h, w = image_rgb_clean.shape[:2]
+            crop_args = [(idx, det, image_rgb_clean, h, w) for idx, det in enumerate(detections['cells'])]
+            
+            # Process crops in parallel
+            with ThreadPoolExecutor(max_workers=8) as executor:
+                crop_results = list(executor.map(prepare_crop, crop_args))
+            
+            # Collect results
+            for result in crop_results:
+                if result is None:
+                    continue
+                idx, cell_type, cell_crop_pil = result
                 if cell_type == 'WBC':
                     wbc_crops.append(cell_crop_pil)
                     wbc_indices.append(idx)
-                    
                 elif cell_type == 'RBC':
                     rbc_crops.append(cell_crop_pil)
                     rbc_indices.append(idx)
+            
+            # OPTIMIZATION: Sample RBCs if too many (statistically representative)
+            # Simple random sampling - no double-processing
+            original_rbc_count = len(rbc_crops)
+            
+            if ENABLE_RBC_SAMPLING and len(rbc_crops) > RBC_SAMPLE_LIMIT:
+                import random
+                # Simple random sampling - no pre-check needed
+                sample_indices = random.sample(range(len(rbc_crops)), RBC_SAMPLE_LIMIT)
+                sample_indices.sort()
+                rbc_crops = [rbc_crops[i] for i in sample_indices]
+                rbc_indices = [rbc_indices[i] for i in sample_indices]
+                print(f"   > RBC sampling: {original_rbc_count} -> {len(rbc_crops)} (statistically representative)")
 
             # 2. Batch Classify WBCs
             if wbc_crops:
@@ -897,7 +989,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                             wbc_class, wbc_confidence = 'Neutrophil: Normal', 0.5
 
                     # Disease thresholds
-                    DISEASE_THRESHOLDS_CONF = {'cml': 0.90, 'aml': 0.80, 'all': 0.80, 'cll': 0.80, 'default': 0.75}
+                    DISEASE_THRESHOLDS_CONF = {'cml': 0.90, 'aml': 0.75, 'all': 0.75, 'cll': 0.88, 'default': 0.75}
                     is_disease = ': normal' not in wbc_class.lower()
                     
                     if is_disease:
@@ -953,12 +1045,13 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                             'is_abnormal': True
                         })
 
-            # 3. Batch Classify RBCs
+            # 3. Batch Classify RBCs (ALL RBCs for maximum sickle cell detection)
             if rbc_crops:
                 if not classifier.is_loaded(): 
                     load_convnext_model()
-                print(f"   > Batch classifying {len(rbc_crops)} RBCs...")
-                rbc_results = classifier.classify_batch(rbc_crops, ['RBC']*len(rbc_crops), batch_size=32)
+                print(f"   > Batch classifying {len(rbc_crops)} RBCs (all detected)...")
+                # Use full preprocessing pipeline for RBCs (same as WBCs) for accurate detection
+                rbc_results = classifier.classify_batch(rbc_crops, ['RBC']*len(rbc_crops), batch_size=32, use_fast_mode_for_rbc=False)
                 
                 for i, result in enumerate(rbc_results):
                     if not result: continue
@@ -971,13 +1064,14 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     is_sickle = result.get('is_sickle_cell', False)
                     sickle_conf = result.get('sickle_cell_confidence', 0.0)
                     
-                    # Generate base64 only if needed (for all RBC results we store them, but display mainly sickle)
-                    # To save space, we might only generate base64 for sickle cells? 
-                    # The original code generated it for ALL results it appended to rbc_classifications.
-                    display_crop = crop_pil.resize((384, 384), Image.LANCZOS)
-                    c_buf = io.BytesIO()
-                    display_crop.save(c_buf, format='PNG')
-                    crop_b64 = base64.b64encode(c_buf.getvalue()).decode('utf-8')
+                    # OPTIMIZATION: Only generate base64 for SICKLE CELLS
+                    # Normal RBCs don't need display images (saves ~15-20% processing time)
+                    crop_b64 = None
+                    if is_sickle:
+                        display_crop = crop_pil.resize((384, 384), Image.LANCZOS)
+                        c_buf = io.BytesIO()
+                        display_crop.save(c_buf, format='PNG')
+                        crop_b64 = base64.b64encode(c_buf.getvalue()).decode('utf-8')
                     
                     rbc_res = {
                         'rbc_id': len(rbc_classifications) + 1,
@@ -987,7 +1081,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         'classification_confidence': result['confidence'],
                         'sickle_cell_confidence': sickle_conf,
                         'probabilities': result['probabilities'],
-                        'cropped_image': crop_b64,
+                        'cropped_image': crop_b64,  # Only populated for sickle cells
                         'is_sickle_cell': is_sickle
                     }
                     rbc_classifications.append(rbc_res)

@@ -106,6 +106,9 @@ const Homepage = () => {
             basophil: 0,
             eosinophil: 0,
             myeloblast: 0,
+            promyelocyte: 0,
+            myelocyte: 0,
+            metamyelocyte: 0,
             neutrophil: 0
         };
 
@@ -124,11 +127,12 @@ const Homepage = () => {
 
             const classificationStr = (cls.classification || '').toLowerCase();
 
-            // Robust detection logic
-            const hasCML = classificationStr.includes('cml');
-            const hasCLL = classificationStr.includes('cll');
-            const hasAML = classificationStr.includes('aml');
-            const hasALL = classificationStr.includes('all');
+            // Robust detection logic - STRICT MODE
+            // Ensure we strictly check for the disease tag formatting used by the model (e.g., "Cell: Disease")
+            const hasCML = classificationStr.includes(': cml');
+            const hasCLL = classificationStr.includes(': cll');
+            const hasAML = classificationStr.includes(': aml');
+            const hasALL = classificationStr.includes(': all');
 
             const isNeutrophil = classificationStr.includes('neutrophil');
             const isLymphocyte = classificationStr.includes('lymphocyte');
@@ -137,11 +141,14 @@ const Homepage = () => {
             const isBasophil = classificationStr.includes('basophil');
             const isMyeloblast = classificationStr.includes('myeloblast');
             const isLymphoblast = classificationStr.includes('lymphoblast') || classificationStr.includes('b_lymphoblast');
-            const isMyelocyte = classificationStr.includes('myelocyte');
-            const isMetamyelocyte = classificationStr.includes('metamyelocyte');
+            // Check specific precursors BEFORE generic myelocyte (since promyelocyte/metamyelocyte contain 'myelocyte')
             const isPromyelocyte = classificationStr.includes('promyelocyte');
+            const isMetamyelocyte = classificationStr.includes('metamyelocyte');
+            // Only true myelocyte (not promyelocyte or metamyelocyte)
+            const isMyelocyte = classificationStr.includes('myelocyte') && !isPromyelocyte && !isMetamyelocyte;
 
-            if (isNeutrophil || isMyelocyte || isMetamyelocyte || isPromyelocyte || (isMyeloblast && !hasAML)) {
+            // Differential Count Logic
+            if (isNeutrophil || isMyelocyte || isMetamyelocyte || isPromyelocyte || (isMyeloblast && !hasAML && !hasCML)) {
                 differentialCounts['Neutrophil']++;
             } else if (isLymphocyte || isLymphoblast) {
                 differentialCounts['Lymphocyte']++;
@@ -153,27 +160,38 @@ const Homepage = () => {
                 differentialCounts['Basophil']++;
             }
 
+            // Abnormal Cell Tracking
+            // Identify any cell that isn't explicity marked "Normal"
             if (!classificationStr.includes('normal') && cls.classification) {
                 abnormalWBCs.push(cls);
             }
 
-            // Disease Counting
-            if (hasCML || isMyelocyte || isMetamyelocyte || isPromyelocyte) {
+            // Disease Counting - STRICT: Only count if explicitly marked with disease label
+            if (hasCML) {
+                // Only count cells explicitly classified as CML (e.g., "Neutrophil: CML", "Basophil: CML")
                 cmlCount++;
                 if (isBasophil) cmlGranulocyteBreakdown.basophil++;
                 else if (isEosinophil) cmlGranulocyteBreakdown.eosinophil++;
-                else if (isMyeloblast || isMyelocyte || isMetamyelocyte || isPromyelocyte) cmlGranulocyteBreakdown.myeloblast++;
+                else if (isMyeloblast) cmlGranulocyteBreakdown.myeloblast++;
                 else if (isNeutrophil) cmlGranulocyteBreakdown.neutrophil++;
+                // Granulocytic precursors with CML marker - Separated
+                else if (isPromyelocyte) cmlGranulocyteBreakdown.promyelocyte++;
+                else if (isMyelocyte) cmlGranulocyteBreakdown.myelocyte++;
+                else if (isMetamyelocyte) cmlGranulocyteBreakdown.metamyelocyte++;
             }
 
             if (hasCLL) cllCount++;
 
-            if (hasALL || isLymphoblast) {
+            // ALL counting - STRICT: Only count if explicitly marked as ALL
+            // Lymphoblasts without disease marker should NOT be counted as ALL
+            if (hasALL) {
                 allCount++;
                 blastBreakdown.lymphoblast++;
             }
 
-            if (hasAML || isMyeloblast) {
+            // AML counting - STRICT: Only count if explicitly marked as AML  
+            // Myeloblasts without disease marker should NOT be counted as AML
+            if (hasAML) {
                 amlCount++;
                 blastBreakdown.myeloblast++;
             }
@@ -272,11 +290,11 @@ const Homepage = () => {
             });
         }
 
-        // CML (Chronic Myeloid Leukemia)
-        {
+        // CML (Chronic Myeloid Leukemia) - Only show if CML cells detected
+        if (cmlCount > 0) {
             let interpretation = '';
             let severity = 'INFO';
-            let condition = 'Normal';
+            let condition = 'Monitor for CML';
 
             if (cmlPercentage > 95) {
                 interpretation = 'Accelerated Phase CML - extreme granulocytic proliferation';
@@ -294,15 +312,21 @@ const Homepage = () => {
                 interpretation = 'Reactive / Secondary Leukocytosis (CML) - mild granulocytic predominance';
                 condition = 'Reactive Leukocytosis';
                 severity = 'LOW';
-            } else if (cmlCount > 0) {
+            } else {
                 interpretation = 'CML-marked cells detected but below threshold levels';
                 condition = 'Monitor for CML';
                 severity = 'INFO';
-            } else {
-                interpretation = 'No CML-marked granulocytes detected - Normal differential';
-                condition = 'Normal';
-                severity = 'INFO';
             }
+
+            // Only include non-zero breakdown values
+            const cmlBreakdown = {};
+            if (cmlGranulocyteBreakdown.basophil > 0) cmlBreakdown["CML:Basophil"] = cmlGranulocyteBreakdown.basophil;
+            if (cmlGranulocyteBreakdown.eosinophil > 0) cmlBreakdown["CML:Eosinophil"] = cmlGranulocyteBreakdown.eosinophil;
+            if (cmlGranulocyteBreakdown.myeloblast > 0) cmlBreakdown["CML:Myeloblast"] = cmlGranulocyteBreakdown.myeloblast;
+            if (cmlGranulocyteBreakdown.promyelocyte > 0) cmlBreakdown["CML:Promyelocyte"] = cmlGranulocyteBreakdown.promyelocyte;
+            if (cmlGranulocyteBreakdown.myelocyte > 0) cmlBreakdown["CML:Myelocyte"] = cmlGranulocyteBreakdown.myelocyte;
+            if (cmlGranulocyteBreakdown.metamyelocyte > 0) cmlBreakdown["CML:Metamyelocyte"] = cmlGranulocyteBreakdown.metamyelocyte;
+            if (cmlGranulocyteBreakdown.neutrophil > 0) cmlBreakdown["CML:Neutrophil"] = cmlGranulocyteBreakdown.neutrophil;
 
             diseaseFindings.push({
                 type: 'CML (Chronic Myeloid Leukemia)',
@@ -310,20 +334,15 @@ const Homepage = () => {
                 interpretation,
                 severity,
                 condition,
-                breakdown: {
-                    "CML:Basophil": cmlGranulocyteBreakdown.basophil,
-                    "CML:Eosonphil": cmlGranulocyteBreakdown.eosinophil,
-                    "CML:Myeloblast": cmlGranulocyteBreakdown.myeloblast,
-                    "CML:Neutrophils": cmlGranulocyteBreakdown.neutrophil
-                }
+                breakdown: cmlBreakdown
             });
         }
 
-        // CLL (Chronic Lymphocytic Leukemia)
-        {
+        // CLL (Chronic Lymphocytic Leukemia) - Only show if CLL cells detected
+        if (cllCount > 0) {
             let interpretation = '';
             let severity = 'INFO';
-            let condition = 'Normal';
+            let condition = 'Monitor for CLL';
 
             if (cllPercentage > 80) {
                 interpretation = 'Advanced / Progressive CLL - lymphocytes dominate smear';
@@ -341,13 +360,9 @@ const Homepage = () => {
                 interpretation = 'Reactive / Secondary Lymphocytosis - may occur with viral infections';
                 condition = 'Reactive Lymphocytosis';
                 severity = 'LOW';
-            } else if (cllCount > 0) {
+            } else {
                 interpretation = 'CLL-marked cells detected but below threshold levels';
                 condition = 'Monitor for CLL';
-                severity = 'INFO';
-            } else {
-                interpretation = 'No CLL-marked lymphocytes detected - Normal lymphocyte count';
-                condition = 'Normal';
                 severity = 'INFO';
             }
 
@@ -382,7 +397,7 @@ const Homepage = () => {
             sickleInterpretation = 'Mild Sickling (HbAS) - sickle cell trait, usually asymptomatic';
             sickleSeverity = 'MILD';
         } else if (sicklePercentage > 0) {
-            sickleInterpretation = 'Normal blood with minimal sickling (< 3%)';
+            sickleInterpretation = 'Normal blood (< 3%)';
             sickleSeverity = 'NORMAL';
         }
 

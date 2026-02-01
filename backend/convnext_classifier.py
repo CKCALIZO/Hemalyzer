@@ -45,26 +45,40 @@ class AdaptiveCellPreprocessing:
     matching the training val_transform pipeline exactly.
     """
     
-    def __init__(self, target_size=384, normalize_staining=True, detect_cell=True):
+    def __init__(self, target_size=384, normalize_staining=True, detect_cell=True, fast_mode=False):
         """
         Args:
             target_size: Output image size (384 for ConvNeXt)
             normalize_staining: Whether to apply stain normalization (default: True)
             detect_cell: Whether to detect and center cell (default: True)
+            fast_mode: If True, use faster but slightly less accurate preprocessing
         """
         self.target_size = target_size
         self.normalize_staining = normalize_staining
         self.detect_cell = detect_cell
+        self.fast_mode = fast_mode
         # Pre-create CLAHE object for reuse
         self.clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
         # Pre-create morphological kernel for reuse
         self.morph_kernel = np.ones((3, 3), np.uint8)
+        # Pre-allocate arrays for fast_mode
+        self._percentile_cache = {}
         print(f"[AdaptiveCellPreprocessing] Initialized: target_size={target_size}, "
-              f"stain_norm={normalize_staining}, cell_detect={detect_cell}")
+              f"stain_norm={normalize_staining}, cell_detect={detect_cell}, fast_mode={fast_mode}")
     
     def __call__(self, img):
         """Apply preprocessing to PIL Image - matches training script exactly"""
         img_array = np.array(img)
+        
+        # Fast mode: skip some steps for RBCs (sickle cell detection still works well)
+        if self.fast_mode:
+            # Simplified preprocessing - just resize and basic enhancement
+            img_array = cv2.resize(img_array, (self.target_size, self.target_size))
+            # Quick CLAHE only
+            img_yuv = cv2.cvtColor(img_array, cv2.COLOR_RGB2YUV)
+            img_yuv[:, :, 0] = self.clahe.apply(img_yuv[:, :, 0])
+            img_array = cv2.cvtColor(img_yuv, cv2.COLOR_YUV2RGB)
+            return Image.fromarray(img_array)
         
         # Step 1: Stain normalization (critical for varying stain intensities)
         if self.normalize_staining:
@@ -173,7 +187,7 @@ class ConvNeXtClassifier:
         self.pre_transform = None  # Pre-preprocessor transforms
         self.transform = None  # Post-preprocessor transforms
         self.preprocessor = None
-        self.sickle_cell_confidence_threshold = 0.85  # 90% confidence threshold for sickle cell detection
+        self.sickle_cell_confidence_threshold = 0.87  # 87% confidence threshold for sickle cell detection
     
     def load_model(self, model_path='best_leukemia_model.pth', use_mixed_precision=False, compile_model=False):
         """
@@ -200,9 +214,17 @@ class ConvNeXtClassifier:
             # Set device to CPU and optimize for inference
             self.device = torch.device('cpu')
             
-            # CPU optimizations
-            torch.set_num_threads(4)  # Use 4 threads for parallel processing
+            # CPU optimizations - use all threads for maximum parallelism
+            import multiprocessing
+            num_cpu = multiprocessing.cpu_count()
+            num_threads = num_cpu  # Use all cores
+            torch.set_num_threads(num_threads)
             torch.set_grad_enabled(False)  # Disable gradient computation globally
+            
+            # Additional CPU optimizations
+            torch.backends.mkldnn.enabled = True  # Enable MKL-DNN if available
+            
+            print(f"   CPU threads: {num_threads} (of {num_cpu} cores)")
             
             # Load checkpoint
             checkpoint = torch.load(model_path, map_location='cpu', weights_only=False)
@@ -439,7 +461,7 @@ class ConvNeXtClassifier:
             traceback.print_exc()
             return None
     
-    def classify_batch(self, cell_crops_pil, cell_types=None, batch_size=32):
+    def classify_batch(self, cell_crops_pil, cell_types=None, batch_size=32, use_fast_mode_for_rbc=True):
         """
         OPTIMIZED: Classify multiple cell crops in batches for better CPU performance
         
@@ -447,11 +469,14 @@ class ConvNeXtClassifier:
         1. Parallel Preprocessing (multithreading)
         2. Batched inference
         3. Dynamic Quantization (applied in load_model)
+        4. Fast mode preprocessing for RBCs (simpler pipeline)
+        5. Larger thread pool for parallel preprocessing
         
         Args:
             cell_crops_pil: List of PIL Images of cell crops
             cell_types: List of cell types ('WBC' or 'RBC') for each crop, or single type for all
             batch_size: Batch size for inference (default: 32, higher for quantized CPU)
+            use_fast_mode_for_rbc: Use faster preprocessing for RBCs (default: True)
             
         Returns:
             list: List of classification result dicts (same format as classify())
@@ -473,16 +498,30 @@ class ConvNeXtClassifier:
         results = [None] * len(cell_crops_pil)
         
         try:
-            # 1. PARALLEL PREPROCESSING
+            # 1. PARALLEL PREPROCESSING with Fast Mode for RBCs
             # This is the most CPU-intensive part (stain norm, CLAHE, etc.)
-            # We use a thread pool to process images in parallel
+            # RBCs use fast mode (simpler pipeline) while WBCs use full pipeline
             
-            def preprocess_single(idx_and_img):
-                idx, img = idx_and_img
+            # Create fast-mode preprocessor for RBCs
+            fast_preprocessor = AdaptiveCellPreprocessing(
+                target_size=384,
+                normalize_staining=False,  # Skip for RBCs
+                detect_cell=False,         # Skip for RBCs
+                fast_mode=True
+            ) if use_fast_mode_for_rbc else self.preprocessor
+            
+            def preprocess_single(idx_and_img_and_type):
+                idx, img, cell_type = idx_and_img_and_type
                 try:
                     # Apply full preprocessing pipeline
                     img_resized = self.pre_transform(img)
-                    img_preprocessed = self.preprocessor(img_resized)
+                    
+                    # Use fast preprocessor for RBCs, full for WBCs
+                    if cell_type == 'RBC' and use_fast_mode_for_rbc:
+                        img_preprocessed = fast_preprocessor(img_resized)
+                    else:
+                        img_preprocessed = self.preprocessor(img_resized)
+                    
                     tensor = self.transform(img_preprocessed)
                     return idx, tensor
                 except Exception as e:
@@ -492,16 +531,17 @@ class ConvNeXtClassifier:
             print(f"   Starting parallel preprocessing of {len(cell_crops_pil)} cells...")
             prep_start = time.time()
             
-            # Use max_workers=None (defaults to num_cpus * 5) for I/O bound, 
-            # but here it's CPU bound so maybe num_cpus is better. 
-            # However, cv2 releases GIL often, so more threads might allow better utilization.
-            # Let's use standard default.
+            # Use more workers for better CPU utilization
+            # OpenCV releases GIL, so more threads can help
+            # Increase cap to 16 for large RBC batches (common in blood smears)
+            num_workers = min(16, max(8, len(cell_crops_pil) // 50))  # Scale workers with batch size
             valid_tensors = []
             valid_indices = []
             
-            with ThreadPoolExecutor() as executor:
-                # Submit all tasks
-                futures = list(executor.map(preprocess_single, enumerate(cell_crops_pil)))
+            with ThreadPoolExecutor(max_workers=num_workers) as executor:
+                # Submit all tasks with cell types
+                args = [(idx, img, cell_types[idx]) for idx, img in enumerate(cell_crops_pil)]
+                futures = list(executor.map(preprocess_single, args))
                 
                 # Collect results
                 for idx, tensor in futures:

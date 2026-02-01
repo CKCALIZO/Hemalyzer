@@ -88,6 +88,78 @@ MINIMUM_CELLS_FOR_DIAGNOSIS = {
     'min_fields_for_reliable': 5  # Minimum fields for reliable diagnosis
 }
 
+# ============================================================
+# EXPECTED CELL COUNTS FOR 10 HPF ANALYSIS
+# Based on 100x oil immersion, ~3 WBCs per field average
+# These are ABSOLUTE COUNT expectations, not percentages
+# ============================================================
+
+# Expected total WBC count for 10 HPF (100x magnification)
+EXPECTED_WBC_PER_10HPF = {
+    'total': {
+        'min': 15,       # Low end of normal
+        'expected': 30,  # Average (~3 per field × 10 fields)
+        'max': 50,       # High end of normal
+        'note': 'Normal blood smear at 100x magnification'
+    },
+    # Expected absolute counts for each WBC type in 10 HPF
+    # Calculated from normal differential % applied to 30 expected WBCs
+    # Ranges widened to account for sampling variation
+    'differential_counts': {
+        'Neutrophil': {
+            'normal_pct': (50, 70),        # Reference percentage
+            'expected_count': (15, 21),    # 50-70% of 30 WBCs
+            'acceptable_range': (10, 35),  # Wider range for small sample
+            'flag_high': 36,               # Flag if > this count
+            'flag_low': 8,                 # Flag if < this count (in adequate sample)
+        },
+        'Lymphocyte': {
+            'normal_pct': (18, 42),
+            'expected_count': (5, 13),     # 18-42% of 30 WBCs
+            'acceptable_range': (3, 18),
+            'flag_high': 20,
+            'flag_low': 2,
+        },
+        'Monocyte': {
+            'normal_pct': (2, 11),
+            'expected_count': (1, 3),      # 2-11% of 30 WBCs
+            'acceptable_range': (0, 6),
+            'flag_high': 8,
+            'flag_low': None,              # 0 monocytes can be normal in small sample
+        },
+        'Eosinophil': {
+            'normal_pct': (1, 3),
+            'expected_count': (0, 1),      # 1-3% of 30 WBCs = 0.3-0.9
+            'acceptable_range': (0, 3),
+            'flag_high': 4,                # >4 eosinophils in 10 HPF is suspicious
+            'flag_low': None,
+        },
+        'Basophil': {
+            'normal_pct': (0, 2),
+            'expected_count': (0, 1),      # 0-2% of 30 WBCs = 0-0.6
+            'acceptable_range': (0, 2),
+            'flag_high': 3,                # >3 basophils in 10 HPF is suspicious
+            'flag_low': None,
+        },
+    }
+}
+
+# Statistical confidence thresholds for small samples
+# Based on binomial confidence intervals
+SMALL_SAMPLE_THRESHOLDS = {
+    # Minimum WBCs needed for reliable percentage assessment
+    'min_for_percentage': 20,      # Below this, use absolute counts only
+    'min_for_differential': 50,    # Below this, differential has high uncertainty
+    'target_for_clinical': 100,    # Clinical standard for reliable differential
+    
+    # Confidence interval widths (approximate) for different sample sizes
+    # Used to determine if a finding is statistically significant
+    'ci_width_at_30': 0.18,        # ±18% at 30 WBCs (very wide)
+    'ci_width_at_50': 0.14,        # ±14% at 50 WBCs
+    'ci_width_at_100': 0.10,       # ±10% at 100 WBCs (acceptable)
+}
+
+
 # Manual Hemocytometer Calculation Constants
 # Based on Neubauer Improved Hemocytometer
 HEMOCYTOMETER_CONSTANTS = {
