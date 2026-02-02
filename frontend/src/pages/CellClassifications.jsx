@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Header } from "../components/Header.jsx";
 import { Footer } from "../components/Footer.jsx";
+import { Sidebar } from "../components/Sidebar.jsx";
 
 export const CellClassifications = () => {
     const navigate = useNavigate();
@@ -65,9 +66,11 @@ export const CellClassifications = () => {
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-red-50">
-            <Header />
-            <main className="flex grow flex-col p-8">
+        <div className="flex min-h-screen bg-red-50">
+            <Sidebar />
+            <div className="flex flex-col flex-1 transition-all duration-300">
+                <Header />
+                <main className="flex grow flex-col p-8">
                 <div className="max-w-7xl mx-auto w-full">
                     {/* Header Section */}
                     <div className="flex justify-between items-center mb-6">
@@ -224,8 +227,9 @@ export const CellClassifications = () => {
                         </p>
                     </div>
                 </div>
-            </main>
-            <Footer />
+                </main>
+                <Footer />
+            </div>
         </div>
     );
 };

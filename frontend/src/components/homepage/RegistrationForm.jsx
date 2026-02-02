@@ -6,8 +6,20 @@ export const RegistrationForm = ({
     patientAge, setPatientAge,
     patientGender, setPatientGender,
     patientPhone, setPatientPhone,
-    onRegister
+    onRegister,
+    onClose,
+    isEditMode = false
 }) => {
+    /**
+     * Handle phone number input - only accept digits, max 10
+     */
+    const handlePhoneChange = (e) => {
+        const value = e.target.value;
+        // Only allow digits and limit to 10 characters
+        const digitsOnly = value.replace(/\D/g, '').slice(0, 10);
+        setPatientPhone(digitsOnly);
+    };
+
     /**
      * Generate Structured MRN (Medical Record Number)
      * Format: YYMMDD-XXXX (Date + 4-digit sequential number)
@@ -115,23 +127,43 @@ export const RegistrationForm = ({
         window.validateMRN = validateMRN;
     }, []);
 
-    // Auto-generate ID on mount
+    // Auto-generate ID on mount (only for new patients)
     React.useEffect(() => {
-        if (!patientId) {
+        if (!patientId && !isEditMode) {
             generatePatientId();
         }
-    }, []);
+    }, [isEditMode]);
 
     return (
-        <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-rose-100 overflow-hidden transform transition-all">
-            <div className="bg-gradient-to-r from-rose-600 to-pink-600 px-6 py-4 text-white">
+        <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-rose-100 overflow-hidden transform transition-all relative">
+            {/* Close Button */}
+            {onClose && (
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="absolute top-3 right-3 z-10 p-2 rounded-full bg-white/20 hover:bg-white/40 text-white transition-colors"
+                    title="Close"
+                >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            )}
+            
+            <div className={`px-6 py-4 text-white ${isEditMode ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gradient-to-r from-rose-600 to-pink-600'}`}>
                 <h2 className="text-xl font-bold flex items-center gap-2">
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        {isEditMode ? (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        ) : (
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        )}
                     </svg>
-                    Patient Registration
+                    {isEditMode ? 'Edit Patient Information' : 'Patient Registration'}
                 </h2>
-                <p className="text-rose-100 text-sm mt-0.5">Enter patient details to begin analysis</p>
+                <p className={`text-sm mt-0.5 ${isEditMode ? 'text-blue-100' : 'text-rose-100'}`}>
+                    {isEditMode ? 'Update patient details below' : 'Enter patient details to begin analysis'}
+                </p>
             </div>
 
             <form onSubmit={onRegister} className="p-6 space-y-4">
@@ -209,24 +241,36 @@ export const RegistrationForm = ({
                 {/* Phone Number */}
                 <div>
                     <label htmlFor="patientPhone" className="block text-sm font-semibold text-slate-700 mb-1.5">Phone Number</label>
-                    <input
-                        id="patientPhone"
-                        name="patientPhone"
-                        type="tel"
-                        autoComplete="tel"
-                        value={patientPhone}
-                        onChange={(e) => setPatientPhone(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition-all"
-                        placeholder="e.g. +1 (555) 000-0000"
-                    />
+                    <div className="relative flex">
+                        <span className="inline-flex items-center px-3 py-2.5 bg-slate-100 border border-r-0 border-slate-300 rounded-l-lg text-slate-600 font-medium text-sm">
+                            +63
+                        </span>
+                        <input
+                            id="patientPhone"
+                            name="patientPhone"
+                            type="tel"
+                            inputMode="numeric"
+                            autoComplete="tel"
+                            value={patientPhone}
+                            onChange={handlePhoneChange}
+                            maxLength={10}
+                            className="w-full px-4 py-2.5 border border-slate-300 rounded-r-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition-all"
+                            placeholder="9XXXXXXXXX"
+                        />
+                    </div>
+                    <p className="text-xs text-slate-500 mt-1">Enter 10-digit mobile number (e.g., 9171234567)</p>
                 </div>
 
                 <div className="pt-4 flex justify-end">
                     <button
                         type="submit"
-                        className="w-full px-8 py-3 bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 text-white rounded-xl font-bold text-lg shadow-lg shadow-rose-200 hover:shadow-xl hover:shadow-rose-300 transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+                        className={`w-full px-8 py-3 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 ${
+                            isEditMode 
+                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-200 hover:shadow-blue-300'
+                                : 'bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 shadow-rose-200 hover:shadow-rose-300'
+                        }`}
                     >
-                        Start Analysis
+                        {isEditMode ? 'Save Changes' : 'Start Analysis'}
                     </button>
                 </div>
             </form>

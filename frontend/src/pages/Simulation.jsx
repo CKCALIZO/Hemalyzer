@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
+import { Sidebar } from '../components/Sidebar';
 import '../styles/index.css';
 
 export function Simulation() {
@@ -180,33 +181,35 @@ export function Simulation() {
   }, [activeTab]);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <Header />
-      
-      <main className="flex-grow container mx-auto px-4 py-8">
-        {/* Page Title */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">
-            Simulation & Comparison
-          </h1>
-          <p className="text-gray-600">
-            Compare detection models, understand methodology, and perform manual calculations
-          </p>
-        </div>
+    <div className="flex min-h-screen bg-gray-50">
+      <Sidebar />
+      <div className="flex flex-col flex-1 transition-all duration-300">
+        <Header />
+        
+        <main className="flex-grow container mx-auto px-4 py-8">
+          {/* Page Title */}
+          <div className="text-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-800 mb-2">
+              Simulation & Comparison
+            </h1>
+            <p className="text-gray-600">
+              Compare detection models, understand methodology, and perform manual calculations
+            </p>
+          </div>
 
-        {/* Tab Navigation */}
-        <div className="flex justify-center mb-8">
-          <div className="bg-white rounded-lg shadow-md p-1 flex gap-1">
-            <button
-              onClick={() => setActiveTab('comparison')}
-              className={`px-6 py-3 rounded-md font-medium transition-all ${
-                activeTab === 'comparison'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-100'
-              }`}
-            >
-              Model Comparison
-            </button>
+          {/* Tab Navigation */}
+          <div className="flex justify-center mb-8">
+            <div className="bg-white rounded-lg shadow-md p-1 flex gap-1">
+              <button
+                onClick={() => setActiveTab('comparison')}
+                className={`px-6 py-3 rounded-md font-medium transition-all ${
+                  activeTab === 'comparison'
+                    ? 'bg-blue-600 text-white'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                Model Comparison
+              </button>
             <button
               onClick={() => setActiveTab('calculation')}
               className={`px-6 py-3 rounded-md font-medium transition-all ${
@@ -1112,9 +1115,10 @@ export function Simulation() {
             )}
           </div>
         )}
-      </main>
+        </main>
 
-      <Footer />
+        <Footer />
+      </div>
     </div>
   );
 }

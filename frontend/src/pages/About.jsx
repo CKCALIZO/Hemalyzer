@@ -1,5 +1,6 @@
 import { Header } from "../components/Header.jsx";
 import { Footer } from "../components/Footer.jsx";
+import { Sidebar } from "../components/Sidebar.jsx";
 import { useState } from "react";
 
 export const About = () => {
@@ -10,9 +11,11 @@ export const About = () => {
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-red-50">
-            <Header />
-            <main className="flex grow flex-col items-center justify-start p-8">
+        <div className="flex min-h-screen bg-red-50">
+            <Sidebar />
+            <div className="flex flex-col flex-1 transition-all duration-300">
+                <Header />
+                <main className="flex grow flex-col items-center justify-start p-8">
                 <div className="max-w-6xl w-full mb-8">
                     <h1 className="text-3xl font-bold text-center text-red-900 mb-4">About Hemalyzer</h1>
                     <div className="bg-white rounded-lg shadow-sm p-6 border-l-4 border-red-700">
@@ -353,8 +356,9 @@ export const About = () => {
                         </div>
                     )}
                 </div>
-            </main>
-            <Footer />
+                </main>
+                <Footer />
+            </div>
         </div>
     )
 }

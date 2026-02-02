@@ -104,6 +104,16 @@ export const UploadSection = ({
 
                 {/* Upload Controls - Fade when threshold met */}
                 <div className={`transition-opacity duration-300 ${thresholdMet ? 'opacity-40 pointer-events-none' : ''}`}>
+                    {/* Supported File Types Notice */}
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
+                        <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p className="text-sm text-blue-800">
+                            <strong>Supported file types:</strong> JPG and PNG only
+                        </p>
+                    </div>
+                    
                     {/* Single File Input */}
                     <input
                         type="file"
@@ -132,7 +142,7 @@ export const UploadSection = ({
                 {/* Bulk Upload Section */}
                 <div className="mb-4 p-4 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg border border-rose-200">
                     <label className="block text-sm font-medium text-rose-900 mb-2">
-                        Bulk Upload (up to {targetImageCount - processedImages.length} images)
+                        Bulk Upload (up to {targetImageCount - processedImages.length} images) - JPG/PNG only
                     </label>
                     <input
                         className="block w-full text-sm text-rose-700 border border-rose-300 
@@ -140,7 +150,7 @@ export const UploadSection = ({
                         focus:ring-rose-400 p-2 mb-3"
                         id="bulk-upload"
                         type="file"
-                        accept="image/*"
+                        accept=".jpg,.jpeg,.png"
                         multiple
                         onChange={handleBulkFileChange}
                         disabled={loading || thresholdMet || isBulkProcessing}

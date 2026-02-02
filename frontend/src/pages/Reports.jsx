@@ -3,6 +3,7 @@ import { Trash2, FileText, Download, Filter, Search, ChevronDown, ChevronUp } fr
 import { generatePDF } from '../utils/pdfGenerator';
 import { Header } from "../components/Header.jsx";
 import { Footer } from "../components/Footer.jsx";
+import { Sidebar } from "../components/Sidebar.jsx";
 import { ThresholdResults } from "../components/ThresholdResults.jsx";
 
 export const Reports = () => {
@@ -208,25 +209,27 @@ export const Reports = () => {
     };
 
     return (
-        <div className="flex flex-col min-h-screen bg-red-50">
-            <Header />
-            <main className="flex grow flex-col items-start justify-start p-8">
-                <div className="w-full max-w-7xl mx-auto">
-                    <div className="flex justify-between items-center mb-6">
-                        <h1 className="text-4xl font-bold text-red-900">Analysis Reports</h1>
-                        {reports.length > 0 && (
-                            <button
-                                onClick={clearAllReports}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                            >
-                                Clear All Reports
-                            </button>
-                        )}
-                    </div>
+        <div className="flex min-h-screen bg-red-50">
+            <Sidebar />
+            <div className="flex flex-col flex-1 transition-all duration-300">
+                <Header />
+                <main className="flex grow flex-col items-start justify-start p-8">
+                    <div className="w-full max-w-7xl mx-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h1 className="text-4xl font-bold text-red-900">Analysis Reports</h1>
+                            {reports.length > 0 && (
+                                <button
+                                    onClick={clearAllReports}
+                                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                                >
+                                    Clear All Reports
+                                </button>
+                            )}
+                        </div>
 
-                    {reports.length === 0 ? (
-                        <div className="text-center py-16 bg-white rounded-lg border border-red-200">
-                            <p className="text-xl text-red-600">No reports saved yet</p>
+                        {reports.length === 0 ? (
+                            <div className="text-center py-16 bg-white rounded-lg border border-red-200">
+                                <p className="text-xl text-red-600">No reports saved yet</p>
                             <p className="text-sm text-red-400 mt-2">Analyze an image and save the report to view it here</p>
                         </div>
                     ) : (
@@ -531,9 +534,10 @@ export const Reports = () => {
                             </div>
                         </div>
                     )}
-                </div>
-            </main>
-            <Footer />
+                    </div>
+                </main>
+                <Footer />
+            </div>
         </div>
     )
 }
