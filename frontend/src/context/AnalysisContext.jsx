@@ -563,6 +563,14 @@ export const AnalysisProvider = ({ children }) => {
 
             const data = await response.json();
 
+            // Check if the image was rejected (not a valid blood smear)
+            if (data.success === false) {
+                setError(data.error || 'Image validation failed. Please ensure you upload a valid 100x oil immersion blood smear.');
+                setLoading(false);
+                setAnalysisProgress({ stage: '', percentage: 0, message: '' });
+                return;
+            }
+
             setAnalysisProgress({ stage: 'Complete', percentage: 100, message: 'Analysis complete!' });
 
             // Update current results
@@ -666,6 +674,12 @@ export const AnalysisProvider = ({ children }) => {
                 }
 
                 const data = await response.json();
+
+                // Check if the image was rejected (not a valid blood smear)
+                if (data.success === false) {
+                    console.warn(`Skipped ${file.name}: ${data.error || 'Invalid blood smear image'}`);
+                    continue;
+                }
 
                 newProcessedImages.push({
                     id: Date.now() + i,

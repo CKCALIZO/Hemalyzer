@@ -654,6 +654,83 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         original_h, original_w = image.shape[:2]
         
+        # ========== IMAGE QUALITY VALIDATION ==========
+        # Check image quality BEFORE sending to detection API
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # 1. Brightness check (mean pixel intensity)
+        mean_brightness = np.mean(gray)
+        MIN_BRIGHTNESS = 40   # Too dark threshold
+        MAX_BRIGHTNESS = 245  # Too bright/overexposed threshold
+        
+        print(f"\n{'='*60}")
+        print(f"IMAGE QUALITY CHECK")
+        print(f"{'='*60}")
+        print(f"Mean brightness: {mean_brightness:.1f} (valid range: {MIN_BRIGHTNESS}-{MAX_BRIGHTNESS})")
+        
+        if mean_brightness < MIN_BRIGHTNESS:
+            print(f"   ⚠️ REJECTED: Image too dark (brightness: {mean_brightness:.1f})")
+            return {
+                'success': False,
+                'error': 'Image quality validation failed:\n\n'
+                         'The image appears to be too DARK.\n'
+                         'Please ensure:\n'
+                         '1. Microscope light source is properly adjusted\n'
+                         '2. Image is not underexposed\n'
+                         '3. Camera settings are correct for microscopy'
+            }
+        
+        if mean_brightness > MAX_BRIGHTNESS:
+            print(f"   ⚠️ REJECTED: Image too bright/overexposed (brightness: {mean_brightness:.1f})")
+            return {
+                'success': False,
+                'error': 'Image quality validation failed:\n\n'
+                         'The image appears to be OVEREXPOSED or too bright.\n'
+                         'Please ensure:\n'
+                         '1. Reduce microscope light intensity\n'
+                         '2. Adjust camera exposure settings\n'
+                         '3. Image shows visible cell structures'
+            }
+        
+        # 2. Contrast check (standard deviation of pixel intensities)
+        std_dev = np.std(gray)
+        MIN_CONTRAST = 15  # Minimum contrast threshold
+        
+        print(f"Contrast (std dev): {std_dev:.1f} (minimum: {MIN_CONTRAST})")
+        
+        if std_dev < MIN_CONTRAST:
+            print(f"   ⚠️ REJECTED: Image has insufficient contrast (std: {std_dev:.1f})")
+            return {
+                'success': False,
+                'error': 'Image quality validation failed:\n\n'
+                         'The image appears to be BLANK or has very low contrast.\n'
+                         'This does not appear to be a blood smear image.\n'
+                         'Please ensure:\n'
+                         '1. Upload a proper blood smear microscopy image\n'
+                         '2. Image contains visible cells with distinct features\n'
+                         '3. Image is in focus'
+            }
+        
+        # 3. Check for uniform/solid color images (histogram analysis)
+        hist = cv2.calcHist([gray], [0], None, [256], [0, 256])
+        hist_normalized = hist / hist.sum()
+        max_bin_ratio = hist_normalized.max()
+        
+        print(f"Max histogram bin ratio: {max_bin_ratio:.3f} (max allowed: 0.5)")
+        
+        if max_bin_ratio > 0.5:  # More than 50% pixels in single intensity bin
+            print(f"   ⚠️ REJECTED: Image appears uniform/solid (max bin: {max_bin_ratio:.3f})")
+            return {
+                'success': False,
+                'error': 'Image quality validation failed:\n\n'
+                         'The image appears to be a solid color or nearly uniform.\n'
+                         'This is not a valid blood smear image.\n'
+                         'Please upload a proper microscopy image of a blood smear.'
+            }
+        
+        print(f"   ✓ Image quality checks PASSED")
+        # ========== END IMAGE QUALITY VALIDATION ==========
+        
         # Resize image to 640x640 (model training size) for consistent detection
         TARGET_SIZE = 640
         image_resized = cv2.resize(image, (TARGET_SIZE, TARGET_SIZE))
