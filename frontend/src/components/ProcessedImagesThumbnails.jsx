@@ -26,7 +26,32 @@ export const ProcessedImagesThumbnails = ({
     const [showAbnormalWBCs, setShowAbnormalWBCs] = useState(false);
 
     if (!processedImages || processedImages.length === 0) {
-        return null;
+        return (
+            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                <div className="px-4 py-3 bg-gradient-to-r from-rose-50 to-pink-50 border-b border-rose-200">
+                    <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-rose-800 flex items-center gap-2">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                            Processed Images
+                        </h3>
+                        <span className="text-sm text-rose-600">0 / {targetImageCount}</span>
+                    </div>
+                </div>
+                <div className="p-6 text-center">
+                    <div className="flex justify-center mb-4">
+                        <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center">
+                            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                        </div>
+                    </div>
+                    <p className="text-slate-500 text-sm">No images analyzed yet</p>
+                    <p className="text-slate-400 text-xs mt-1">Upload and analyze blood smear images to see results here</p>
+                </div>
+            </div>
+        );
     }
 
     const progress = Math.min(100, (currentImageCount / targetImageCount) * 100);
@@ -264,7 +289,7 @@ export const ProcessedImagesThumbnails = ({
                                         className="w-8 h-8 rounded border-2 border-rose-300 overflow-hidden"
                                     >
                                         <img
-                                            src={img.preview || `data:image/jpeg;base64,${img.annotated}`}
+                                            src={img.annotatedImage ? `data:image/jpeg;base64,${img.annotatedImage}` : (img.preview || `data:image/jpeg;base64,${img.annotated}`)}
                                             alt={`Img ${idx + 1}`}
                                             className="w-full h-full object-cover"
                                         />
@@ -315,7 +340,7 @@ export const ProcessedImagesThumbnails = ({
                                             <div className="relative">
                                                 <div className="w-14 h-14 rounded-lg overflow-hidden border-2 border-rose-300">
                                                     <img
-                                                        src={img.preview || `data:image/jpeg;base64,${img.annotated}`}
+                                                        src={img.annotatedImage ? `data:image/jpeg;base64,${img.annotatedImage}` : (img.preview || `data:image/jpeg;base64,${img.annotated}`)}
                                                         alt={`Image ${idx + 1}`}
                                                         className="w-full h-full object-cover"
                                                     />
@@ -546,11 +571,12 @@ export const ProcessedImagesThumbnails = ({
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                 {/* Left: Annotated Image */}
                                 <div>
-                                    {selectedImage.annotated && (
+                                    {(selectedImage.annotatedImage || selectedImage.annotated || selectedImage.preview) && (
                                         <div>
                                             <h4 className="text-sm font-semibold text-slate-600 mb-2">Annotated Image</h4>
                                             <img
-                                                src={`data:image/jpeg;base64,${selectedImage.annotated}`}
+                                                src={selectedImage.annotatedImage ? `data:image/jpeg;base64,${selectedImage.annotatedImage}` : 
+                                                     (selectedImage.annotated ? `data:image/jpeg;base64,${selectedImage.annotated}` : selectedImage.preview)}
                                                 alt="Annotated"
                                                 className="w-full rounded-lg border border-slate-200"
                                             />

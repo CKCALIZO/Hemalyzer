@@ -46,7 +46,7 @@ export const UploadSection = ({
                     </div>
                     <div className="w-full h-3 bg-rose-200 rounded-full overflow-hidden">
                         <div
-                            className="h-full bg-gradient-to-r from-rose-400 to-rose-600 transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                            className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${thresholdMet ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' : 'bg-gradient-to-r from-rose-400 to-rose-600'}`}
                             style={{ width: `${progress}%` }}
                         />
                     </div>
@@ -56,13 +56,28 @@ export const UploadSection = ({
                         </p>
                     ) : (
                         <p className="text-xs text-emerald-600 mt-2 font-medium">
-                            Threshold met! Processing final results...
+                            ✓ Analysis complete! View final results above.
                         </p>
                     )}
                 </div>
 
-                {/* Image Preview */}
-                {previewUrl && (
+                {/* Threshold Met Banner */}
+                {thresholdMet && (
+                    <div className="mb-4 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <div className="flex items-center gap-2 text-emerald-700">
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="font-semibold">10 Images Analyzed Successfully!</span>
+                        </div>
+                        <p className="text-sm text-emerald-600 mt-1">
+                            Final results are now available. Click "Reset Analysis Session" to start a new analysis.
+                        </p>
+                    </div>
+                )}
+
+                {/* Image Preview - Only show when not threshold met and no error */}
+                {previewUrl && !thresholdMet && !error && (
                     <div className="mb-4 rounded-lg overflow-hidden border border-slate-200">
                         <img
                             src={previewUrl}
@@ -72,27 +87,45 @@ export const UploadSection = ({
                     </div>
                 )}
 
-                {/* Single File Input */}
-                <input
-                    type="file"
-                    accept=".jpg,.jpeg,.png"
-                    onChange={handleFileChange}
-                    className="block w-full text-sm text-slate-500
-                    file:mr-4 file:py-2 file:px-4
-                    file:rounded-full file:border-0
-                    file:text-sm file:font-semibold
-                    file:bg-rose-50 file:text-rose-700
-                    hover:file:bg-rose-100"
-                    disabled={loading || thresholdMet}
-                />
-
-                {/* Divider */}
-                <div className="relative my-6">
-                    <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-slate-200"></div>
+                {/* Early Error Display - Show immediately after file selection fails */}
+                {error && !loading && (
+                    <div className="mb-4 p-4 bg-red-50 border border-red-300 rounded-lg">
+                        <div className="flex items-start gap-2">
+                            <svg className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <div>
+                                <p className="font-semibold text-red-700 text-sm">Image Validation Failed</p>
+                                <p className="text-sm text-red-600 whitespace-pre-wrap mt-1">{error}</p>
+                            </div>
+                        </div>
                     </div>
-                    <div className="relative flex justify-center text-sm">
-                        <span className="bg-white px-3 text-slate-500 font-medium">OR</span>
+                )}
+
+                {/* Upload Controls - Fade when threshold met */}
+                <div className={`transition-opacity duration-300 ${thresholdMet ? 'opacity-40 pointer-events-none' : ''}`}>
+                    {/* Single File Input */}
+                    <input
+                        type="file"
+                        accept=".jpg,.jpeg,.png"
+                        onChange={handleFileChange}
+                        className="block w-full text-sm text-slate-500
+                        file:mr-4 file:py-2 file:px-4
+                        file:rounded-full file:border-0
+                        file:text-sm file:font-semibold
+                        file:bg-rose-50 file:text-rose-700
+                        hover:file:bg-rose-100
+                        disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={loading || thresholdMet}
+                    />
+
+                    {/* Divider */}
+                    <div className="relative my-6">
+                        <div className="absolute inset-0 flex items-center">
+                            <div className="w-full border-t border-slate-200"></div>
+                        </div>
+                        <div className="relative flex justify-center text-sm">
+                            <span className="bg-white px-3 text-slate-500 font-medium">OR</span>
                     </div>
                 </div>
 
@@ -204,30 +237,30 @@ export const UploadSection = ({
 
                 {/* Analysis Progress Bar - Shows during image processing AND for 2s after completion */}
                 {analysisProgress.stage && (
-                    <div className={`mb-4 p-4 rounded-lg border ${analysisProgress.stage === 'complete'
+                    <div className={`mb-4 p-4 rounded-lg border ${analysisProgress.stage === 'Complete'
                         ? 'bg-emerald-50 border-emerald-300'
                         : 'bg-rose-50 border-rose-300'
                         }`}>
                         <div className="flex justify-between items-center mb-2">
-                            <span className={`text-sm font-medium ${analysisProgress.stage === 'complete'
+                            <span className={`text-sm font-medium ${analysisProgress.stage === 'Complete'
                                 ? 'text-emerald-800'
                                 : 'text-rose-800'
                                 }`}>
                                 {analysisProgress.message}
                             </span>
-                            <span className={`text-sm font-semibold ${analysisProgress.stage === 'complete'
+                            <span className={`text-sm font-semibold ${analysisProgress.stage === 'Complete'
                                 ? 'text-emerald-600'
                                 : 'text-rose-600'
                                 }`}>
                                 {analysisProgress.percentage}%
                             </span>
                         </div>
-                        <div className={`w-full h-2.5 rounded-full overflow-hidden ${analysisProgress.stage === 'complete'
+                        <div className={`w-full h-2.5 rounded-full overflow-hidden ${analysisProgress.stage === 'Complete'
                             ? 'bg-emerald-200'
                             : 'bg-rose-200'
                             }`}>
                             <div
-                                className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${analysisProgress.stage === 'complete'
+                                className={`h-full transition-all duration-700 ease-[cubic-bezier(0.4,0,0.2,1)] ${analysisProgress.stage === 'Complete'
                                     ? 'bg-emerald-500'
                                     : 'bg-gradient-to-r from-rose-400 to-rose-600'
                                     }`}
@@ -236,7 +269,7 @@ export const UploadSection = ({
                         </div>
                         {/* Only show step indicators for single image processing, not bulk */}
                         {analysisProgress.stage !== 'bulk' && (
-                            <div className={`mt-3 flex items-center justify-between text-xs ${analysisProgress.stage === 'complete'
+                            <div className={`mt-3 flex items-center justify-between text-xs ${analysisProgress.stage === 'Complete'
                                 ? 'text-emerald-700'
                                 : 'text-rose-700'
                                 }`}>
@@ -295,18 +328,12 @@ export const UploadSection = ({
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
-                            Analyze Image
+                            {thresholdMet ? 'Analysis Complete' : 'Analyze Image'}
                         </>
                     )}
                 </button>
-
-                {/* Error Display */}
-                {error && (
-                    <div className="mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg">
-                        <p className="font-semibold text-sm">Error</p>
-                        <p className="text-sm whitespace-pre-wrap">{error}</p>
-                    </div>
-                )}
+                </div>
+                {/* End of Upload Controls wrapper */}
 
                 {/* Aggregated Stats */}
                 {processedImages.length > 0 && (

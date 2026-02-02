@@ -997,8 +997,8 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             h, w = image_rgb_clean.shape[:2]
             crop_args = [(idx, det, image_rgb_clean, h, w) for idx, det in enumerate(detections['cells'])]
             
-            # Process crops in parallel
-            with ThreadPoolExecutor(max_workers=8) as executor:
+            # Process crops in parallel (reduced workers to prevent system slowdown)
+            with ThreadPoolExecutor(max_workers=4) as executor:
                 crop_results = list(executor.map(prepare_crop, crop_args))
             
             # Collect results
@@ -1033,7 +1033,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     load_convnext_model()
                     
                 print(f"   > Batch classifying {len(wbc_crops)} WBCs...")
-                wbc_results = classifier.classify_batch(wbc_crops, ['WBC']*len(wbc_crops), batch_size=32)
+                wbc_results = classifier.classify_batch(wbc_crops, ['WBC']*len(wbc_crops), batch_size=16)
                 
                 for i, result in enumerate(wbc_results):
                     if not result: continue
@@ -1124,8 +1124,8 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 if not classifier.is_loaded(): 
                     load_convnext_model()
                 print(f"   > Batch classifying {len(rbc_crops)} RBCs (sampled from {original_rbc_count} total)...")
-                # Use fast mode and larger batch size for RBCs - balances speed and accuracy
-                rbc_results = classifier.classify_batch(rbc_crops, ['RBC']*len(rbc_crops), batch_size=64, use_fast_mode_for_rbc=True)
+                # Use fast mode and reduced batch size for RBCs - balances speed and system load
+                rbc_results = classifier.classify_batch(rbc_crops, ['RBC']*len(rbc_crops), batch_size=32, use_fast_mode_for_rbc=True)
                 
                 for i, result in enumerate(rbc_results):
                     if not result: continue
@@ -1236,6 +1236,13 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         
         return {
             'success': True,
+            
+            # ===== COMPATIBILITY KEYS (for frontend) =====
+            # These flat keys are used by the frontend for aggregation
+            'wbc_count': detections['counts']['WBC'],
+            'rbc_count': detections['counts']['RBC'],
+            'platelet_count': detections['counts']['Platelets'],
+            'wbc_classifications': wbc_classifications,  # Alias for frontend compatibility
             
             # ===== TWO-STAGE WORKFLOW RESULTS =====
             # Stage 1: YOLOv8 Detection (total cell counts)

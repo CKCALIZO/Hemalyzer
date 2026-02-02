@@ -531,10 +531,9 @@ class ConvNeXtClassifier:
             print(f"   Starting parallel preprocessing of {len(cell_crops_pil)} cells...")
             prep_start = time.time()
             
-            # Use more workers for better CPU utilization
-            # OpenCV releases GIL, so more threads can help
-            # Increase cap to 16 for large RBC batches (common in blood smears)
-            num_workers = min(16, max(8, len(cell_crops_pil) // 50))  # Scale workers with batch size
+            # Use fewer workers to prevent system slowdown on laptops
+            # Reduced from min(16, max(8, ...)) to min(6, max(4, ...))
+            num_workers = min(6, max(4, len(cell_crops_pil) // 100))  # Scale workers with batch size
             valid_tensors = []
             valid_indices = []
             

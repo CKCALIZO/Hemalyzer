@@ -403,13 +403,18 @@ export const AnalysisProvider = ({ children }) => {
                     if (session.isRegistered) setIsRegistered(true);
 
                     const isThresholdMet = session.thresholdMet === true || (session.processedImages && session.processedImages.length >= TARGET_IMAGE_COUNT);
-                    if (isThresholdMet) {
-                        setThresholdMet(true);
-                        if (session.finalResults) setFinalResults(session.finalResults);
-                    } else {
-                        setThresholdMet(false);
-                        setFinalResults(null);
+                    setThresholdMet(isThresholdMet);
+                    
+                    // Restore finalResults if available (the useEffect will recalculate if needed)
+                    if (session.finalResults) {
+                        setFinalResults(session.finalResults);
                     }
+                    
+                    console.log('Session restored:', {
+                        imagesCount: session.processedImages?.length || 0,
+                        thresholdMet: isThresholdMet,
+                        hasFinalResults: !!session.finalResults
+                    });
                 }
             } catch (error) {
                 console.log('No valid session to restore:', error);
@@ -455,7 +460,8 @@ export const AnalysisProvider = ({ children }) => {
                 },
                 sessionData: {
                     analysisComplete: true,
-                    wbcClassificationCount: finalResults.totalWBC
+                    wbcClassificationCount: finalResults.totalWBC,
+                    totalImagesAnalyzed: processedImages.length
                 }
             };
 
@@ -503,15 +509,76 @@ export const AnalysisProvider = ({ children }) => {
         setIsBulkProcessing(false);
     }, []);
 
-    // Handle File Change - Process selected file for preview
-    const handleFileChange = useCallback((e) => {
+    // Client-side image validation helper
+    const validateImageFile = useCallback((file) => {
+        return new Promise((resolve, reject) => {
+            // Check file type
+            const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+            if (!validTypes.includes(file.type)) {
+                reject('Invalid file type. Please upload JPG or PNG images only.');
+                return;
+            }
+
+            // Check file size (max 20MB)
+            const maxSize = 20 * 1024 * 1024;
+            if (file.size > maxSize) {
+                reject('File too large. Maximum size is 20MB.');
+                return;
+            }
+
+            // Load image to check dimensions and basic properties
+            const img = new Image();
+            const objectUrl = URL.createObjectURL(file);
+            
+            img.onload = () => {
+                URL.revokeObjectURL(objectUrl);
+                
+                // Check minimum dimensions (blood smear images should be reasonably sized)
+                const minDimension = 200;
+                if (img.width < minDimension || img.height < minDimension) {
+                    reject(`Image too small. Minimum dimensions: ${minDimension}x${minDimension} pixels.`);
+                    return;
+                }
+
+                // Check aspect ratio (blood smear images are typically square-ish or 4:3)
+                const aspectRatio = img.width / img.height;
+                if (aspectRatio > 3 || aspectRatio < 0.33) {
+                    reject('Unusual aspect ratio. Blood smear images should not be extremely wide or tall.');
+                    return;
+                }
+
+                resolve({ width: img.width, height: img.height });
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(objectUrl);
+                reject('Failed to load image. The file may be corrupted.');
+            };
+
+            img.src = objectUrl;
+        });
+    }, []);
+
+    // Handle File Change - Process selected file for preview with validation
+    const handleFileChange = useCallback(async (e) => {
         const file = e.target.files[0];
         if (file) {
-            setSelectedFile(file);
-            setPreviewUrl(URL.createObjectURL(file));
-            setError(null);
+            try {
+                // Validate image before showing preview
+                await validateImageFile(file);
+                
+                setSelectedFile(file);
+                setPreviewUrl(URL.createObjectURL(file));
+                setError(null);
+            } catch (validationError) {
+                setError(validationError);
+                setSelectedFile(null);
+                setPreviewUrl(null);
+                // Reset the file input
+                e.target.value = '';
+            }
         }
-    }, []);
+    }, [validateImageFile]);
 
     // Handle Patient Registration
     const handleRegistration = useCallback((e) => {
@@ -521,12 +588,29 @@ export const AnalysisProvider = ({ children }) => {
         }
     }, [patientName, patientId]);
 
-    // Handle Bulk File Change
-    const handleBulkFileChange = useCallback((e) => {
+    // Handle Bulk File Change with validation
+    const handleBulkFileChange = useCallback(async (e) => {
         const files = Array.from(e.target.files);
-        setBulkFiles(files);
-        setError(null);
-    }, []);
+        const validFiles = [];
+        const errors = [];
+
+        for (const file of files) {
+            try {
+                await validateImageFile(file);
+                validFiles.push(file);
+            } catch (err) {
+                errors.push(`${file.name}: ${err}`);
+            }
+        }
+
+        if (errors.length > 0) {
+            setError(`Some files were rejected:\n${errors.join('\n')}`);
+        } else {
+            setError(null);
+        }
+
+        setBulkFiles(validFiles);
+    }, [validateImageFile]);
 
     // Handle Single Image Analysis
     const handleAnalyze = useCallback(async () => {
@@ -581,20 +665,25 @@ export const AnalysisProvider = ({ children }) => {
                 id: Date.now(),
                 filename: selectedFile.name,
                 preview: previewUrl,
+                annotatedImage: data.annotated_image,
                 results: data,
-                sickleCount: data.rbc_classifications?.filter(r => r.is_abnormal)?.length || 0
+                wbcCount: data.wbc_count || data.stage1_detection?.counts?.WBC || 0,
+                rbcCount: data.rbc_count || data.stage1_detection?.counts?.RBC || 0,
+                plateletCount: data.platelet_count || data.stage1_detection?.counts?.Platelets || 0,
+                sickleCount: data.rbc_classifications?.filter(r => r.is_sickle_cell || r.is_abnormal)?.length || 0,
+                wbcClassifications: data.wbc_classifications || data.stage2_classification || []
             }];
             setProcessedImages(newProcessedImages);
 
             const newCounts = {
-                wbc: aggregatedCounts.wbc + (data.wbc_count || 0),
-                rbc: aggregatedCounts.rbc + (data.rbc_count || 0),
-                platelets: aggregatedCounts.platelets + (data.platelet_count || 0)
+                wbc: aggregatedCounts.wbc + (data.wbc_count || data.stage1_detection?.counts?.WBC || 0),
+                rbc: aggregatedCounts.rbc + (data.rbc_count || data.stage1_detection?.counts?.RBC || 0),
+                platelets: aggregatedCounts.platelets + (data.platelet_count || data.stage1_detection?.counts?.Platelets || 0)
             };
             setAggregatedCounts(newCounts);
 
-            if (data.wbc_classifications) {
-                setAggregatedClassifications(prev => [...prev, ...data.wbc_classifications]);
+            if (data.wbc_classifications || data.stage2_classification) {
+                setAggregatedClassifications(prev => [...prev, ...(data.wbc_classifications || data.stage2_classification || [])]);
             }
             if (data.rbc_classifications) {
                 setAggregatedRBCClassifications(prev => [...prev, ...data.rbc_classifications]);
@@ -609,13 +698,19 @@ export const AnalysisProvider = ({ children }) => {
             setSelectedFile(null);
             setPreviewUrl(null);
 
+            // Calculate final results for this save
+            const updatedClassifications = [...aggregatedClassifications, ...(data.wbc_classifications || data.stage2_classification || [])];
+            const updatedRBCClassifications = [...aggregatedRBCClassifications, ...(data.rbc_classifications || [])];
+            const computedFinalResults = calculateFinalResults(updatedClassifications, newProcessedImages, newCounts, updatedRBCClassifications);
+
             // Save session
             await saveSession({
                 processedImages: newProcessedImages,
                 aggregatedCounts: newCounts,
-                aggregatedClassifications: [...aggregatedClassifications, ...(data.wbc_classifications || [])],
-                aggregatedRBCClassifications: [...aggregatedRBCClassifications, ...(data.rbc_classifications || [])],
+                aggregatedClassifications: updatedClassifications,
+                aggregatedRBCClassifications: updatedRBCClassifications,
                 currentResults: data,
+                finalResults: computedFinalResults,
                 patientData: { name: patientName, id: patientId, age: patientAge, gender: patientGender, phone: patientPhone },
                 isRegistered,
                 thresholdMet: newProcessedImages.length >= TARGET_IMAGE_COUNT,
@@ -629,7 +724,7 @@ export const AnalysisProvider = ({ children }) => {
             setLoading(false);
             setAnalysisProgress({ stage: '', percentage: 0, message: '' });
         }
-    }, [selectedFile, previewUrl, processedImages, aggregatedCounts, aggregatedClassifications, aggregatedRBCClassifications, patientName, patientId, patientAge, patientGender, patientPhone, isRegistered]);
+    }, [selectedFile, previewUrl, processedImages, aggregatedCounts, aggregatedClassifications, aggregatedRBCClassifications, patientName, patientId, patientAge, patientGender, patientPhone, isRegistered, calculateFinalResults]);
 
     // Handle Bulk Upload
     const handleBulkUpload = useCallback(async () => {
@@ -657,11 +752,24 @@ export const AnalysisProvider = ({ children }) => {
         for (let i = 0; i < filesToProcess.length; i++) {
             const file = filesToProcess[i];
             setBulkProgress({ current: i + 1, total: filesToProcess.length });
-            setAnalysisProgress({ stage: 'Processing', percentage: ((i + 1) / filesToProcess.length) * 100, message: `Processing image ${i + 1} of ${filesToProcess.length}...` });
+            
+            // Per-image progress: Upload phase (10%)
+            setAnalysisProgress({ 
+                stage: 'Uploading', 
+                percentage: 10, 
+                message: `Image ${i + 1}/${filesToProcess.length}: Uploading ${file.name}...` 
+            });
 
             try {
                 const formData = new FormData();
                 formData.append('image', file);
+
+                // Per-image progress: Detection phase (50%)
+                setAnalysisProgress({ 
+                    stage: 'Processing', 
+                    percentage: 50, 
+                    message: `Image ${i + 1}/${filesToProcess.length}: Detecting cells...` 
+                });
 
                 const response = await fetch(`${API_URL}/api/analyze`, {
                     method: 'POST',
@@ -673,6 +781,13 @@ export const AnalysisProvider = ({ children }) => {
                     continue;
                 }
 
+                // Per-image progress: Classification phase (80%)
+                setAnalysisProgress({ 
+                    stage: 'Classifying', 
+                    percentage: 80, 
+                    message: `Image ${i + 1}/${filesToProcess.length}: Classifying cells...` 
+                });
+
                 const data = await response.json();
 
                 // Check if the image was rejected (not a valid blood smear)
@@ -681,22 +796,34 @@ export const AnalysisProvider = ({ children }) => {
                     continue;
                 }
 
+                // Per-image progress: Complete (100%)
+                setAnalysisProgress({ 
+                    stage: 'Complete', 
+                    percentage: 100, 
+                    message: `Image ${i + 1}/${filesToProcess.length}: Complete!` 
+                });
+
                 newProcessedImages.push({
                     id: Date.now() + i,
                     filename: file.name,
                     preview: URL.createObjectURL(file),
+                    annotatedImage: data.annotated_image,
                     results: data,
-                    sickleCount: data.rbc_classifications?.filter(r => r.is_abnormal)?.length || 0
+                    wbcCount: data.wbc_count || data.stage1_detection?.counts?.WBC || 0,
+                    rbcCount: data.rbc_count || data.stage1_detection?.counts?.RBC || 0,
+                    plateletCount: data.platelet_count || data.stage1_detection?.counts?.Platelets || 0,
+                    sickleCount: data.rbc_classifications?.filter(r => r.is_sickle_cell || r.is_abnormal)?.length || 0,
+                    wbcClassifications: data.wbc_classifications || data.stage2_classification || []
                 });
 
                 newCounts = {
-                    wbc: newCounts.wbc + (data.wbc_count || 0),
-                    rbc: newCounts.rbc + (data.rbc_count || 0),
-                    platelets: newCounts.platelets + (data.platelet_count || 0)
+                    wbc: newCounts.wbc + (data.wbc_count || data.stage1_detection?.counts?.WBC || 0),
+                    rbc: newCounts.rbc + (data.rbc_count || data.stage1_detection?.counts?.RBC || 0),
+                    platelets: newCounts.platelets + (data.platelet_count || data.stage1_detection?.counts?.Platelets || 0)
                 };
 
-                if (data.wbc_classifications) {
-                    newClassifications = [...newClassifications, ...data.wbc_classifications];
+                if (data.wbc_classifications || data.stage2_classification) {
+                    newClassifications = [...newClassifications, ...(data.wbc_classifications || data.stage2_classification || [])];
                 }
                 if (data.rbc_classifications) {
                     newRBCClassifications = [...newRBCClassifications, ...data.rbc_classifications];
@@ -718,6 +845,9 @@ export const AnalysisProvider = ({ children }) => {
             setThresholdMet(true);
         }
 
+        // Calculate final results for this save
+        const computedFinalResults = calculateFinalResults(newClassifications, newProcessedImages, newCounts, newRBCClassifications);
+
         // Save session
         await saveSession({
             processedImages: newProcessedImages,
@@ -725,6 +855,7 @@ export const AnalysisProvider = ({ children }) => {
             aggregatedClassifications: newClassifications,
             aggregatedRBCClassifications: newRBCClassifications,
             currentResults: newProcessedImages[newProcessedImages.length - 1]?.results || null,
+            finalResults: computedFinalResults,
             patientData: { name: patientName, id: patientId, age: patientAge, gender: patientGender, phone: patientPhone },
             isRegistered,
             thresholdMet: newProcessedImages.length >= TARGET_IMAGE_COUNT,
@@ -736,7 +867,7 @@ export const AnalysisProvider = ({ children }) => {
         setBulkProgress({ current: 0, total: 0 });
         setAnalysisProgress({ stage: '', percentage: 0, message: '' });
 
-    }, [bulkFiles, processedImages, aggregatedCounts, aggregatedClassifications, aggregatedRBCClassifications, patientName, patientId, patientAge, patientGender, patientPhone, isRegistered]);
+    }, [bulkFiles, processedImages, aggregatedCounts, aggregatedClassifications, aggregatedRBCClassifications, patientName, patientId, patientAge, patientGender, patientPhone, isRegistered, calculateFinalResults]);
 
     const value = {
         patientName, setPatientName,

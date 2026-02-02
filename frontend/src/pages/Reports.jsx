@@ -119,7 +119,7 @@ export const Reports = () => {
     const PieChart = ({ data }) => {
         if (!data || Object.keys(data).length === 0) return <div className="text-gray-400 text-xs">No data for chart</div>;
 
-        const total = Object.values(data).reduce((a, b) => a + typeof b === 'number' ? b : 0, 0);
+        const total = Object.values(data).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
         if (total === 0) return <div className="text-gray-400 text-xs">No count data</div>;
 
         let cumulativePercent = 0;
