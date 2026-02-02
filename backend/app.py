@@ -654,16 +654,20 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
         original_h, original_w = image.shape[:2]
         
+        # Resize image to 640x640 (model training size) for consistent detection
+        TARGET_SIZE = 640
+        image_resized = cv2.resize(image, (TARGET_SIZE, TARGET_SIZE))
+        image_rgb = cv2.resize(image_rgb, (TARGET_SIZE, TARGET_SIZE))
+        
         print(f"\n{'='*60}")
-        print(f"PROCESSING IMAGE WITH ROBOFLOW")
+        print(f"PROCESSING BLOOD SMEAR IMAGE")
         print(f"{'='*60}")
-        print(f"Image size: {original_w} x {original_h}")
+        print(f"Original size: {original_w} x {original_h} -> Resized to: {TARGET_SIZE} x {TARGET_SIZE}")
         print(f"Confidence threshold: {conf_threshold}")
         print(f"IoU threshold: {iou_threshold}")
-        print(f"Model: {MODEL_ID}")
         
-        # Convert image to base64 for direct API call
-        _, buffer = cv2.imencode('.jpg', image)
+        # Convert resized image to base64 for API call
+        _, buffer = cv2.imencode('.jpg', image_resized)
         image_base64 = base64.b64encode(buffer).decode('utf-8')
         
         # Run inference using direct HTTP request (bypasses SDK's Content-Type bug)
@@ -703,17 +707,16 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         
         if result is None:
             # All retries failed
-            error_msg = f"Roboflow connection failed after {max_retries} attempts: {last_error}"
+            error_msg = f"Detection API connection failed after {max_retries} attempts: {last_error}"
             print(f"   ✗ {error_msg}")
             return {'success': False, 'error': str(last_error)}
         
-        print(f"Roboflow response received")
-        print(f"Raw response keys: {result.keys() if isinstance(result, dict) else type(result)}")
+        print(f"Detection response received")
         
         # Parse predictions
         predictions = result.get('predictions', [])
         
-        print(f"Raw detections: {len(predictions)}")
+        print(f"Cells detected: {len(predictions)}")
 
         # VALIDATION: Check if this is likely a blood smear
         # User requested minimum 100 cells to accept as valid
