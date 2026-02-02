@@ -25,33 +25,9 @@ export const ProcessedImagesThumbnails = ({
     const [showNormalWBCs, setShowNormalWBCs] = useState(false);
     const [showAbnormalWBCs, setShowAbnormalWBCs] = useState(false);
 
+    // Return null if no images - parent component controls visibility
     if (!processedImages || processedImages.length === 0) {
-        return (
-            <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
-                <div className="px-4 py-3 bg-gradient-to-r from-rose-50 to-pink-50 border-b border-rose-200">
-                    <div className="flex items-center justify-between">
-                        <h3 className="font-semibold text-rose-800 flex items-center gap-2">
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                            Processed Images
-                        </h3>
-                        <span className="text-sm text-rose-600">0 / {targetImageCount}</span>
-                    </div>
-                </div>
-                <div className="p-6 text-center">
-                    <div className="flex justify-center mb-4">
-                        <div className="w-16 h-16 bg-slate-100 rounded-lg flex items-center justify-center">
-                            <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                        </div>
-                    </div>
-                    <p className="text-slate-500 text-sm">No images analyzed yet</p>
-                    <p className="text-slate-400 text-xs mt-1">Upload and analyze blood smear images to see results here</p>
-                </div>
-            </div>
-        );
+        return null;
     }
 
     const progress = Math.min(100, (currentImageCount / targetImageCount) * 100);
@@ -328,7 +304,9 @@ export const ProcessedImagesThumbnails = ({
                     <div className="px-4 pb-4 border-t border-rose-200">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mt-3">
                             {processedImages.map((img, idx) => {
-                                const breakdown = getWBCBreakdown(img.classifications);
+                                // Check multiple possible field names for backward compatibility
+                                const classifications = img.wbcClassifications || img.classifications || img.results?.wbc_classifications || img.results?.stage2_classification || [];
+                                const breakdown = getWBCBreakdown(classifications);
                                 return (
                                     <div
                                         key={idx}
@@ -351,7 +329,7 @@ export const ProcessedImagesThumbnails = ({
                                                 </div>
                                             </div>
                                             <div className="flex-1">
-                                                <p className="text-rose-900 font-semibold text-sm truncate">{img.fileName || `Image ${idx + 1}`}</p>
+                                                <p className="text-rose-900 font-semibold text-sm truncate">{img.filename || `Image ${idx + 1}`}</p>
                                                 <p className="text-rose-600 text-xs">Blood Smear Analysis</p>
                                             </div>
                                         </div>
@@ -368,8 +346,8 @@ export const ProcessedImagesThumbnails = ({
                                             </div>
                                         </div>
 
-                                        {/* 5 WBC Categories */}
-                                        {breakdown && breakdown.totalWBC > 0 && (
+                                        {/* 5 WBC Categories - Show if we have breakdown OR wbcCount */}
+                                        {(breakdown && breakdown.totalWBC > 0) ? (
                                             <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
                                                 <p className="text-slate-600 text-xs mb-2 font-medium">WBC Distribution</p>
                                                 <div className="space-y-1">
@@ -398,7 +376,7 @@ export const ProcessedImagesThumbnails = ({
                                                     })}
                                                 </div>
                                                 {/* Abnormal indicator */}
-                                                {breakdown.abnormalWBCs.length > 0 && (
+                                                {breakdown.abnormalWBCs && breakdown.abnormalWBCs.length > 0 && (
                                                     <div className="mt-2 pt-2 border-t border-slate-200">
                                                         <div className="flex items-center gap-1 text-amber-400 text-xs">
                                                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -409,7 +387,13 @@ export const ProcessedImagesThumbnails = ({
                                                     </div>
                                                 )}
                                             </div>
-                                        )}
+                                        ) : img.wbcCount > 0 ? (
+                                            <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
+                                                <p className="text-slate-600 text-xs mb-2 font-medium">WBC Detected</p>
+                                                <p className="text-slate-700 text-sm font-bold">{img.wbcCount} WBC(s)</p>
+                                                <p className="text-slate-500 text-xs mt-1">Classification data pending...</p>
+                                            </div>
+                                        ) : null}
 
                                         {/* Click hint */}
                                         <p className="text-rose-500 text-xs text-center mt-2 opacity-70">
@@ -554,7 +538,7 @@ export const ProcessedImagesThumbnails = ({
                         <div className="sticky top-0 bg-rose-50 border-b border-rose-200 text-rose-900 px-6 py-4 flex items-center justify-between">
                             <div>
                                 <h3 className="text-lg font-bold">Blood Smear Image #{selectedImage.index + 1}</h3>
-                                <p className="text-sm text-rose-600">{selectedImage.fileName || 'Blood Smear Image'}</p>
+                                <p className="text-sm text-rose-600">{selectedImage.filename || 'Blood Smear Image'}</p>
                             </div>
                             <button
                                 onClick={closeModal}
@@ -611,8 +595,12 @@ export const ProcessedImagesThumbnails = ({
                                     </div>
 
                                     {/* WBC Breakdown */}
-                                    {selectedImage.classifications && selectedImage.classifications.length > 0 && (() => {
-                                        const breakdown = getWBCBreakdown(selectedImage.classifications);
+                                    {(() => {
+                                        // Check multiple possible field names for backward compatibility
+                                        const classifications = selectedImage.wbcClassifications || selectedImage.classifications || selectedImage.results?.wbc_classifications || selectedImage.results?.stage2_classification || [];
+                                        if (!classifications || classifications.length === 0) return null;
+                                        
+                                        const breakdown = getWBCBreakdown(classifications);
                                         if (!breakdown) return null;
 
                                         return (

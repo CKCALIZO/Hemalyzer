@@ -126,13 +126,39 @@ export const Reports = () => {
 
         // Sort for better visualization
         const sortedData = Object.entries(data).sort((a, b) => b[1] - a[1]);
-        // Colors palette
-        const colors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#6366F1', '#EC4899', '#8B5CF6', '#64748B'];
+        // Colors palette - WBC type specific colors
+        const colorMap = {
+            'neutrophil': '#3B82F6', // blue
+            'lymphocyte': '#F59E0B', // amber  
+            'monocyte': '#FBBF24',   // yellow
+            'eosinophil': '#F97316', // orange
+            'basophil': '#8B5CF6',   // purple
+            'b_lymphoblast': '#10B981', // green
+            'myeloblast': '#EF4444', // red
+        };
+        const defaultColors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#6366F1', '#EC4899', '#8B5CF6', '#64748B'];
 
         const getCoordinatesForPercent = (percent) => {
             const x = Math.cos(2 * Math.PI * percent);
             const y = Math.sin(2 * Math.PI * percent);
             return [x, y];
+        };
+
+        // Format label for display (e.g., "Neutrophil: Normal" -> "Neutrophil:\nNormal")
+        const formatLabel = (label) => {
+            if (label.includes(':')) {
+                const [cellType, condition] = label.split(':').map(s => s.trim());
+                return { cellType, condition };
+            }
+            return { cellType: label, condition: null };
+        };
+
+        const getColorForLabel = (label, index) => {
+            const lowerLabel = label.toLowerCase();
+            for (const [key, color] of Object.entries(colorMap)) {
+                if (lowerLabel.includes(key)) return color;
+            }
+            return defaultColors[index % defaultColors.length];
         };
 
         const slices = sortedData.map(([label, value], i) => {
@@ -147,12 +173,12 @@ export const Reports = () => {
             const largeArcFlag = percent > 0.5 ? 1 : 0;
             const pathData = `M 0 0 L ${startX} ${startY} A 1 1 0 ${largeArcFlag} 1 ${endX} ${endY} L 0 0`;
 
-            return { path: pathData, color: colors[i % colors.length], label, value, percent };
+            return { path: pathData, color: getColorForLabel(label, i), label, value, percent, ...formatLabel(label) };
         });
 
         return (
-            <div className="flex items-center gap-4">
-                <div className="relative w-32 h-32 shrink-0">
+            <div className="flex items-start gap-4">
+                <div className="relative w-28 h-28 shrink-0">
                     <svg viewBox="-1 -1 2 2" className="transform -rotate-90 w-full h-full">
                         {slices.map((slice, i) => (
                             <path key={i} d={slice.path} fill={slice.color} stroke="white" strokeWidth="0.05">
@@ -161,12 +187,19 @@ export const Reports = () => {
                         ))}
                     </svg>
                 </div>
-                <div className="text-xs space-y-1">
+                <div className="text-xs space-y-1.5 flex-1">
                     {slices.map((slice, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                            <span className="w-3 h-3 rounded-full" style={{ backgroundColor: slice.color }}></span>
-                            <span className="font-medium text-slate-700">{slice.label}</span>
-                            <span className="text-slate-500">{Math.round(slice.percent * 100)}%</span>
+                        <div key={i} className="flex items-start gap-2">
+                            <span className="w-3 h-3 rounded-full shrink-0 mt-0.5" style={{ backgroundColor: slice.color }}></span>
+                            <div className="flex-1 min-w-0">
+                                <span className="font-medium text-slate-700 block truncate" title={slice.label}>
+                                    {slice.cellType}{slice.condition ? ':' : ''}
+                                </span>
+                                {slice.condition && (
+                                    <span className="text-slate-500 block truncate">{slice.condition}</span>
+                                )}
+                            </div>
+                            <span className="text-slate-600 font-semibold shrink-0">{Math.round(slice.percent * 100)}%</span>
                         </div>
                     ))}
                 </div>
@@ -384,7 +417,6 @@ export const Reports = () => {
                                             </div>
                                         )}
 
-                                        {/* Abnormal Cells Summary */}
                                         {/* Abnormal Cells Summary & Pie Chart */}
                                         <div className="bg-amber-50 p-4 rounded-lg mb-6 border border-amber-200">
                                             <div className="flex flex-col md:flex-row gap-6">
@@ -405,11 +437,11 @@ export const Reports = () => {
                                                         </div>
                                                         <div className="bg-white p-3 rounded border border-slate-200">
                                                             <p className="text-sm text-slate-600">Analyzed Images</p>
-                                                            <p className="text-2xl font-bold text-slate-700">{selectedReport.sessionData?.totalImagesAnalyzed || selectedReport.imagesCount || 0}/10</p>
+                                                            <p className="text-2xl font-bold text-slate-700">{selectedReport.summary?.imagesAnalyzed || selectedReport.sessionData?.totalImagesAnalyzed || selectedReport.imagesCount || 10}/10</p>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="md:w-1/3 border-l border-amber-200 pl-6 hidden md:block">
+                                                <div className="md:w-2/5 md:border-l border-amber-200 md:pl-6">
                                                     <h4 className="font-semibold text-sm mb-3 text-amber-900">Classification Breakdown</h4>
                                                     <PieChart data={selectedReport.data?.classificationCounts || (selectedReport.data?.wbcDifferential && Object.fromEntries(Object.entries(selectedReport.data.wbcDifferential).map(([k, v]) => [k, v.count])))} />
                                                 </div>

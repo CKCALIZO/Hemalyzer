@@ -124,7 +124,6 @@ const Homepage = () => {
                         No, let's just assume finalResults covers it.
                     */}
 
-
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* LEFT COLUMN: Upload & Guidelines */}
                         <div className="lg:col-span-1 space-y-6">
@@ -194,11 +193,14 @@ const Homepage = () => {
 
                         {/* RIGHT COLUMN: Results */}
                         <div className="lg:col-span-2 space-y-6">
-                            <ProcessedImagesThumbnails
-                                processedImages={processedImages}
-                                currentImageCount={processedImages.length}
-                                targetImageCount={TARGET_IMAGE_COUNT}
-                            />
+                            {/* Processed Images Panel - Only show when there are images */}
+                            {processedImages.length > 0 && (
+                                <ProcessedImagesThumbnails
+                                    processedImages={processedImages}
+                                    currentImageCount={processedImages.length}
+                                    targetImageCount={TARGET_IMAGE_COUNT}
+                                />
+                            )}
 
                             <AnalysisResults
                                 currentResults={currentResults}
