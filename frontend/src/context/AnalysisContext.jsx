@@ -1,0 +1,775 @@
+
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { saveSession, loadSession, clearSession, migrateFromLocalStorage } from '../utils/sessionStorage';
+
+const AnalysisContext = createContext();
+
+const API_URL = 'http://localhost:5000';
+const TARGET_IMAGE_COUNT = 10;
+const WBC_NORMAL_RANGES = {
+    'Neutrophil': { min: 45, max: 65 },
+    'Lymphocyte': { min: 20, max: 35 },
+    'Monocyte': { min: 2, max: 6 },
+    'Eosinophil': { min: 2, max: 4 },
+    'Basophil': { min: 0, max: 1 }
+};
+const RBC_MULTIPLIER = 200000;
+const WBC_MULTIPLIER = 2000;
+const NUM_FIELDS = 10;
+
+// --- Clinical Analysis Helper Functions (Module Scope) ---
+
+// Robust Clinical Analysis Helper
+const getClinicalAnalysis = (type, status) => {
+    const analyses = {
+        'Neutrophil': {
+            high: {
+                interpretation: 'Neutrophilia: Increased neutrophils often indicate acute bacterial infection, severe stress, burns, or tissue necrosis.',
+                recommendation: 'Clinical Recommendation: Evaluate for signs of infection (fever, localized pain). Consider CBC with differential repeats and inflammatory markers (CRP, ESR).'
+            },
+            low: {
+                interpretation: 'Neutropenia: Decreased neutrophils significantly increase infection risk. May be caused by viral infections, chemotherapy, aplastic anemia, or severe overwhelming infection (sepsis).',
+                recommendation: 'Clinical Recommendation: Urgent clinical assessment for infection. Review medication history (look for marrow-suppressive drugs). Hematology consultation recommended if persistent or severe (<1000/µL).'
+            },
+            normal: {
+                interpretation: 'Neutrophil count is within the healthy reference range, suggesting adequate innate immune function against bacteria.',
+                recommendation: 'Clinical Recommendation: Routine monitoring as part of standard wellness checks.'
+            }
+        },
+        'Lymphocyte': {
+            high: {
+                interpretation: 'Lymphocytosis: Elevated lymphocytes are common in viral infections (Epstein-Barr, Cytomegalovirus), chronic lymphocytic leukemia (CLL), or pertussis.',
+                recommendation: 'Clinical Recommendation: Assess for viral symptoms (sore throat, lymphadenopathy). If elderly or asymptomatic, rule out lymphoproliferative disorders (CLL).'
+            },
+            low: {
+                interpretation: 'Lymphocytopenia: Decreased lymphocytes may be seen in HIV/AIDS, high-dose steroid therapy, autoimmune diseases (Lupus), or acute stress response.',
+                recommendation: 'Clinical Recommendation: detailed history taking for autoimmune symptoms or immunodeficiency risk factors. Consider HIV screening if clinically indicated.'
+            },
+            normal: {
+                interpretation: 'Lymphocyte count is within the healthy reference range, indicating normal adaptive immune capacity.',
+                recommendation: 'Clinical Recommendation: Routine monitoring.'
+            }
+        },
+        'Monocyte': {
+            high: {
+                interpretation: 'Monocytosis: Often associated with chronic infections (Tuberculosis, fungal), bacterial endocarditis, recovery phase of acute infections, or autoimmune disorders.',
+                recommendation: 'Clinical Recommendation: Evaluate for chronic inflammatory conditions. If persistent, consider screening for chronic infections or myelomonocytic leukemia in elderly patients.'
+            },
+            low: {
+                interpretation: 'Monocytopenia: Rare. Can be associated with hairy cell leukemia, severe aplastic anemia, or acute stress.',
+                recommendation: 'Clinical Recommendation: Usually not clinically significant in isolation. Monitor trend. Review peripheral smear for hairy cells.'
+            },
+            normal: {
+                interpretation: 'Monocyte count is within the healthy reference range.',
+                recommendation: 'Clinical Recommendation: Routine monitoring.'
+            }
+        },
+        'Eosinophil': {
+            high: {
+                interpretation: 'Eosinophilia: Strongly suggestive of allergic conditions (asthma, eczema), parasitic infections (worms), or drug hypersensitivity.',
+                recommendation: 'Clinical Recommendation: Review allergy history and medications. Consider stool ova/parasite exam if travel history is relevant. Screen for asthma.'
+            },
+            low: {
+                interpretation: 'Eosinopenia: Often occurs during acute adrenal stress (Cushing’s syndrome), severe acute infection, or corticosteroid use.',
+                recommendation: 'Clinical Recommendation: Usually transient and responsive to stress/infection resolution. No specific intervention typically needed unless Cushing’s suspected.'
+            },
+            normal: {
+                interpretation: 'Eosinophil count is within the healthy reference range.',
+                recommendation: 'Clinical Recommendation: Routine monitoring.'
+            }
+        },
+        'Basophil': {
+            high: {
+                interpretation: 'Basophilia: Uncommon. Can be a marker for Chronic Myeloid Leukemia (CML) or other myeloproliferative neoplasms. Also seen in hypersensitivity reactions.',
+                recommendation: 'Clinical Recommendation: IMPORTANT: Rule out myeloproliferative disorders (CML). Check for splenomegaly. Hematology referral suggested if persistent.'
+            },
+            low: {
+                interpretation: 'Basopenia: Difficult to demonstrate as normal count is low. May be seen in acute phase of infection, hyperthyroidism, or stress.',
+                recommendation: 'Clinical Recommendation: Generally not clinically significant.'
+            },
+            normal: {
+                interpretation: 'Basophil count is within the healthy reference range.',
+                recommendation: 'Clinical Recommendation: Routine monitoring.'
+            }
+        }
+    };
+    return analyses[type]?.[status] || {
+        interpretation: 'Clinical correlation recommended.',
+        recommendation: 'Clinical Recommendation: Correlate with clinical findings.'
+    };
+};
+
+// Sickle Cell Clinical Analysis Helper
+const getSickleCellAnalysis = (severity) => {
+    if (severity === 'SEVERE') {
+        return {
+            interpretation: 'Severe Sickle Cell Anemia (HbSS): High percentage of sickled cells detected, consistent with sickle cell disease crisis or homozygous state.',
+            recommendation: 'Clinical Recommendation: URGENT hematology consultation. Evaluate for vaso-occlusive crisis. Confirm with Hb Electrophoresis.'
+        };
+    } else if (severity === 'MODERATE') {
+        return {
+            interpretation: 'Moderate Sickling: Significant presence of sickled cells, suggestive of Sickle Cell Disease or related hemoglobinopathy.',
+            recommendation: 'Clinical Recommendation: Hematology referral recommended. Correlation with clinical symptoms and confirmatory testing required.'
+        };
+    } else if (severity === 'MILD') {
+        return {
+            interpretation: 'Mild Sickling (HbAS): Lower percentage of sickled cells, often seen in Sickle Cell Trait or compound heterozygotes.',
+            recommendation: 'Clinical Recommendation: Genetic counseling and family screening suggested. Generally asymptomatic but requires awareness.'
+        };
+    } else {
+        return {
+            interpretation: 'Normal / Trace Findings: Sickle cells absent or present in trace amounts (< 3%) below diagnostic significance.',
+            recommendation: 'Clinical Recommendation: Likely normal variant or artifact. No specific intervention required in absence of clinical symptoms.'
+        };
+    }
+};
+
+// Disease Recommendations
+const getDiseaseRecommendation = (type, severity) => {
+    if (severity === 'HIGH') {
+        return `Diagnostic level for ${type}. Urgent Hematology Referral Required.`;
+    } else if (severity === 'MODERATE') {
+        return `Suspicious for ${type}. Bone Marrow Biopsy / Further testing recommended.`;
+    } else {
+        return `Low/Normal levels. Clinical correlation recommended.`;
+    }
+};
+
+export const AnalysisProvider = ({ children }) => {
+    // Patient Data State
+    const [patientName, setPatientName] = useState('');
+    const [patientId, setPatientId] = useState('');
+    const [patientAge, setPatientAge] = useState('');
+    const [patientGender, setPatientGender] = useState('Male');
+    const [patientPhone, setPatientPhone] = useState('');
+    const [isRegistered, setIsRegistered] = useState(false);
+
+    // File handling
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
+
+    // Progress tracking
+    const [analysisProgress, setAnalysisProgress] = useState({
+        stage: '',
+        percentage: 0,
+        message: ''
+    });
+
+    // Multi-image session state
+    const [processedImages, setProcessedImages] = useState([]);
+    const [aggregatedCounts, setAggregatedCounts] = useState({
+        wbc: 0, rbc: 0, platelets: 0
+    });
+    const [aggregatedClassifications, setAggregatedClassifications] = useState([]);
+    const [aggregatedRBCClassifications, setAggregatedRBCClassifications] = useState([]);
+    const [currentResults, setCurrentResults] = useState(null);
+    const [showCurrentResults, setShowCurrentResults] = useState(true);
+
+    // Threshold tracking
+    const [thresholdMet, setThresholdMet] = useState(false);
+    const [finalResults, setFinalResults] = useState(null);
+
+    // Bulk upload state
+    const [bulkFiles, setBulkFiles] = useState([]);
+    const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
+    const [imageProgress, setImageProgress] = useState(0);
+    const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+
+    // Calculate aggregated results
+    const calculateFinalResults = useCallback((allClassifications, allProcessedImages, counts, allRBCClassifications = []) => {
+        const wbcTypeCounts = {};
+        const mainWBCCategories = ['Neutrophil', 'Lymphocyte', 'Monocyte', 'Eosinophil', 'Basophil'];
+        const differentialCounts = { 'Neutrophil': 0, 'Lymphocyte': 0, 'Monocyte': 0, 'Eosinophil': 0, 'Basophil': 0 };
+
+        let cmlCount = 0, cllCount = 0, allCount = 0, amlCount = 0;
+        const cmlGranulocyteBreakdown = { basophil: 0, eosinophil: 0, myeloblast: 0, promyelocyte: 0, myelocyte: 0, metamyelocyte: 0, neutrophil: 0 };
+        const blastBreakdown = { lymphoblast: 0, myeloblast: 0 };
+        const abnormalWBCs = [];
+
+        allClassifications.forEach(cls => {
+            const classification = cls.classification || '';
+            wbcTypeCounts[classification] = (wbcTypeCounts[classification] || 0) + 1;
+            const classificationStr = (cls.classification || '').toLowerCase();
+
+            const hasCML = classificationStr.includes(': cml');
+            const hasCLL = classificationStr.includes(': cll');
+            const hasAML = classificationStr.includes(': aml');
+            const hasALL = classificationStr.includes(': all');
+
+            const isNeutrophil = classificationStr.includes('neutrophil');
+            const isLymphocyte = classificationStr.includes('lymphocyte');
+            const isMonocyte = classificationStr.includes('monocyte');
+            const isEosinophil = classificationStr.includes('eosinophil') || classificationStr.includes('eosonophil');
+            const isBasophil = classificationStr.includes('basophil');
+            const isMyeloblast = classificationStr.includes('myeloblast');
+            const isLymphoblast = classificationStr.includes('lymphoblast') || classificationStr.includes('b_lymphoblast');
+            const isPromyelocyte = classificationStr.includes('promyelocyte');
+            const isMetamyelocyte = classificationStr.includes('metamyelocyte');
+            const isMyelocyte = classificationStr.includes('myelocyte') && !isPromyelocyte && !isMetamyelocyte;
+
+            if (isNeutrophil || isMyelocyte || isMetamyelocyte || isPromyelocyte || (isMyeloblast && !hasAML && !hasCML)) {
+                differentialCounts['Neutrophil']++;
+            } else if (isLymphocyte || isLymphoblast) {
+                differentialCounts['Lymphocyte']++;
+            } else if (isMonocyte) {
+                differentialCounts['Monocyte']++;
+            } else if (isEosinophil) {
+                differentialCounts['Eosinophil']++;
+            } else if (isBasophil) {
+                differentialCounts['Basophil']++;
+            }
+
+            if (!classificationStr.includes('normal') && cls.classification) {
+                abnormalWBCs.push(cls);
+            }
+
+            if (hasCML) {
+                cmlCount++;
+                if (isBasophil) cmlGranulocyteBreakdown.basophil++;
+                else if (isEosinophil) cmlGranulocyteBreakdown.eosinophil++;
+                else if (isMyeloblast) cmlGranulocyteBreakdown.myeloblast++;
+                else if (isNeutrophil) cmlGranulocyteBreakdown.neutrophil++;
+                else if (isPromyelocyte) cmlGranulocyteBreakdown.promyelocyte++;
+                else if (isMyelocyte) cmlGranulocyteBreakdown.myelocyte++;
+                else if (isMetamyelocyte) cmlGranulocyteBreakdown.metamyelocyte++;
+            }
+
+            if (hasCLL) cllCount++;
+
+            if (hasALL) {
+                allCount++;
+                blastBreakdown.lymphoblast++;
+            }
+
+            if (hasAML) {
+                amlCount++;
+                blastBreakdown.myeloblast++;
+            }
+        });
+
+        const totalImagesProcessed = allProcessedImages.length;
+        const averageRBCPerImage = totalImagesProcessed > 0 ? counts.rbc / totalImagesProcessed : 0;
+        const estimatedRBCCount = Math.round((averageRBCPerImage / 10) * RBC_MULTIPLIER);
+        const estimatedWBCCount = Math.round((counts.wbc / NUM_FIELDS) * WBC_MULTIPLIER);
+        const totalWBC = counts.wbc;
+        const wbcDifferential = {};
+
+        mainWBCCategories.forEach(category => {
+            const count = differentialCounts[category];
+            const percentage = totalWBC > 0 ? (count / totalWBC) * 100 : 0;
+            const normalRange = WBC_NORMAL_RANGES[category];
+            let status = 'normal';
+            if (normalRange) {
+                if (percentage > normalRange.max) status = 'high';
+                else if (percentage < normalRange.min) status = 'low';
+            }
+            wbcDifferential[category] = {
+                count, percentage, normalRange: normalRange ? `${normalRange.min}-${normalRange.max}%` : '-', status,
+                clinInterpretation: getClinicalAnalysis(category, status).interpretation,
+                clinRecommendation: getClinicalAnalysis(category, status).recommendation
+            };
+        });
+
+        const blastCount = amlCount + allCount;
+        const cmlPercentage = totalWBC > 0 ? (cmlCount / totalWBC) * 100 : 0;
+        const cllPercentage = totalWBC > 0 ? (cllCount / totalWBC) * 100 : 0;
+        const diseaseFindings = [];
+
+        if (amlCount > 0) {
+            const amlPercentage = totalWBC > 0 ? (amlCount / totalWBC) * 100 : 0;
+            let interpretation = '', severity = 'NORMAL';
+            if (amlPercentage >= 20) { interpretation = 'Diagnostic level for AML'; severity = 'HIGH'; }
+            else if (amlPercentage >= 10) { interpretation = 'Suspicious / Pre-leukemic (AML)'; severity = 'MODERATE'; }
+            else { interpretation = 'Myeloblasts detected'; severity = 'NORMAL'; }
+            diseaseFindings.push({
+                type: 'AML (Acute Myeloblastic Leukemia)', percentage: amlPercentage, interpretation, severity,
+                condition: 'Acute Myeloid Leukemia', breakdown: { "AML:Myeloblast": blastBreakdown.myeloblast },
+                recommendation: getDiseaseRecommendation('AML', severity)
+            });
+        }
+
+        if (allCount > 0) {
+            const allPercentage = totalWBC > 0 ? (allCount / totalWBC) * 100 : 0;
+            let interpretation = '', severity = 'NORMAL';
+            if (allPercentage >= 20) { interpretation = 'Diagnostic level for ALL'; severity = 'HIGH'; }
+            else if (allPercentage >= 10) { interpretation = 'Suspicious / Pre-leukemic (ALL)'; severity = 'MODERATE'; }
+            else { interpretation = 'Lymphoblasts detected'; severity = 'NORMAL'; }
+            diseaseFindings.push({
+                type: 'ALL (Acute Lymphoblastic Leukemia)', percentage: allPercentage, interpretation, severity,
+                condition: 'Acute Lymphoblastic Leukemia', breakdown: { "ALL:B_Lymphoblast": blastBreakdown.lymphoblast },
+                recommendation: getDiseaseRecommendation('ALL', severity)
+            });
+        }
+
+        if (cmlCount > 0) {
+            let interpretation = '', severity = 'NORMAL', condition = 'Monitor for CML';
+            if (cmlPercentage > 95) { interpretation = 'Accelerated Phase CML'; condition = 'CML (Accelerated)'; severity = 'HIGH'; }
+            else if (cmlPercentage >= 90) { interpretation = 'Typical Chronic Phase CML'; condition = 'CML (Chronic)'; severity = 'HIGH'; }
+            else if (cmlPercentage >= 76) { interpretation = 'Suspicious for Early CML'; condition = 'Suspicious for Early CML'; severity = 'MODERATE'; }
+            else if (cmlPercentage >= 60) { interpretation = 'Reactive / Secondary Leukocytosis'; condition = 'Reactive Leukocytosis'; severity = 'LOW'; }
+            else { interpretation = 'CML-marked cells detected but below threshold'; }
+
+            const cmlBreakdown = {};
+            if (cmlGranulocyteBreakdown.basophil > 0) cmlBreakdown["CML:Basophil"] = cmlGranulocyteBreakdown.basophil;
+            if (cmlGranulocyteBreakdown.eosinophil > 0) cmlBreakdown["CML:Eosinophil"] = cmlGranulocyteBreakdown.eosinophil;
+            if (cmlGranulocyteBreakdown.myeloblast > 0) cmlBreakdown["CML:Myeloblast"] = cmlGranulocyteBreakdown.myeloblast;
+            if (cmlGranulocyteBreakdown.promyelocyte > 0) cmlBreakdown["CML:Promyelocyte"] = cmlGranulocyteBreakdown.promyelocyte;
+            if (cmlGranulocyteBreakdown.myelocyte > 0) cmlBreakdown["CML:Myelocyte"] = cmlGranulocyteBreakdown.myelocyte;
+            if (cmlGranulocyteBreakdown.metamyelocyte > 0) cmlBreakdown["CML:Metamyelocyte"] = cmlGranulocyteBreakdown.metamyelocyte;
+            if (cmlGranulocyteBreakdown.neutrophil > 0) cmlBreakdown["CML:Neutrophil"] = cmlGranulocyteBreakdown.neutrophil;
+
+            diseaseFindings.push({
+                type: 'CML (Chronic Myeloid Leukemia)', percentage: cmlPercentage, interpretation, severity, condition, breakdown: cmlBreakdown,
+                recommendation: getDiseaseRecommendation('CML', severity)
+            });
+        }
+
+        if (cllCount > 0) {
+            let interpretation = '', severity = 'NORMAL', condition = 'Monitor for CLL';
+            if (cllPercentage > 80) { interpretation = 'Advanced / Progressive CLL'; condition = 'CLL (Advanced)'; severity = 'HIGH'; }
+            else if (cllPercentage >= 66) { interpretation = 'Typical CLL'; condition = 'CLL'; severity = 'HIGH'; }
+            else if (cllPercentage >= 51) { interpretation = 'Suspicious for Early CLL'; condition = 'Suspicious for Early CML'; severity = 'MODERATE'; }
+            else if (cllPercentage >= 35) { interpretation = 'Reactive / Secondary Lymphocytosis'; condition = 'Reactive Lymphocytosis'; severity = 'LOW'; }
+            else { interpretation = 'CLL-marked cells detected but below threshold'; }
+            diseaseFindings.push({
+                type: 'CLL (Chronic Lymphocytic Leukemia)', percentage: cllPercentage, interpretation, severity, condition, breakdown: { "CLL:Lymphocytes": cllCount },
+                recommendation: getDiseaseRecommendation('CLL', severity)
+            });
+        }
+
+        let sickleCount = 0;
+        allProcessedImages.forEach(img => { if (img.sickleCount) sickleCount += img.sickleCount; });
+        const sicklePercentage = counts.rbc > 0 ? (sickleCount / counts.rbc) * 100 : 0;
+        let sickleInterpretation = 'Normal blood', sickleSeverity = 'NORMAL';
+        if (sicklePercentage > 30) { sickleInterpretation = 'Severe Sickle Cell Anemia (HbSS)'; sickleSeverity = 'SEVERE'; }
+        else if (sicklePercentage >= 10) { sickleInterpretation = 'Moderate Sickling'; sickleSeverity = 'MODERATE'; }
+        else if (sicklePercentage >= 3) { sickleInterpretation = 'Mild Sickling (HbAS)'; sickleSeverity = 'MILD'; }
+        else if (sicklePercentage > 0) { sickleInterpretation = 'Normal blood (< 3%)'; }
+
+        let patientStatus = 'Normal';
+        const hasCritical = diseaseFindings.some(f => f.severity === 'HIGH');
+        const hasAbnormal = diseaseFindings.some(f => f.severity === 'MODERATE' || f.severity === 'LOW');
+        if (hasCritical || sicklePercentage > 30) patientStatus = 'Critical';
+        else if (hasAbnormal || sicklePercentage >= 3) patientStatus = 'Abnormal';
+
+        return {
+            thresholdMet: true, totalWBC: counts.wbc, totalRBC: counts.rbc, totalPlatelets: counts.platelets,
+            estimatedWBCCount, estimatedRBCCount, avgRBCPerField: averageRBCPerImage,
+            wbcClassifications: allClassifications, rbcClassifications: allRBCClassifications,
+            abnormalWBCs, wbcDifferential, diseaseFindings, classificationCounts: wbcTypeCounts,
+            sickleCell: {
+                count: sickleCount, totalRBC: counts.rbc, percentage: sicklePercentage, interpretation: sickleInterpretation, severity: sickleSeverity,
+                recommendation: getSickleCellAnalysis(sickleSeverity).recommendation
+            },
+            patientStatus
+        };
+    }, []);
+
+    // LIVE UPDATE: Ensure finalResults is always up-to-date with current analysis
+    useEffect(() => {
+        if (processedImages.length > 0) {
+            const results = calculateFinalResults(
+                aggregatedClassifications,
+                processedImages,
+                aggregatedCounts,
+                aggregatedRBCClassifications
+            );
+            setFinalResults(results);
+        }
+    }, [processedImages, aggregatedClassifications, aggregatedCounts, aggregatedRBCClassifications, calculateFinalResults]);
+
+    // Load initial session
+    useEffect(() => {
+        (async () => {
+            try {
+                await migrateFromLocalStorage();
+                const session = await loadSession();
+                if (session) {
+                    if (session.processedImages) setProcessedImages(session.processedImages);
+                    if (session.aggregatedCounts) setAggregatedCounts(session.aggregatedCounts);
+                    if (session.aggregatedClassifications) setAggregatedClassifications(session.aggregatedClassifications);
+                    if (session.aggregatedRBCClassifications) setAggregatedRBCClassifications(session.aggregatedRBCClassifications);
+                    if (session.currentResults) setCurrentResults(session.currentResults);
+
+                    if (session.patientData) {
+                        setPatientName(session.patientData.name || '');
+                        setPatientId(session.patientData.id || '');
+                        setPatientAge(session.patientData.age || '');
+                        setPatientGender(session.patientData.gender || 'Male');
+                        setPatientPhone(session.patientData.phone || '');
+                    }
+                    if (session.isRegistered) setIsRegistered(true);
+
+                    const isThresholdMet = session.thresholdMet === true || (session.processedImages && session.processedImages.length >= TARGET_IMAGE_COUNT);
+                    if (isThresholdMet) {
+                        setThresholdMet(true);
+                        if (session.finalResults) setFinalResults(session.finalResults);
+                    } else {
+                        setThresholdMet(false);
+                        setFinalResults(null);
+                    }
+                }
+            } catch (error) {
+                console.log('No valid session to restore:', error);
+            }
+        })();
+    }, []);
+
+    // Save Report Functionality
+    const saveReport = () => {
+        if (!finalResults) {
+            alert("No analysis results to save.");
+            return;
+        }
+
+        try {
+            const newReport = {
+                id: Date.now().toString(),
+                timestamp: new Date().toLocaleString(),
+                patientData: {
+                    name: patientName,
+                    id: patientId,
+                    age: patientAge,
+                    gender: patientGender,
+                    phone: patientPhone
+                },
+                summary: {
+                    totalCells: (finalResults.totalWBC + finalResults.totalRBC + finalResults.totalPlatelets),
+                    wbcCount: finalResults.totalWBC,
+                    rbcCount: finalResults.totalRBC,
+                    plateletCount: finalResults.totalPlatelets,
+                    sickleCount: finalResults.sickleCell?.count || 0,
+                    estimatedWBCCount: finalResults.estimatedWBCCount,
+                    estimatedRBCCount: finalResults.estimatedRBCCount,
+                    imagesAnalyzed: processedImages.length
+                },
+                data: {
+                    wbcDifferential: finalResults.wbcDifferential,
+                    diseaseFindings: finalResults.diseaseFindings,
+                    abnormalWBCs: finalResults.abnormalWBCs ? finalResults.abnormalWBCs.length : 0,
+                    classificationCounts: finalResults.classificationCounts,
+                    sickleCount: finalResults.sickleCell?.count || 0,
+                    sickleCell: finalResults.sickleCell
+                },
+                sessionData: {
+                    analysisComplete: true,
+                    wbcClassificationCount: finalResults.totalWBC
+                }
+            };
+
+            const savedReports = JSON.parse(localStorage.getItem('hemalyzer_reports') || '[]');
+            savedReports.unshift(newReport); // Add to top
+            localStorage.setItem('hemalyzer_reports', JSON.stringify(savedReports));
+
+            alert("Report saved successfully!");
+        } catch (error) {
+            console.error("Failed to save report:", error);
+            alert("Failed to save report. Please try again.");
+        }
+    };
+
+    // Handle Reset - Clears all analysis state to start a new analysis
+    const handleReset = useCallback(async () => {
+        try {
+            await clearSession();
+        } catch (error) {
+            console.error('Failed to clear session:', error);
+        }
+        // Reset all state
+        setPatientName('');
+        setPatientId('');
+        setPatientAge('');
+        setPatientGender('Male');
+        setPatientPhone('');
+        setIsRegistered(false);
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setLoading(false);
+        setError(null);
+        setAnalysisProgress({ stage: '', percentage: 0, message: '' });
+        setProcessedImages([]);
+        setAggregatedCounts({ wbc: 0, rbc: 0, platelets: 0 });
+        setAggregatedClassifications([]);
+        setAggregatedRBCClassifications([]);
+        setCurrentResults(null);
+        setShowCurrentResults(true);
+        setThresholdMet(false);
+        setFinalResults(null);
+        setBulkFiles([]);
+        setBulkProgress({ current: 0, total: 0 });
+        setImageProgress(0);
+        setIsBulkProcessing(false);
+    }, []);
+
+    // Handle File Change - Process selected file for preview
+    const handleFileChange = useCallback((e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setSelectedFile(file);
+            setPreviewUrl(URL.createObjectURL(file));
+            setError(null);
+        }
+    }, []);
+
+    // Handle Patient Registration
+    const handleRegistration = useCallback((e) => {
+        if (e) e.preventDefault();
+        if (patientName.trim() && patientId.trim()) {
+            setIsRegistered(true);
+        }
+    }, [patientName, patientId]);
+
+    // Handle Bulk File Change
+    const handleBulkFileChange = useCallback((e) => {
+        const files = Array.from(e.target.files);
+        setBulkFiles(files);
+        setError(null);
+    }, []);
+
+    // Handle Single Image Analysis
+    const handleAnalyze = useCallback(async () => {
+        if (!selectedFile) {
+            setError('Please select a file first');
+            return;
+        }
+
+        if (processedImages.length >= TARGET_IMAGE_COUNT) {
+            setError('Analysis threshold already met. Please start a new analysis.');
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+        setAnalysisProgress({ stage: 'Uploading', percentage: 10, message: 'Uploading image...' });
+
+        try {
+            const formData = new FormData();
+            formData.append('image', selectedFile);
+
+            setAnalysisProgress({ stage: 'Processing', percentage: 30, message: 'Processing image...' });
+
+            const response = await fetch(`${API_URL}/api/analyze`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error(`Server error: ${response.status}`);
+            }
+
+            setAnalysisProgress({ stage: 'Classifying', percentage: 70, message: 'Classifying cells...' });
+
+            const data = await response.json();
+
+            setAnalysisProgress({ stage: 'Complete', percentage: 100, message: 'Analysis complete!' });
+
+            // Update current results
+            setCurrentResults(data);
+
+            // Update aggregated data
+            const newProcessedImages = [...processedImages, {
+                id: Date.now(),
+                filename: selectedFile.name,
+                preview: previewUrl,
+                results: data,
+                sickleCount: data.rbc_classifications?.filter(r => r.is_abnormal)?.length || 0
+            }];
+            setProcessedImages(newProcessedImages);
+
+            const newCounts = {
+                wbc: aggregatedCounts.wbc + (data.wbc_count || 0),
+                rbc: aggregatedCounts.rbc + (data.rbc_count || 0),
+                platelets: aggregatedCounts.platelets + (data.platelet_count || 0)
+            };
+            setAggregatedCounts(newCounts);
+
+            if (data.wbc_classifications) {
+                setAggregatedClassifications(prev => [...prev, ...data.wbc_classifications]);
+            }
+            if (data.rbc_classifications) {
+                setAggregatedRBCClassifications(prev => [...prev, ...data.rbc_classifications]);
+            }
+
+            // Check threshold
+            if (newProcessedImages.length >= TARGET_IMAGE_COUNT) {
+                setThresholdMet(true);
+            }
+
+            // Clear file input for next upload
+            setSelectedFile(null);
+            setPreviewUrl(null);
+
+            // Save session
+            await saveSession({
+                processedImages: newProcessedImages,
+                aggregatedCounts: newCounts,
+                aggregatedClassifications: [...aggregatedClassifications, ...(data.wbc_classifications || [])],
+                aggregatedRBCClassifications: [...aggregatedRBCClassifications, ...(data.rbc_classifications || [])],
+                currentResults: data,
+                patientData: { name: patientName, id: patientId, age: patientAge, gender: patientGender, phone: patientPhone },
+                isRegistered,
+                thresholdMet: newProcessedImages.length >= TARGET_IMAGE_COUNT,
+                timestamp: Date.now()
+            });
+
+        } catch (error) {
+            console.error('Analysis error:', error);
+            setError(error.message || 'Failed to analyze image');
+        } finally {
+            setLoading(false);
+            setAnalysisProgress({ stage: '', percentage: 0, message: '' });
+        }
+    }, [selectedFile, previewUrl, processedImages, aggregatedCounts, aggregatedClassifications, aggregatedRBCClassifications, patientName, patientId, patientAge, patientGender, patientPhone, isRegistered]);
+
+    // Handle Bulk Upload
+    const handleBulkUpload = useCallback(async () => {
+        if (!bulkFiles || bulkFiles.length === 0) {
+            setError('Please select files first');
+            return;
+        }
+
+        const remainingSlots = TARGET_IMAGE_COUNT - processedImages.length;
+        if (remainingSlots <= 0) {
+            setError('Analysis threshold already met. Please start a new analysis.');
+            return;
+        }
+
+        const filesToProcess = bulkFiles.slice(0, remainingSlots);
+        setIsBulkProcessing(true);
+        setBulkProgress({ current: 0, total: filesToProcess.length });
+        setError(null);
+
+        let newProcessedImages = [...processedImages];
+        let newCounts = { ...aggregatedCounts };
+        let newClassifications = [...aggregatedClassifications];
+        let newRBCClassifications = [...aggregatedRBCClassifications];
+
+        for (let i = 0; i < filesToProcess.length; i++) {
+            const file = filesToProcess[i];
+            setBulkProgress({ current: i + 1, total: filesToProcess.length });
+            setAnalysisProgress({ stage: 'Processing', percentage: ((i + 1) / filesToProcess.length) * 100, message: `Processing image ${i + 1} of ${filesToProcess.length}...` });
+
+            try {
+                const formData = new FormData();
+                formData.append('image', file);
+
+                const response = await fetch(`${API_URL}/api/analyze`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    console.error(`Failed to process ${file.name}`);
+                    continue;
+                }
+
+                const data = await response.json();
+
+                newProcessedImages.push({
+                    id: Date.now() + i,
+                    filename: file.name,
+                    preview: URL.createObjectURL(file),
+                    results: data,
+                    sickleCount: data.rbc_classifications?.filter(r => r.is_abnormal)?.length || 0
+                });
+
+                newCounts = {
+                    wbc: newCounts.wbc + (data.wbc_count || 0),
+                    rbc: newCounts.rbc + (data.rbc_count || 0),
+                    platelets: newCounts.platelets + (data.platelet_count || 0)
+                };
+
+                if (data.wbc_classifications) {
+                    newClassifications = [...newClassifications, ...data.wbc_classifications];
+                }
+                if (data.rbc_classifications) {
+                    newRBCClassifications = [...newRBCClassifications, ...data.rbc_classifications];
+                }
+
+                setCurrentResults(data);
+
+            } catch (error) {
+                console.error(`Error processing ${file.name}:`, error);
+            }
+        }
+
+        setProcessedImages(newProcessedImages);
+        setAggregatedCounts(newCounts);
+        setAggregatedClassifications(newClassifications);
+        setAggregatedRBCClassifications(newRBCClassifications);
+
+        if (newProcessedImages.length >= TARGET_IMAGE_COUNT) {
+            setThresholdMet(true);
+        }
+
+        // Save session
+        await saveSession({
+            processedImages: newProcessedImages,
+            aggregatedCounts: newCounts,
+            aggregatedClassifications: newClassifications,
+            aggregatedRBCClassifications: newRBCClassifications,
+            currentResults: newProcessedImages[newProcessedImages.length - 1]?.results || null,
+            patientData: { name: patientName, id: patientId, age: patientAge, gender: patientGender, phone: patientPhone },
+            isRegistered,
+            thresholdMet: newProcessedImages.length >= TARGET_IMAGE_COUNT,
+            timestamp: Date.now()
+        });
+
+        setBulkFiles([]);
+        setIsBulkProcessing(false);
+        setBulkProgress({ current: 0, total: 0 });
+        setAnalysisProgress({ stage: '', percentage: 0, message: '' });
+
+    }, [bulkFiles, processedImages, aggregatedCounts, aggregatedClassifications, aggregatedRBCClassifications, patientName, patientId, patientAge, patientGender, patientPhone, isRegistered]);
+
+    const value = {
+        patientName, setPatientName,
+        patientId, setPatientId,
+        patientAge, setPatientAge,
+        patientGender, setPatientGender,
+        patientPhone, setPatientPhone,
+        isRegistered, setIsRegistered,
+        selectedFile, setSelectedFile,
+        previewUrl, setPreviewUrl,
+        loading, setLoading,
+        error, setError,
+        analysisProgress, setAnalysisProgress,
+        processedImages, setProcessedImages,
+        aggregatedCounts, setAggregatedCounts,
+        aggregatedClassifications, setAggregatedClassifications,
+        aggregatedRBCClassifications, setAggregatedRBCClassifications,
+        currentResults, setCurrentResults,
+        showCurrentResults, setShowCurrentResults,
+        thresholdMet, setThresholdMet,
+        finalResults, setFinalResults,
+        bulkFiles, setBulkFiles,
+        bulkProgress, setBulkProgress,
+        imageProgress, setImageProgress,
+        isBulkProcessing, setIsBulkProcessing,
+        calculateFinalResults,
+        saveReport,
+        handleReset,
+        handleFileChange,
+        handleAnalyze,
+        handleBulkFileChange,
+        handleBulkUpload,
+        handleRegistration,
+        TARGET_IMAGE_COUNT
+    };
+
+    return (
+        <AnalysisContext.Provider value={value}>
+            {children}
+        </AnalysisContext.Provider>
+    );
+};
+
+export const useAnalysis = () => {
+    const context = useContext(AnalysisContext);
+    if (!context) {
+        throw new Error('useAnalysis must be used within an AnalysisProvider');
+    }
+    return context;
+};

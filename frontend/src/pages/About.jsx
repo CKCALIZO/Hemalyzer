@@ -186,8 +186,8 @@ export const About = () => {
                                     <thead>
                                         <tr className="bg-slate-800 text-white">
                                             <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Blast Cells in Smear (%)</th>
-                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Typical Interpretation</th>
-                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Possible Condition</th>
+                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Interpretation</th>
+                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Condition</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -232,8 +232,8 @@ export const About = () => {
                                     <thead>
                                         <tr className="bg-slate-800 text-white">
                                             <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Granulocytes (Basophil, Eosinophil, Myeloblast, Neutrophils) (%)</th>
-                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Typical Interpretation</th>
-                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Possible Condition</th>
+                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Interpretation</th>
+                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Condition</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -255,7 +255,7 @@ export const About = () => {
                                         <tr className="hover:bg-slate-50 transition-colors bg-slate-50/50">
                                             <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">90% - 95% <br /><span className="text-sm text-slate-500">(Blast cells usually &lt; 5%)</span></td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Granulocytes dominate differential; significant left shift with numerous granulocytes; circulating blasts usually &lt; 5%.</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Typical Chronic Phase CML</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600"> Chronic Phase CML</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors">
                                             <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">&gt; 95% <br /><span className="text-sm text-slate-500">(Blasts &ge; 10%)</span></td>
@@ -276,9 +276,9 @@ export const About = () => {
                                 <table className="w-full border-collapse">
                                     <thead>
                                         <tr className="bg-slate-800 text-white">
-                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Lymphocytes (%)</th>
-                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Typical Interpretation</th>
-                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Possible Condition</th>
+                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Lymphocytes (% )</th>
+                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Interpretation</th>
+                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Condition</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -300,7 +300,7 @@ export const About = () => {
                                         <tr className="hover:bg-slate-50 transition-colors bg-slate-50/50">
                                             <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">66% - 80%</td>
                                             <td className="border border-slate-200 px-6 py-3 text-slate-600">Marked lymphocytic predominance; numerous lymphocytes visible on smear.</td>
-                                            <td className="border border-slate-200 px-6 py-3 text-slate-600">Typical Chronic Lymphocytic Leukemia (CLL)</td>
+                                            <td className="border border-slate-200 px-6 py-3 text-slate-600"> Chronic Lymphocytic Leukemia (CLL)</td>
                                         </tr>
                                         <tr className="hover:bg-slate-50 transition-colors">
                                             <td className="border border-slate-200 px-6 py-3 font-semibold text-slate-700">&gt; 80%</td>
@@ -322,8 +322,8 @@ export const About = () => {
                                     <thead>
                                         <tr className="bg-slate-800 text-white">
                                             <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Sickle cells in smear (%)</th>
-                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Typical Interpretation</th>
-                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Possible Condition</th>
+                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Interpretation</th>
+                                            <th className="border border-slate-700 px-6 py-3 text-left text-sm font-semibold">Condition</th>
                                         </tr>
                                     </thead>
                                     <tbody>

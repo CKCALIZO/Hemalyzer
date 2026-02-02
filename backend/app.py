@@ -1,9 +1,3 @@
-"""
-Hemalyzer Backend API
-Blood Cell Analysis using Roboflow Inference API + ConvNeXt Classification
-Model: bloodcell-hema (detection) + ConvNeXt (classification)
-"""
-
 from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from inference_sdk import InferenceHTTPClient
@@ -612,8 +606,8 @@ BASELINE_MODEL_ID = "hemalens-baseline/1"  # Standard YOLOv8 baseline (if availa
 # ============================================================
 
 # Performance tuning constants
-RBC_SAMPLE_LIMIT = 200  # Max RBCs to classify per image (only used if ENABLE_RBC_SAMPLING is True)
-ENABLE_RBC_SAMPLING = False  # If False, classify ALL RBCs for maximum detection accuracy
+RBC_SAMPLE_LIMIT = 100  # Max RBCs to classify per image (CPU optimized, statistically valid)
+ENABLE_RBC_SAMPLING = True  # Enable sampling for faster processing (1000 total RBCs across 10 images)
 
 def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
     """
@@ -989,7 +983,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                             wbc_class, wbc_confidence = 'Neutrophil: Normal', 0.5
 
                     # Disease thresholds
-                    DISEASE_THRESHOLDS_CONF = {'cml': 0.90, 'aml': 0.75, 'all': 0.75, 'cll': 0.88, 'default': 0.75}
+                    DISEASE_THRESHOLDS_CONF = {'cml': 0.90, 'aml': 0.75, 'all': 0.75, 'cll': 0.87, 'default': 0.75}
                     is_disease = ': normal' not in wbc_class.lower()
                     
                     if is_disease:
@@ -1049,9 +1043,9 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             if rbc_crops:
                 if not classifier.is_loaded(): 
                     load_convnext_model()
-                print(f"   > Batch classifying {len(rbc_crops)} RBCs (all detected)...")
-                # Use full preprocessing pipeline for RBCs (same as WBCs) for accurate detection
-                rbc_results = classifier.classify_batch(rbc_crops, ['RBC']*len(rbc_crops), batch_size=32, use_fast_mode_for_rbc=False)
+                print(f"   > Batch classifying {len(rbc_crops)} RBCs (sampled from {original_rbc_count} total)...")
+                # Use fast mode and larger batch size for RBCs - balances speed and accuracy
+                rbc_results = classifier.classify_batch(rbc_crops, ['RBC']*len(rbc_crops), batch_size=64, use_fast_mode_for_rbc=True)
                 
                 for i, result in enumerate(rbc_results):
                     if not result: continue
@@ -1231,13 +1225,11 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
 def home():
     """Root endpoint - backend status page"""
     return jsonify({
-        'message': 'Hemalyzer Backend API',
+        'message': 'Hemalyzer Backend',
         'status': 'running',
-        'model': MODEL_ID,
         'endpoints': {
             'health': '/api/health',
             'analyze': '/api/analyze (POST)',
-            'model_info': '/api/models/info',
             'test': '/api/test'
         },
         'frontend_url': 'http://localhost:5173/Hemalyzer',
@@ -2148,18 +2140,6 @@ def serve_test_image(filename):
 # ============================================================
 
 if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("HEMALYZER BACKEND - Yolov8NAS + ConvNeXt")
-    print("="*60)
-    print(f"Detection Model: {MODEL_ID}")
-    print(f"API Key configured: {'Yes' if API_KEY else 'No'}")
-    print("="*60)
-    
-    if not API_KEY:
-        print("\nWARNING: No API key found!")
-        print("   Please add your Roboflow API key to the .env file:")
-        print("   API_KEY=your_api_key_here")
-        print("="*60)
     
     # Load ConvNeXt model for cell classification
     print("\nLoading ConvNeXt classification model...")
