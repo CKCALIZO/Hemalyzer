@@ -36,7 +36,7 @@ export const Instructions = () => {
                                         <span className="w-6 h-6 bg-rose-600 text-white rounded-full flex items-center justify-center text-sm font-bold">1</span>
                                         <h3 className="font-semibold text-slate-800">Register Patient</h3>
                                     </div>
-                                    <p className="text-sm text-slate-600">Enter patient details including name, ID, age, and gender</p>
+                                    <p className="text-sm text-slate-600">Enter patient details including name, age, and gender</p>
                                 </div>
                                 <div className="bg-slate-50 rounded-lg p-4 border-l-4 border-rose-500">
                                     <div className="flex items-center gap-2 mb-2">

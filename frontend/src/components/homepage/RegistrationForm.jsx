@@ -21,40 +21,62 @@ export const RegistrationForm = ({
     };
 
     /**
-     * Generate Structured MRN (Medical Record Number)
-     * Format: YYMMDD-XXXX (Date + 4-digit sequential number)
-     * Example: 260202-0001 (Feb 2, 2026, patient #1 that day)
-     * 
-     * This follows healthcare best practices:
-     * - Uses date prefix for temporal organization
-     * - Sequential numbering within each day
-     * - Check digit appended for error detection
+     * Get the current date prefix and storage key for MRN generation
      */
-    const generatePatientId = () => {
+    const getDateInfo = () => {
         const now = new Date();
-
-        // Format: YYMMDD
-        const year = String(now.getFullYear()).slice(-2);  // Last 2 digits of year
+        const year = String(now.getFullYear()).slice(-2);
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
         const datePrefix = `${year}${month}${day}`;
-
-        // Get/increment daily counter from localStorage
         const storageKey = `hemalyzer_mrn_counter_${datePrefix}`;
-        let counter = parseInt(localStorage.getItem(storageKey) || '0', 10);
-        counter += 1;
-        localStorage.setItem(storageKey, counter.toString());
+        return { datePrefix, storageKey };
+    };
+
+    /**
+     * Generate Preview MRN (Medical Record Number) - Does NOT increment counter
+     * Shows what the next MRN will be without committing it
+     * Format: YYMMDD-XXXX-C (Date + 4-digit sequential number + check digit)
+     */
+    const generatePreviewMRN = () => {
+        const { datePrefix, storageKey } = getDateInfo();
+
+        // Get current counter WITHOUT incrementing
+        const currentCounter = parseInt(localStorage.getItem(storageKey) || '0', 10);
+        const nextCounter = currentCounter + 1;
 
         // Format: YYMMDD-XXXX (4-digit sequential padded)
-        const sequentialNum = String(counter).padStart(4, '0');
+        const sequentialNum = String(nextCounter).padStart(4, '0');
 
         // Calculate Luhn check digit for error detection
         const baseNumber = `${datePrefix}${sequentialNum}`;
         const checkDigit = calculateLuhnCheckDigit(baseNumber);
 
-        // Final MRN: YYMMDD-XXXX-C (e.g., 260202-0001-7)
+        // Final MRN: YYMMDD-XXXX-C (e.g., 260203-0001-7)
         const mrn = `${datePrefix}-${sequentialNum}-${checkDigit}`;
         setPatientId(mrn);
+    };
+
+    /**
+     * Commit MRN - Increments the counter in localStorage
+     * Only called when form is actually submitted
+     */
+    const commitMRN = () => {
+        const { storageKey } = getDateInfo();
+        const currentCounter = parseInt(localStorage.getItem(storageKey) || '0', 10);
+        localStorage.setItem(storageKey, (currentCounter + 1).toString());
+    };
+
+    /**
+     * Handle form submission - commits the MRN and calls onRegister
+     */
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        // Only commit (increment counter) for new patients, not edits
+        if (!isEditMode) {
+            commitMRN();
+        }
+        onRegister(e);
     };
 
     /**
@@ -127,12 +149,13 @@ export const RegistrationForm = ({
         window.validateMRN = validateMRN;
     }, []);
 
-    // Auto-generate ID on mount (only for new patients)
+    // Generate preview MRN on mount or when form is reset for new patient
+    // This runs when patientId is empty and we're not in edit mode
     React.useEffect(() => {
         if (!patientId && !isEditMode) {
-            generatePatientId();
+            generatePreviewMRN();
         }
-    }, [isEditMode]);
+    }, [patientId, isEditMode]);
 
     return (
         <div className="w-full max-w-lg bg-white rounded-xl shadow-2xl border border-rose-100 overflow-hidden transform transition-all relative">
@@ -166,7 +189,7 @@ export const RegistrationForm = ({
                 </p>
             </div>
 
-            <form onSubmit={onRegister} className="p-6 space-y-4">
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
                 {/* Patient Name */}
                 <div>
                     <label htmlFor="patientName" className="block text-sm font-semibold text-slate-700 mb-1.5">Full Name *</label>

@@ -19,7 +19,8 @@ export const UploadSection = ({
     handleAnalyze,
     error,
     aggregatedCounts,
-    handleReset
+    handleReset,
+    isRegistered
 }) => {
     const remainingImages = Math.max(0, targetImageCount - processedImages.length);
     const progress = Math.min(100, (processedImages.length / targetImageCount) * 100);
@@ -102,8 +103,8 @@ export const UploadSection = ({
                     </div>
                 )}
 
-                {/* Upload Controls - Fade when threshold met */}
-                <div className={`transition-opacity duration-300 ${thresholdMet ? 'opacity-40 pointer-events-none' : ''}`}>
+                {/* Upload Controls - Fade when threshold met or no patient registered */}
+                <div className={`transition-opacity duration-300 ${thresholdMet || !isRegistered ? 'opacity-40 pointer-events-none' : ''}`}>
                     {/* Supported File Types Notice */}
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
                         <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +127,7 @@ export const UploadSection = ({
                         file:bg-rose-50 file:text-rose-700
                         hover:file:bg-rose-100
                         disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={loading || thresholdMet}
+                        disabled={loading || thresholdMet || !isRegistered}
                     />
 
                     {/* Divider */}
@@ -153,7 +154,7 @@ export const UploadSection = ({
                         accept=".jpg,.jpeg,.png"
                         multiple
                         onChange={handleBulkFileChange}
-                        disabled={loading || thresholdMet || isBulkProcessing}
+                        disabled={loading || thresholdMet || isBulkProcessing || !isRegistered}
                     />
 
                     {/* Selected files preview */}
@@ -219,11 +220,11 @@ export const UploadSection = ({
                     {/* Process Bulk Button */}
                     <button
                         onClick={handleBulkUpload}
-                        disabled={bulkFiles.length === 0 || loading || thresholdMet || isBulkProcessing}
+                        disabled={bulkFiles.length === 0 || loading || thresholdMet || isBulkProcessing || !isRegistered}
                         className={`w-full flex items-center justify-center gap-2 text-white 
                         bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 
                         transition-all font-semibold rounded-lg text-sm px-4 py-2.5
-                        ${(bulkFiles.length === 0 || loading || thresholdMet || isBulkProcessing) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer shadow-md hover:shadow-lg'}`}
+                        ${(bulkFiles.length === 0 || loading || thresholdMet || isBulkProcessing || !isRegistered) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer shadow-md hover:shadow-lg'}`}
                     >
                         {isBulkProcessing ? (
                             <>
@@ -319,11 +320,11 @@ export const UploadSection = ({
                 {/* Analyze Button */}
                 <button
                     onClick={handleAnalyze}
-                    disabled={!selectedFile || loading || thresholdMet}
+                    disabled={!selectedFile || loading || thresholdMet || !isRegistered}
                     className={`w-full flex items-center justify-center gap-2 text-white 
                     bg-rose-600 hover:bg-rose-500 transition-colors font-semibold 
                     rounded-lg text-base px-6 py-3
-                    ${(!selectedFile || loading || thresholdMet) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    ${(!selectedFile || loading || thresholdMet || !isRegistered) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                     {loading ? (
                         <>
@@ -338,7 +339,7 @@ export const UploadSection = ({
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                             </svg>
-                            {thresholdMet ? 'Analysis Complete' : 'Analyze Image'}
+                            {!isRegistered ? 'Register Patient First' : thresholdMet ? 'Analysis Complete' : 'Analyze Image'}
                         </>
                     )}
                 </button>
