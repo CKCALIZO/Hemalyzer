@@ -9,6 +9,16 @@ import { ThresholdResults } from "../components/ThresholdResults.jsx";
 export const Reports = () => {
     const [reports, setReports] = useState([]);
     const [selectedReport, setSelectedReport] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    // Filter reports based on search query (MRN or patient name)
+    const filteredReports = reports.filter(report => {
+        if (!searchQuery.trim()) return true;
+        const query = searchQuery.toLowerCase().trim();
+        const patientName = report.patientData?.name?.toLowerCase() || '';
+        const patientId = report.patientData?.id?.toLowerCase() || '';
+        return patientName.includes(query) || patientId.includes(query);
+    });
 
     useEffect(() => {
         // Load saved reports from localStorage
@@ -237,8 +247,44 @@ export const Reports = () => {
                             {/* Reports List */}
                             <div className="lg:col-span-1 space-y-4">
                                 <h2 className="text-xl font-semibold mb-4 text-red-900">Saved Reports ({reports.length})</h2>
+                                
+                                {/* Search Bar */}
+                                <div className="relative">
+                                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                        <Search className="h-4 w-4 text-red-400" />
+                                    </div>
+                                    <input
+                                        type="text"
+                                        placeholder="Search by MRN or patient name..."
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 border border-red-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white text-sm placeholder-red-300"
+                                    />
+                                    {searchQuery && (
+                                        <button
+                                            onClick={() => setSearchQuery('')}
+                                            className="absolute inset-y-0 right-0 pr-3 flex items-center text-red-400 hover:text-red-600"
+                                        >
+                                            <span className="text-lg">&times;</span>
+                                        </button>
+                                    )}
+                                </div>
+                                
+                                {/* Search Results Count */}
+                                {searchQuery && (
+                                    <p className="text-xs text-red-500">
+                                        Found {filteredReports.length} of {reports.length} reports
+                                    </p>
+                                )}
+                                
                                 <div className="space-y-2 max-h-[600px] overflow-y-auto">
-                                    {reports.map((report) => (
+                                    {filteredReports.length === 0 ? (
+                                        <div className="text-center py-8 text-red-400">
+                                            <Search className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                                            <p className="text-sm">No reports match your search</p>
+                                        </div>
+                                    ) : (
+                                        filteredReports.map((report) => (
                                         <div
                                             key={report.id}
                                             onClick={() => setSelectedReport(report)}
@@ -249,7 +295,12 @@ export const Reports = () => {
                                         >
                                             <div className="flex justify-between items-start">
                                                 <div className="flex-1">
-                                                    <p className="font-semibold text-sm text-red-800">Report #{report.id}</p>
+                                                    <p className="font-semibold text-sm text-red-800">
+                                                        {report.patientData?.name || 'Unknown Patient'}
+                                                    </p>
+                                                    <p className="text-xs text-red-600 font-mono">
+                                                        MRN: {report.patientData?.id || 'N/A'}
+                                                    </p>
                                                     <p className="text-xs text-red-500">{report.timestamp}</p>
                                                     <div className="mt-2 text-xs text-red-600">
                                                         <span className="font-medium">
@@ -284,7 +335,8 @@ export const Reports = () => {
                                                 </button>
                                             </div>
                                         </div>
-                                    ))}
+                                    ))
+                                    )}
                                 </div>
                             </div>
 
@@ -294,7 +346,12 @@ export const Reports = () => {
                                     <div className="bg-white rounded-lg border border-red-200 p-6 shadow-sm">
                                         <div className="flex justify-between items-start mb-6">
                                             <div>
-                                                <h2 className="text-2xl font-bold text-red-900">Report #{selectedReport.id}</h2>
+                                                <h2 className="text-2xl font-bold text-red-900">
+                                                    {selectedReport.patientData?.name || 'Unknown Patient'} - Analysis Report
+                                                </h2>
+                                                <p className="text-sm text-red-600 font-mono mt-1">
+                                                    MRN: {selectedReport.patientData?.id || 'N/A'}
+                                                </p>
                                                 <p className="text-sm text-red-500 mt-1">{selectedReport.timestamp}</p>
                                             </div>
                                             <button

@@ -435,8 +435,11 @@ export const AnalysisProvider = ({ children }) => {
         }
 
         try {
+            // Create a meaningful report ID using MRN and timestamp
+            const reportId = patientId ? `${patientId}_${Date.now()}` : `UNKNOWN_${Date.now()}`;
+            
             const newReport = {
-                id: Date.now().toString(),
+                id: reportId,
                 timestamp: new Date().toLocaleString(),
                 patientData: {
                     name: patientName,
@@ -669,6 +672,9 @@ export const AnalysisProvider = ({ children }) => {
             const newProcessedImages = [...processedImages, {
                 id: Date.now(),
                 filename: selectedFile.name,
+                fileName: selectedFile.name,  // For duplicate checking compatibility
+                fileSize: selectedFile.size,  // For duplicate checking
+                lastModified: selectedFile.lastModified,  // For duplicate checking
                 preview: previewUrl,
                 annotatedImage: data.annotated_image,
                 results: data,
@@ -808,9 +814,12 @@ export const AnalysisProvider = ({ children }) => {
                     message: `Image ${i + 1}/${filesToProcess.length}: Complete!` 
                 });
 
-                newProcessedImages.push({
+                const newImage = {
                     id: Date.now() + i,
                     filename: file.name,
+                    fileName: file.name,  // For duplicate checking compatibility
+                    fileSize: file.size,  // For duplicate checking
+                    lastModified: file.lastModified,  // For duplicate checking
                     preview: URL.createObjectURL(file),
                     annotatedImage: data.annotated_image,
                     results: data,
@@ -819,7 +828,9 @@ export const AnalysisProvider = ({ children }) => {
                     plateletCount: data.platelet_count || data.stage1_detection?.counts?.Platelets || 0,
                     sickleCount: data.rbc_classifications?.filter(r => r.is_sickle_cell || r.is_abnormal)?.length || 0,
                     wbcClassifications: data.wbc_classifications || data.stage2_classification || []
-                });
+                };
+
+                newProcessedImages.push(newImage);
 
                 newCounts = {
                     wbc: newCounts.wbc + (data.wbc_count || data.stage1_detection?.counts?.WBC || 0),
@@ -834,6 +845,11 @@ export const AnalysisProvider = ({ children }) => {
                     newRBCClassifications = [...newRBCClassifications, ...data.rbc_classifications];
                 }
 
+                // Update state progressively after each image for real-time UI updates
+                setProcessedImages([...newProcessedImages]);
+                setAggregatedCounts({ ...newCounts });
+                setAggregatedClassifications([...newClassifications]);
+                setAggregatedRBCClassifications([...newRBCClassifications]);
                 setCurrentResults(data);
 
             } catch (error) {
@@ -841,6 +857,7 @@ export const AnalysisProvider = ({ children }) => {
             }
         }
 
+        // Final state update (redundant but ensures consistency)
         setProcessedImages(newProcessedImages);
         setAggregatedCounts(newCounts);
         setAggregatedClassifications(newClassifications);

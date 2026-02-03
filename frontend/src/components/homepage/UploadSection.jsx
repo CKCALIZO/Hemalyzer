@@ -25,15 +25,86 @@ export const UploadSection = ({
     const remainingImages = Math.max(0, targetImageCount - processedImages.length);
     const progress = Math.min(100, (processedImages.length / targetImageCount) * 100);
 
+    // Helper function to check for duplicate images
+    const isDuplicateImage = (file) => {
+        if (!processedImages || processedImages.length === 0) return false;
+        
+        return processedImages.some(processedImage => {
+            // Compare file name, size, and last modified date
+            // Use both fileName (new field) and filename (legacy field) for compatibility
+            const processedFileName = processedImage.fileName || processedImage.filename;
+            const processedFileSize = processedImage.fileSize;
+            const processedLastModified = processedImage.lastModified;
+            
+            const isSameName = processedFileName === file.name;
+            const isSameSize = processedFileSize === file.size;
+            const isSameDate = processedLastModified === file.lastModified;
+            
+            // Consider it a duplicate if all three match
+            return isSameName && isSameSize && isSameDate;
+        });
+    };
+
+    // Enhanced file change handler with duplicate validation
+    const handleSingleFileChangeWithValidation = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        // Check for duplicate
+        if (isDuplicateImage(file)) {
+            const errorMessage = `Duplicate image detected: "${file.name}" has already been processed. Please select a different image.`;
+            setError(errorMessage);
+            e.target.value = ''; // Clear the input
+            return;
+        }
+        
+        // Clear any previous errors and proceed with original handler
+        setError(null);
+        handleFileChange(e);
+    };
+
     // Enhanced bulk file change handler with validation
     const handleBulkFileChangeWithValidation = (e) => {
         const files = Array.from(e.target.files);
         const maxAllowed = remainingImages;
         
         if (files.length > maxAllowed) {
-            setError(`Too many files selected! You can only upload ${maxAllowed} more image${maxAllowed > 1 ? 's' : ''} to reach the 10-image limit. Please select fewer files.`);
+            const errorMessage = `Too many files selected! You can only upload ${maxAllowed} more image${maxAllowed > 1 ? 's' : ''} to reach the 10-image limit. Please select fewer files.`;
+            setError(errorMessage);
             // Clear the input
             e.target.value = '';
+            return;
+        }
+        
+        // Check for duplicates against processed images
+        const duplicateFiles = files.filter(file => isDuplicateImage(file));
+        
+        if (duplicateFiles.length > 0) {
+            const duplicateNames = duplicateFiles.map(f => f.name).join(', ');
+            const errorMessage = `Duplicate image(s) detected: ${duplicateNames}. These images have already been processed. Please select different images.`;
+            setError(errorMessage);
+            e.target.value = ''; // Clear the input
+            return;
+        }
+        
+        // Check for duplicates within the selected files themselves
+        const fileMap = new Map();
+        const internalDuplicates = [];
+        
+        files.forEach(file => {
+            const key = `${file.name}_${file.size}_${file.lastModified}`;
+            if (fileMap.has(key)) {
+                internalDuplicates.push(file.name);
+            } else {
+                fileMap.set(key, true);
+            }
+        });
+        
+        if (internalDuplicates.length > 0) {
+            const duplicateNames = [...new Set(internalDuplicates)].join(', ');
+            const errorMessage = `Duplicate files in selection: ${duplicateNames}. Please select unique images only.`;
+            setError(errorMessage);
+            e.target.value = ''; // Clear the input
             return;
         }
         
@@ -136,7 +207,7 @@ export const UploadSection = ({
                     <input
                         type="file"
                         accept=".jpg,.jpeg,.png"
-                        onChange={handleFileChange}
+                        onChange={handleSingleFileChangeWithValidation}
                         className="block w-full text-sm text-slate-500
                         file:mr-4 file:py-2 file:px-4
                         file:rounded-full file:border-0
@@ -350,7 +421,14 @@ export const UploadSection = ({
 
                 {/* Analyze Button */}
                 <button
-                    onClick={handleAnalyze}
+                    onClick={() => {
+                        // Double-check for duplicates before analyzing
+                        if (selectedFile && isDuplicateImage(selectedFile)) {
+                            setError(`Cannot analyze: "${selectedFile.name}" has already been processed. Please select a different image.`);
+                            return;
+                        }
+                        handleAnalyze();
+                    }}
                     disabled={!selectedFile || loading || thresholdMet || !isRegistered || isBulkProcessing}
                     className={`w-full flex items-center justify-center gap-2 text-white 
                     bg-rose-600 hover:bg-rose-500 transition-colors font-semibold 

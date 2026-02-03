@@ -229,5 +229,10 @@ export const generatePDF = (report) => {
     doc.text("It is not a definitive medical diagnosis. Confirmatory testing is required.", 105, pageHeight - 11, { align: 'center' });
     doc.text("**** End of Report ****", 105, pageHeight - 6, { align: 'center' });
 
-    doc.save(`Hemalyzer_Report_${report.id || 'Draft'}.pdf`);
+    // Generate filename using patient MRN and name
+    const patientMRN = report.patientData?.id || 'UNKNOWN';
+    const patientName = report.patientData?.name ? report.patientData.name.replace(/[^a-zA-Z0-9]/g, '_') : 'Unknown_Patient';
+    const filename = `Hemalyzer_${patientName}_${patientMRN}.pdf`;
+    
+    doc.save(filename);
 };
