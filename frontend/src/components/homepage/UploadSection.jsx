@@ -25,6 +25,23 @@ export const UploadSection = ({
     const remainingImages = Math.max(0, targetImageCount - processedImages.length);
     const progress = Math.min(100, (processedImages.length / targetImageCount) * 100);
 
+    // Enhanced bulk file change handler with validation
+    const handleBulkFileChangeWithValidation = (e) => {
+        const files = Array.from(e.target.files);
+        const maxAllowed = remainingImages;
+        
+        if (files.length > maxAllowed) {
+            setError(`Too many files selected! You can only upload ${maxAllowed} more image${maxAllowed > 1 ? 's' : ''} to reach the 10-image limit. Please select fewer files.`);
+            // Clear the input
+            e.target.value = '';
+            return;
+        }
+        
+        // Clear any previous errors and proceed with original handler
+        setError(null);
+        handleBulkFileChange(e);
+    };
+
     return (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm h-fit">
             <div className="px-6 py-4 border-b border-rose-200 bg-rose-50">
@@ -103,8 +120,8 @@ export const UploadSection = ({
                     </div>
                 )}
 
-                {/* Upload Controls - Fade when threshold met or no patient registered */}
-                <div className={`transition-opacity duration-300 ${thresholdMet || !isRegistered ? 'opacity-40 pointer-events-none' : ''}`}>
+                {/* Upload Controls - Fade when threshold met, no patient registered, OR during any processing */}
+                <div className={`transition-opacity duration-300 ${thresholdMet || !isRegistered || loading || isBulkProcessing ? 'opacity-40 pointer-events-none' : ''}`}>
                     {/* Supported File Types Notice */}
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
                         <svg className="w-5 h-5 text-blue-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -127,7 +144,7 @@ export const UploadSection = ({
                         file:bg-rose-50 file:text-rose-700
                         hover:file:bg-rose-100
                         disabled:opacity-50 disabled:cursor-not-allowed"
-                        disabled={loading || thresholdMet || !isRegistered}
+                        disabled={loading || thresholdMet || !isRegistered || isBulkProcessing}
                     />
 
                     {/* Divider */}
@@ -142,9 +159,23 @@ export const UploadSection = ({
 
                 {/* Bulk Upload Section */}
                 <div className="mb-4 p-4 bg-gradient-to-r from-rose-50 to-pink-50 rounded-lg border border-rose-200">
-                    <label className="block text-sm font-medium text-rose-900 mb-2">
-                        Bulk Upload (up to {targetImageCount - processedImages.length} images) - JPG/PNG only
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                        <label className="block text-sm font-medium text-rose-900">
+                            Bulk Upload (up to {remainingImages} images) - JPG/PNG only
+                        </label>
+                        {remainingImages === 0 && (
+                            <span className="text-xs text-emerald-600 font-semibold">✓ Complete</span>
+                        )}
+                    </div>
+                    
+                    {/* Warning for 10-image limit */}
+                    <div className="mb-3 p-2 bg-blue-50 border border-blue-200 rounded-md">
+                        <p className="text-xs text-blue-800">
+                            <strong>Note:</strong> Maximum {targetImageCount} images allowed per analysis session. 
+                            {remainingImages > 0 ? ` You can upload ${remainingImages} more image${remainingImages > 1 ? 's' : ''}.` : ' Session complete.'}
+                        </p>
+                    </div>
+                    
                     <input
                         className="block w-full text-sm text-rose-700 border border-rose-300 
                         rounded-lg cursor-pointer bg-white focus:outline-none focus:ring-2 
@@ -153,8 +184,8 @@ export const UploadSection = ({
                         type="file"
                         accept=".jpg,.jpeg,.png"
                         multiple
-                        onChange={handleBulkFileChange}
-                        disabled={loading || thresholdMet || isBulkProcessing || !isRegistered}
+                        onChange={handleBulkFileChangeWithValidation}
+                        disabled={loading || thresholdMet || isBulkProcessing || !isRegistered || remainingImages === 0}
                     />
 
                     {/* Selected files preview */}
@@ -188,15 +219,15 @@ export const UploadSection = ({
                     )}
 
                     {/* Insufficient images memo */}
-                    {bulkFiles.length > 0 && bulkFiles.length < (targetImageCount - processedImages.length) && !isBulkProcessing && (
+                    {bulkFiles.length > 0 && bulkFiles.length < remainingImages && !isBulkProcessing && (
                         <div className="mb-3 p-3 bg-amber-50 rounded-lg border border-amber-300 flex items-start gap-2">
                             <span className="text-amber-600 font-bold">Note:</span>
                             <div>
                                 <p className="text-sm font-medium text-amber-800">
-                                    {bulkFiles.length} of {targetImageCount - processedImages.length} images selected
+                                    {bulkFiles.length} of {remainingImages} images selected
                                 </p>
                                 <p className="text-xs text-amber-700 mt-1">
-                                    You can still process these, but for accurate results please upload {targetImageCount - processedImages.length} images total.
+                                    You can still process these, but for accurate results please upload {remainingImages} images total.
                                 </p>
                             </div>
                         </div>
@@ -320,11 +351,11 @@ export const UploadSection = ({
                 {/* Analyze Button */}
                 <button
                     onClick={handleAnalyze}
-                    disabled={!selectedFile || loading || thresholdMet || !isRegistered}
+                    disabled={!selectedFile || loading || thresholdMet || !isRegistered || isBulkProcessing}
                     className={`w-full flex items-center justify-center gap-2 text-white 
                     bg-rose-600 hover:bg-rose-500 transition-colors font-semibold 
                     rounded-lg text-base px-6 py-3
-                    ${(!selectedFile || loading || thresholdMet || !isRegistered) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                    ${(!selectedFile || loading || thresholdMet || !isRegistered || isBulkProcessing) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                 >
                     {loading ? (
                         <>
@@ -333,6 +364,14 @@ export const UploadSection = ({
                                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                             </svg>
                             Analyzing...
+                        </>
+                    ) : isBulkProcessing ? (
+                        <>
+                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 718-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Bulk Processing...
                         </>
                     ) : (
                         <>

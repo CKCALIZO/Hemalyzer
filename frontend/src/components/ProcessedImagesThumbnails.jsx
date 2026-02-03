@@ -55,8 +55,11 @@ export const ProcessedImagesThumbnails = ({
             totalWBC: 0
         };
 
-        // Main WBC types to track
+        // Main WBC types to track (only mature cells count in the 5-part differential)
         const mainWBCTypes = ['Neutrophil', 'Basophil', 'Monocyte', 'Eosinophil', 'Lymphocyte'];
+        
+        // Immature/precursor cells - these go to "Other WBCs", not the main differential
+        const immatureCells = ['Promyelocyte', 'Myelocyte', 'Metamyelocyte', 'Myeloblast', 'Lymphoblast', 'B_Lymphoblast'];
 
         // Disease/blast types for "Other WBCs" (these don't fall into normal/abnormal of main types)
         const diseaseTypes = [
@@ -81,20 +84,29 @@ export const ProcessedImagesThumbnails = ({
             if (hasColon) {
                 // Parse "CellType: Status" format
                 const [cellType, status] = type.split(':').map(s => s.trim());
+                const cellTypeLower = cellType.toLowerCase();
+                const statusLower = status.toLowerCase();
 
-                // Check if it's one of the main 5 WBC types
-                const isMainType = mainWBCTypes.some(t => cellType.toLowerCase().includes(t.toLowerCase()));
+                // Check if it's one of the main 5 WBC types (mature cells only)
+                const isMainType = mainWBCTypes.some(t => cellTypeLower.includes(t.toLowerCase()));
+                
+                // Check if it's an immature/precursor cell (goes to Other WBCs)
+                const isImmatureCell = immatureCells.some(t => cellTypeLower.includes(t.toLowerCase()));
+                
+                // Check for disease markers in status
+                const hasDisease = statusLower.includes('cml') || statusLower.includes('cll') || 
+                                   statusLower.includes('aml') || statusLower.includes('all');
 
-                if (isMainType) {
+                if (isMainType && !isImmatureCell) {
                     // Increment main type counter
-                    if (cellType.toLowerCase().includes('neutrophil')) breakdown.neutrophil++;
-                    else if (cellType.toLowerCase().includes('lymphocyte')) breakdown.lymphocyte++;
-                    else if (cellType.toLowerCase().includes('monocyte')) breakdown.monocyte++;
-                    else if (cellType.toLowerCase().includes('eosinophil')) breakdown.eosinophil++;
-                    else if (cellType.toLowerCase().includes('basophil')) breakdown.basophil++;
+                    if (cellTypeLower.includes('neutrophil')) breakdown.neutrophil++;
+                    else if (cellTypeLower.includes('lymphocyte')) breakdown.lymphocyte++;
+                    else if (cellTypeLower.includes('monocyte')) breakdown.monocyte++;
+                    else if (cellTypeLower.includes('eosinophil')) breakdown.eosinophil++;
+                    else if (cellTypeLower.includes('basophil')) breakdown.basophil++;
 
                     // Categorize into Normal or Abnormal WBCs
-                    const isNormal = status.toLowerCase().includes('normal');
+                    const isNormal = statusLower.includes('normal');
                     const targetArray = isNormal ? breakdown.normalWBCs : breakdown.abnormalWBCs;
 
                     const existing = targetArray.find(o => o.type === type);
@@ -104,7 +116,8 @@ export const ProcessedImagesThumbnails = ({
                         targetArray.push({ type, count: 1, cellType, status });
                     }
                 } else {
-                    // Not a main type, put in Other WBCs
+                    // Not a main type (immature cells like Promyelocyte, Myeloblast, Lymphoblast, etc.)
+                    // OR main type with disease marker - put in Other WBCs
                     const existing = breakdown.otherWBCs.find(o => o.type === type);
                     if (existing) {
                         existing.count++;
@@ -112,7 +125,8 @@ export const ProcessedImagesThumbnails = ({
                         breakdown.otherWBCs.push({
                             type,
                             count: 1,
-                            isDisease: diseaseTypes.some(dt => type.includes(dt))
+                            isDisease: hasDisease || isImmatureCell,
+                            isImmatureCell: isImmatureCell
                         });
                     }
                 }

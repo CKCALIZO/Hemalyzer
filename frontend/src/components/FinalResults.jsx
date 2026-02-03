@@ -510,6 +510,28 @@ export const FinalResults = ({
                                     </span>
                                 </div>
 
+                                {/* Sickle Cell Statistics */}
+                                <div className="grid grid-cols-3 gap-4 mb-4">
+                                    <div className="bg-white/80 rounded-lg p-3 text-center border border-black/5">
+                                        <p className={`text-2xl font-bold ${sickleCell.severity !== 'NORMAL' ? 'text-red-600' : 'text-slate-700'}`}>
+                                            {sickleCell.count}
+                                        </p>
+                                        <p className="text-xs text-slate-500">Sickle Cells</p>
+                                    </div>
+                                    <div className="bg-white/80 rounded-lg p-3 text-center border border-black/5">
+                                        <p className={`text-2xl font-bold ${sickleCell.severity !== 'NORMAL' ? 'text-red-600' : 'text-slate-700'}`}>
+                                            {sickleCell.percentage?.toFixed(2) || '0.00'}%
+                                        </p>
+                                        <p className="text-xs text-slate-500">Percentage of RBCs</p>
+                                    </div>
+                                    <div className="bg-white/80 rounded-lg p-3 text-center border border-black/5">
+                                        <p className="text-2xl font-bold text-slate-700">
+                                            {sickleCell.totalRBC || totalRBC}
+                                        </p>
+                                        <p className="text-xs text-slate-500">Total RBCs Analyzed</p>
+                                    </div>
+                                </div>
+
                                 <div className="space-y-4">
                                     <div>
                                         <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-1">Interpretation</h5>

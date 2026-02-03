@@ -588,7 +588,6 @@ CLIENT = InferenceHTTPClient(
 
 # Your Roboflow model IDs
 MODEL_ID = "hemalens-6807i/2"  # Enhanced YOLOv8-NAS model
-BASELINE_MODEL_ID = "hemalens-baseline/1"  # Standard YOLOv8 baseline (if available)
 # Note: If baseline model doesn't exist, we'll simulate with reduced detection rate
 
 

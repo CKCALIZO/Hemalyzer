@@ -209,9 +209,12 @@ export const AnalysisProvider = ({ children }) => {
             const isMetamyelocyte = classificationStr.includes('metamyelocyte');
             const isMyelocyte = classificationStr.includes('myelocyte') && !isPromyelocyte && !isMetamyelocyte;
 
-            if (isNeutrophil || isMyelocyte || isMetamyelocyte || isPromyelocyte || (isMyeloblast && !hasAML && !hasCML)) {
+            // Only count mature main WBC types in the differential
+            // Immature cells (Promyelocyte, Myelocyte, Metamyelocyte, Myeloblast, Lymphoblast) 
+            // are tracked separately as disease indicators, not in the main differential
+            if (isNeutrophil) {
                 differentialCounts['Neutrophil']++;
-            } else if (isLymphocyte || isLymphoblast) {
+            } else if (isLymphocyte) {
                 differentialCounts['Lymphocyte']++;
             } else if (isMonocyte) {
                 differentialCounts['Monocyte']++;
@@ -220,6 +223,8 @@ export const AnalysisProvider = ({ children }) => {
             } else if (isBasophil) {
                 differentialCounts['Basophil']++;
             }
+            // Note: Promyelocyte, Myelocyte, Metamyelocyte, Myeloblast, Lymphoblast 
+            // are NOT counted in the main 5-part differential
 
             if (!classificationStr.includes('normal') && cls.classification) {
                 abnormalWBCs.push(cls);

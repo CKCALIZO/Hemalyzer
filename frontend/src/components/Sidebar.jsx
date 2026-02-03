@@ -7,7 +7,7 @@ export const Sidebar = () => {
 
     const navItems = [
         {
-            path: "/instructions",
+            path: "/",
             label: "Instructions",
             icon: (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -16,7 +16,7 @@ export const Sidebar = () => {
             )
         },
         {
-            path: "/",
+            path: "/home",
             label: "Home",
             icon: (
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

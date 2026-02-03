@@ -173,8 +173,9 @@ export const RegistrationForm = ({
                 </button>
             )}
             
-            <div className={`px-6 py-4 text-white ${isEditMode ? 'bg-gradient-to-r from-blue-600 to-indigo-600' : 'bg-gradient-to-r from-rose-600 to-pink-600'}`}>
+            <div className={`px-6 py-4 text-white ${isEditMode ? 'bg-gradient-to-r from-rose-600 to-pink-600' : 'bg-gradient-to-r from-rose-600 to-pink-600'}`}>
                 <h2 className="text-xl font-bold flex items-center gap-2">
+                    
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         {isEditMode ? (
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -184,7 +185,7 @@ export const RegistrationForm = ({
                     </svg>
                     {isEditMode ? 'Edit Patient Information' : 'Patient Registration'}
                 </h2>
-                <p className={`text-sm mt-0.5 ${isEditMode ? 'text-blue-100' : 'text-rose-100'}`}>
+                <p className={`text-sm mt-0.5 ${isEditMode ? 'text-rose-100' : 'text-rose-100'}`}>
                     {isEditMode ? 'Update patient details below' : 'Enter patient details to begin analysis'}
                 </p>
             </div>
@@ -289,7 +290,7 @@ export const RegistrationForm = ({
                         type="submit"
                         className={`w-full px-8 py-3 text-white rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5 active:translate-y-0 ${
                             isEditMode 
-                                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 shadow-blue-200 hover:shadow-blue-300'
+                                ? 'bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 shadow-rose-200 hover:shadow-rose-300'
                                 : 'bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-700 hover:to-pink-700 shadow-rose-200 hover:shadow-rose-300'
                         }`}
                     >

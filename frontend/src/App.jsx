@@ -12,8 +12,8 @@ function App() {
   return (
     <AnalysisProvider>
       <Routes>
-        <Route path="/" element={<Homepage />} />
-        <Route path="instructions" element={<Instructions />} />
+        <Route path="/" element={<Instructions />} />
+        <Route path="home" element={<Homepage />} />
         <Route path="reports" element={<Reports />} />
         <Route path="about" element={<About />} />
         <Route path="classifications" element={<CellClassifications />} />
