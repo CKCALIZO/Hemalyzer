@@ -11,6 +11,14 @@ import os
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 
+# Pre-import scipy to avoid slow first-time import during requests
+# This is especially important for confidence interval calculations
+try:
+    from scipy import stats
+    print("[Scipy] Pre-imported successfully")
+except ImportError:
+    print("[Scipy] Import failed - confidence intervals will not be available")
+
 # Import ConvNeXt classification module
 from convnext_classifier import (
     load_convnext_model,

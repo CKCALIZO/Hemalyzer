@@ -9,7 +9,7 @@ services:
     plan: free
     rootDir: backend
     buildCommand: pip install -r requirements-render.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    startCommand: gunicorn app:app --config gunicorn_config.py
     healthCheckPath: /api/health
     envVars:
       - key: FLASK_ENV
