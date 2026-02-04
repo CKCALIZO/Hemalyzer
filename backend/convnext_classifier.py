@@ -650,6 +650,9 @@ class ConvNeXtClassifier:
     
     def is_loaded(self):
         """Check if model is loaded and ready"""
+        # In Colab mode, check if Colab server is healthy
+        if USE_COLAB_MODE:
+            return colab_client.health_check()
         return self.model is not None
     
     def get_class_names(self):

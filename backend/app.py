@@ -1041,6 +1041,8 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     detection = detections['cells'][idx]
                     crop_pil = wbc_crops[i]
                     
+                    print(f"     ✓ Classifying WBC {i+1}/{len(wbc_crops)} (Detection #{idx+1})...")
+                    
                     wbc_class = result['class']
                     wbc_confidence = result['confidence']
                     probs = result['probabilities']
@@ -1132,6 +1134,8 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     idx = rbc_indices[i]
                     detection = detections['cells'][idx]
                     crop_pil = rbc_crops[i]
+                    
+                    print(f"     ✓ Classifying RBC {i+1}/{len(rbc_crops)} (Detection #{idx+1})...")
                     
                     # Only keep sickle cells
                     is_sickle = result.get('is_sickle_cell', False)
