@@ -1035,7 +1035,11 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 wbc_results = classifier.classify_batch(wbc_crops, ['WBC']*len(wbc_crops), batch_size=16)
                 
                 for i, result in enumerate(wbc_results):
-                    if not result: continue
+                    # Skip if result is None or has error
+                    if not result or 'error' in result:
+                        if result and 'error' in result:
+                            print(f"     ✗ WBC {i+1} classification failed: {result['error']}")
+                        continue
                     
                     idx = wbc_indices[i]
                     detection = detections['cells'][idx]
@@ -1043,9 +1047,9 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     
                     print(f"     ✓ Classifying WBC {i+1}/{len(wbc_crops)} (Detection #{idx+1})...")
                     
-                    wbc_class = result['class']
-                    wbc_confidence = result['confidence']
-                    probs = result['probabilities']
+                    wbc_class = result.get('class', 'Unknown')
+                    wbc_confidence = result.get('confidence', 0.0)
+                    probs = result.get('probabilities', {})
                     
                     # --- DISEASE THRESHOLD LOGIC (Ported from sequential loop) ---
                     
@@ -1129,7 +1133,11 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 rbc_results = classifier.classify_batch(rbc_crops, ['RBC']*len(rbc_crops), batch_size=32, use_fast_mode_for_rbc=True)
                 
                 for i, result in enumerate(rbc_results):
-                    if not result: continue
+                    # Skip if result is None or has error
+                    if not result or 'error' in result: 
+                        if result and 'error' in result:
+                            print(f"     ✗ RBC {i+1} classification failed: {result['error']}")
+                        continue
                     
                     idx = rbc_indices[i]
                     detection = detections['cells'][idx]
@@ -1154,10 +1162,10 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         'rbc_id': len(rbc_classifications) + 1,
                         'bbox': detection['bbox'],
                         'detection_confidence': detection['confidence'],
-                        'classification': result['class'],
-                        'classification_confidence': result['confidence'],
+                        'classification': result.get('class', 'Unknown'),
+                        'classification_confidence': result.get('confidence', 0.0),
                         'sickle_cell_confidence': sickle_conf,
-                        'probabilities': result['probabilities'],
+                        'probabilities': result.get('probabilities', {}),
                         'cropped_image': crop_b64,  # Only populated for sickle cells
                         'is_sickle_cell': is_sickle
                     }
