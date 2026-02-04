@@ -158,15 +158,15 @@ class ColabModelClient:
         except Exception as e:
             return {'error': f'Classification failed: {str(e)}'}
     
-    def classify_batch(self, images, cell_types=None, chunk_size=20):
+    def classify_batch(self, images, cell_types=None, chunk_size=10):
         """
         Classify a batch of cell images.
-        Automatically chunks large batches to prevent timeout and payload size issues.
+        Automatically chunks large batches to prevent timeout and memory issues.
         
         Args:
             images: List of PIL Images, numpy arrays, or base64 strings
             cell_types: List of cell types ('WBC' or 'RBC') for each image
-            chunk_size: Maximum images per request (default: 20)
+            chunk_size: Maximum images per request (default: 10, reduced for memory constraints)
         
         Returns:
             list: List of classification results
@@ -177,7 +177,7 @@ class ColabModelClient:
         if cell_types is None:
             cell_types = ['WBC'] * len(images)
         
-        # For large batches, split into chunks to prevent timeout/payload issues
+        # For large batches, split into chunks to prevent timeout/memory issues
         if len(images) > chunk_size:
             print(f"   [Colab] Splitting {len(images)} images into chunks of {chunk_size}")
             all_results = []
@@ -187,6 +187,11 @@ class ColabModelClient:
                 print(f"   [Colab] Processing chunk {i//chunk_size + 1}/{(len(images) + chunk_size - 1)//chunk_size} ({len(chunk_images)} images)")
                 chunk_results = self._classify_batch_chunk(chunk_images, chunk_types)
                 all_results.extend(chunk_results)
+                
+                # Free memory after each chunk
+                del chunk_images, chunk_types, chunk_results
+                import gc
+                gc.collect()
             return all_results
         
         return self._classify_batch_chunk(images, cell_types)
@@ -202,12 +207,17 @@ class ColabModelClient:
                     'images': images_b64,
                     'cell_types': cell_types
                 },
-                timeout=REQUEST_TIMEOUT * 3  # 180 seconds for batch
+                timeout=REQUEST_TIMEOUT * 3  # 270 seconds for batch
             )
+            
+            # Free memory immediately after getting response
+            del images_b64
             
             if response.status_code == 200:
                 data = response.json()
-                return data.get('results', [])
+                results = data.get('results', [])
+                del data  # Free response data
+                return results
             elif response.status_code == 401:
                 return [{'error': 'Unauthorized - check API key'}] * len(images)
             else:

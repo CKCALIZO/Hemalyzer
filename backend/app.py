@@ -613,7 +613,7 @@ MODEL_ID = "hemalens-6807i/2"  # Enhanced YOLOv8-NAS model
 # ============================================================
 
 # Performance tuning constants
-RBC_SAMPLE_LIMIT = 100  # Max RBCs to classify per image (CPU optimized, statistically valid)
+RBC_SAMPLE_LIMIT = 50  # Max RBCs to classify per image (reduced for memory constraints on free tier)
 ENABLE_RBC_SAMPLING = True  # Enable sampling for faster processing (1000 total RBCs across 10 images)
 
 def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
