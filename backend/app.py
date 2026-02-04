@@ -911,6 +911,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         
         wbc_classifications = []
         rbc_classifications = []
+        cropped_cells = []  # Initialize for all cases
         
         if classifier.is_loaded():
             print(f"Starting ConvNeXt classification for detected cells...")
@@ -921,7 +922,6 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             wbc_indices = [] # Indices into detections['cells']
             rbc_crops = []
             rbc_indices = []
-            cropped_cells = []  # Initialize cropped_cells
             
             # Store crop base64 for display
             crop_display_data = {} # {detection_idx: base64_str}

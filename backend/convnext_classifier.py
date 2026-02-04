@@ -23,7 +23,11 @@ DEPLOYMENT MODES:
 import os
 import cv2
 import numpy as np
+import torch
+import torch.nn as nn
 from PIL import Image, ImageEnhance, ImageFilter, ImageDraw
+from torchvision import transforms
+from torchvision.models import convnext_base
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 import time
@@ -35,18 +39,8 @@ USE_COLAB_MODE = bool(COLAB_MODEL_URL)
 if USE_COLAB_MODE:
     print(f"[ConvNeXt] COLAB MODE ENABLED - Using remote model at: {COLAB_MODEL_URL}")
     from colab_client import colab_client, is_colab_mode
-    # Don't import torch in Colab mode - model runs remotely
-    torch = None
-    nn = None
-    transforms = None
-    convnext_base = None
 else:
     print("[ConvNeXt] LOCAL MODE - Loading model locally")
-    # Only import torch when running locally
-    import torch
-    import torch.nn as nn
-    from torchvision import transforms
-    from torchvision.models import convnext_base
 
 
 # ============================================================
