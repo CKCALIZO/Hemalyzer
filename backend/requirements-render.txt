@@ -1,0 +1,24 @@
+# Render Backend Dependencies (Lightweight - Colab Mode)
+# Use this when running the model on Google Colab
+# The backend only needs to proxy requests, not run the model
+
+flask==3.0.0
+flask-cors==4.0.0
+
+# Roboflow Inference SDK (for YOLO detection - if needed)
+# Comment this out if detection also runs on Colab
+inference-sdk>=0.9.0
+
+# Image Processing (for preprocessing before sending to Colab)
+opencv-python-headless==4.8.1.78
+Pillow>=10.2.0
+numpy>=1.24.0
+
+# HTTP Client (for Colab communication)
+requests>=2.28.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Utilities
+gunicorn>=21.0.0  # Production WSGI server for Render

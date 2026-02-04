@@ -1,0 +1,24 @@
+# Render Blueprint - Hemalyzer Backend
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: hemalyzer-backend
+    runtime: python
+    region: oregon  # Change to your preferred region
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements-render.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+    healthCheckPath: /api/health
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: COLAB_MODEL_URL
+        sync: https://cameron-unreproductive-ping.ngrok-free.dev/
+      - key: COLAB_API_KEY
+        value: hemalyzer-colab-2024
+      - key: ROBOFLOW_API_KEY
+        sync: 6705gpN1Xwd9dWGlkwV1
+      - key: PYTHON_VERSION
+        value: 3.11.0

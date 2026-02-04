@@ -1310,13 +1310,16 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
 @app.route('/', methods=['GET'])
 def home():
     """Root endpoint - backend status page"""
+    classifier_info = get_classifier_info()
     return jsonify({
         'message': 'Hemalyzer Backend',
         'status': 'running',
+        'mode': classifier_info.get('mode', 'local'),
         'endpoints': {
             'health': '/api/health',
             'analyze': '/api/analyze (POST)',
-            'test': '/api/test'
+            'test': '/api/test',
+            'classifier_info': '/api/classifier_info'
         },
         'frontend_url': 'http://localhost:5173/Hemalyzer',
         'note': 'This is the backend API. Access the frontend at the URL above.'
@@ -1326,13 +1329,23 @@ def home():
 @app.route('/api/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
+    classifier_info = get_classifier_info()
     return jsonify({
         'status': 'healthy',
         'model': MODEL_ID,
         'api_configured': bool(API_KEY),
-        'convnext_loaded': classifier.is_loaded(),
-        'device': classifier.get_device()
+        'convnext_loaded': classifier_info.get('loaded', False),
+        'device': classifier_info.get('device', 'unknown'),
+        'mode': classifier_info.get('mode', 'local'),
+        'colab_url': os.environ.get('COLAB_MODEL_URL', '') if classifier_info.get('mode') == 'colab' else None
     })
+
+
+@app.route('/api/classifier_info', methods=['GET'])
+def classifier_info_endpoint():
+    """Get detailed classifier information"""
+    classifier_info = get_classifier_info()
+    return jsonify(classifier_info)
 
 
 @app.route('/api/analyze', methods=['POST'])
@@ -1408,7 +1421,8 @@ def models_info():
             'loaded': classifier_info['loaded'],
             'class_names': classifier_info['class_names'],
             'device': classifier_info['device'],
-            'num_classes': classifier_info['num_classes']
+            'num_classes': classifier_info['num_classes'],
+            'mode': classifier_info.get('mode', 'local')
         },
         'default_params': {
             'conf_threshold': 0.15,

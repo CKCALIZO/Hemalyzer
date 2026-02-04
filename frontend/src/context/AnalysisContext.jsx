@@ -4,7 +4,10 @@ import { saveSession, loadSession, clearSession, migrateFromLocalStorage } from 
 
 const AnalysisContext = createContext();
 
-const API_URL = 'http://localhost:5000';
+// Use environment variable for API URL, fallback to localhost for development
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+console.log('[Hemalyzer] API URL:', API_URL);
+
 const TARGET_IMAGE_COUNT = 10;
 const WBC_NORMAL_RANGES = {
     'Neutrophil': { min: 45, max: 65 },

@@ -7,11 +7,17 @@ This module includes:
 - Model loading and initialization
 - Cell classification with confidence thresholds
 - OPTIMIZED for CPU with batch processing and performance improvements
+- COLAB MODE: Remote classification via Google Colab when COLAB_MODEL_URL is set
 
 IMPORTANT: The preprocessing MUST match train_convnext_leukemia_classifier_NEW.py exactly:
 1. Stain normalization (OD space normalization)
 2. CLAHE in YUV space (clipLimit=3.0)
 3. Cell detection and centering (Otsu + contours)
+
+DEPLOYMENT MODES:
+- LOCAL MODE: Model runs on the same machine (default)
+- COLAB MODE: Model runs on Google Colab, accessed via ngrok URL
+  Set COLAB_MODEL_URL environment variable to enable Colab mode
 """
 
 import os
@@ -25,6 +31,16 @@ from torchvision.models import convnext_base
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 import time
+
+# Check if we should use Colab mode
+COLAB_MODEL_URL = os.environ.get('COLAB_MODEL_URL', '')
+USE_COLAB_MODE = bool(COLAB_MODEL_URL)
+
+if USE_COLAB_MODE:
+    print(f"[ConvNeXt] COLAB MODE ENABLED - Using remote model at: {COLAB_MODEL_URL}")
+    from colab_client import colab_client, is_colab_mode
+else:
+    print("[ConvNeXt] LOCAL MODE - Loading model locally")
 
 
 # ============================================================
@@ -675,12 +691,17 @@ def load_convnext_model(model_path='best_leukemia_model.pth', use_mixed_precisio
     Returns:
         bool: True if successful
     """
+    # In Colab mode, we don't load the model locally
+    if USE_COLAB_MODE:
+        print("[ConvNeXt] Colab mode - skipping local model load")
+        return colab_client.health_check()
     return classifier.load_model(model_path, use_mixed_precision, compile_model)
 
 
 def classify_cell_crop(cell_crop_pil, cell_type='WBC'):
     """
     Classify cell crop (convenience wrapper)
+    Supports both local and Colab mode.
     
     Args:
         cell_crop_pil: PIL Image of cell
@@ -689,12 +710,29 @@ def classify_cell_crop(cell_crop_pil, cell_type='WBC'):
     Returns:
         dict: Classification results
     """
+    # Use Colab client if available and healthy
+    if USE_COLAB_MODE and is_colab_mode():
+        result = colab_client.classify_cell(cell_crop_pil, cell_type)
+        # Convert Colab response format to local format
+        if 'error' not in result:
+            return {
+                'class': result.get('classification', 'Unknown'),
+                'confidence': result.get('confidence', 0.0),
+                'probabilities': result.get('all_probabilities', {}),
+                'is_sickle_cell': result.get('is_sickle_cell', False),
+                'sickle_cell_confidence': result.get('sickle_confidence', 0.0)
+            }
+        else:
+            print(f"[ConvNeXt] Colab classification failed: {result['error']}")
+            return None
+    
     return classifier.classify(cell_crop_pil, cell_type)
 
 
 def classify_cell_crops_batch(cell_crops_pil, cell_types=None, batch_size=8):
     """
     OPTIMIZED: Classify multiple cell crops in batches
+    Supports both local and Colab mode.
     
     This is the RECOMMENDED way to classify multiple cells for best performance.
     Up to 5-10x faster than calling classify_cell_crop() in a loop!
@@ -707,16 +745,71 @@ def classify_cell_crops_batch(cell_crops_pil, cell_types=None, batch_size=8):
     Returns:
         list: List of classification result dicts
     """
+    # Use Colab client if available and healthy
+    if USE_COLAB_MODE and is_colab_mode():
+        # Handle cell_types parameter
+        if cell_types is None:
+            cell_types_list = ['WBC'] * len(cell_crops_pil)
+        elif isinstance(cell_types, str):
+            cell_types_list = [cell_types] * len(cell_crops_pil)
+        else:
+            cell_types_list = cell_types
+            
+        results = colab_client.classify_batch(cell_crops_pil, cell_types_list)
+        
+        # Convert Colab response format to local format
+        converted_results = []
+        for result in results:
+            if 'error' not in result:
+                converted_results.append({
+                    'class': result.get('classification', 'Unknown'),
+                    'confidence': result.get('confidence', 0.0),
+                    'probabilities': result.get('all_probabilities', {}),
+                    'is_sickle_cell': result.get('is_sickle_cell', False),
+                    'sickle_cell_confidence': result.get('sickle_confidence', 0.0)
+                })
+            else:
+                print(f"[ConvNeXt] Colab batch item failed: {result['error']}")
+                converted_results.append(None)
+        return converted_results
+    
     return classifier.classify_batch(cell_crops_pil, cell_types, batch_size)
 
 
 def get_classifier_info():
     """
     Get information about loaded classifier
+    Supports both local and Colab mode.
     
     Returns:
         dict: Classifier status and info
     """
+    # Use Colab info if in Colab mode
+    if USE_COLAB_MODE:
+        colab_info = colab_client.get_model_info()
+        if colab_info:
+            return {
+                'loaded': colab_info.get('model_loaded', False),
+                'class_names': colab_info.get('class_names', []),
+                'wbc_class_names': [c for c in colab_info.get('class_names', []) if 'RBC' not in c.upper() and 'sickle' not in c.lower()],
+                'device': colab_info.get('device', 'colab-remote'),
+                'sickle_cell_class_idx': colab_info.get('sickle_cell_class_idx'),
+                'num_classes': colab_info.get('num_classes', 0),
+                'num_wbc_classes': len([c for c in colab_info.get('class_names', []) if 'RBC' not in c.upper() and 'sickle' not in c.lower()]),
+                'mode': 'colab'
+            }
+        return {
+            'loaded': False,
+            'class_names': [],
+            'wbc_class_names': [],
+            'device': 'colab-disconnected',
+            'sickle_cell_class_idx': None,
+            'num_classes': 0,
+            'num_wbc_classes': 0,
+            'mode': 'colab',
+            'error': 'Colab server not responding'
+        }
+    
     return {
         'loaded': classifier.is_loaded(),
         'class_names': classifier.get_class_names(),
@@ -724,5 +817,6 @@ def get_classifier_info():
         'device': classifier.get_device(),
         'sickle_cell_class_idx': classifier.sickle_cell_class_idx,
         'num_classes': len(classifier.get_class_names()) if classifier.is_loaded() else 0,
-        'num_wbc_classes': len(classifier.get_wbc_class_names()) if classifier.is_loaded() else 0
+        'num_wbc_classes': len(classifier.get_wbc_class_names()) if classifier.is_loaded() else 0,
+        'mode': 'local'
     }
