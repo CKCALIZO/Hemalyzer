@@ -17,7 +17,7 @@ import json
 # Configuration
 COLAB_MODEL_URL = os.environ.get('COLAB_MODEL_URL', '')
 COLAB_API_KEY = os.environ.get('COLAB_API_KEY', 'hemalyzer-colab-2024')
-REQUEST_TIMEOUT = 60  # seconds
+REQUEST_TIMEOUT = 90  # seconds - increased for Colab GPU processing
 
 
 class ColabModelClient:
@@ -158,13 +158,15 @@ class ColabModelClient:
         except Exception as e:
             return {'error': f'Classification failed: {str(e)}'}
     
-    def classify_batch(self, images, cell_types=None):
+    def classify_batch(self, images, cell_types=None, chunk_size=20):
         """
         Classify a batch of cell images.
+        Automatically chunks large batches to prevent timeout and payload size issues.
         
         Args:
             images: List of PIL Images, numpy arrays, or base64 strings
             cell_types: List of cell types ('WBC' or 'RBC') for each image
+            chunk_size: Maximum images per request (default: 20)
         
         Returns:
             list: List of classification results
@@ -175,6 +177,22 @@ class ColabModelClient:
         if cell_types is None:
             cell_types = ['WBC'] * len(images)
         
+        # For large batches, split into chunks to prevent timeout/payload issues
+        if len(images) > chunk_size:
+            print(f"   [Colab] Splitting {len(images)} images into chunks of {chunk_size}")
+            all_results = []
+            for i in range(0, len(images), chunk_size):
+                chunk_images = images[i:i+chunk_size]
+                chunk_types = cell_types[i:i+chunk_size]
+                print(f"   [Colab] Processing chunk {i//chunk_size + 1}/{(len(images) + chunk_size - 1)//chunk_size} ({len(chunk_images)} images)")
+                chunk_results = self._classify_batch_chunk(chunk_images, chunk_types)
+                all_results.extend(chunk_results)
+            return all_results
+        
+        return self._classify_batch_chunk(images, cell_types)
+    
+    def _classify_batch_chunk(self, images, cell_types):
+        """Internal method to classify a single chunk of images"""
         try:
             images_b64 = [self._image_to_base64(img) for img in images]
             
@@ -184,7 +202,7 @@ class ColabModelClient:
                     'images': images_b64,
                     'cell_types': cell_types
                 },
-                timeout=REQUEST_TIMEOUT * 2  # Allow more time for batch
+                timeout=REQUEST_TIMEOUT * 3  # 180 seconds for batch
             )
             
             if response.status_code == 200:
@@ -196,10 +214,13 @@ class ColabModelClient:
                 return [{'error': f'Server error: {response.status_code}'}] * len(images)
                 
         except requests.exceptions.Timeout:
+            print(f"   [Colab] Timeout processing {len(images)} images")
             return [{'error': 'Request timeout'}] * len(images)
         except requests.exceptions.ConnectionError:
+            print(f"   [Colab] Connection failed processing {len(images)} images")
             return [{'error': 'Connection failed'}] * len(images)
         except Exception as e:
+            print(f"   [Colab] Error processing {len(images)} images: {e}")
             return [{'error': str(e)}] * len(images)
 
 
