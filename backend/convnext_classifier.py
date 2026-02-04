@@ -424,6 +424,23 @@ class ConvNeXtClassifier:
             dict: {class: str, confidence: float, probabilities: dict, is_sickle_cell: bool}
                   or None if model not loaded
         """
+        # In Colab mode, delegate to Colab client
+        if USE_COLAB_MODE:
+            result = colab_client.classify_cell(cell_crop_pil, cell_type)
+            # Convert Colab response format to local format
+            if result and 'error' not in result:
+                return {
+                    'class': result.get('classification', 'Unknown'),
+                    'confidence': result.get('confidence', 0.0),
+                    'probabilities': result.get('all_probabilities', {}),
+                    'is_sickle_cell': result.get('is_sickle_cell', False),
+                    'sickle_cell_confidence': result.get('sickle_confidence', 0.0)
+                }
+            else:
+                error_msg = result.get('error', 'Unknown error') if result else 'No result'
+                print(f"[ConvNeXt] Colab classification failed: {error_msg}")
+                return None
+        
         if self.model is None:
             return None
         
@@ -503,6 +520,35 @@ class ConvNeXtClassifier:
         Returns:
             list: List of classification result dicts (same format as classify())
         """
+        # In Colab mode, delegate to Colab client
+        if USE_COLAB_MODE:
+            # Handle cell_types parameter
+            if cell_types is None:
+                cell_types_list = ['WBC'] * len(cell_crops_pil)
+            elif isinstance(cell_types, str):
+                cell_types_list = [cell_types] * len(cell_crops_pil)
+            else:
+                cell_types_list = cell_types
+                
+            results = colab_client.classify_batch(cell_crops_pil, cell_types_list)
+            
+            # Convert Colab response format to local format
+            converted_results = []
+            for result in results:
+                if result and 'error' not in result:
+                    converted_results.append({
+                        'class': result.get('classification', 'Unknown'),
+                        'confidence': result.get('confidence', 0.0),
+                        'probabilities': result.get('all_probabilities', {}),
+                        'is_sickle_cell': result.get('is_sickle_cell', False),
+                        'sickle_cell_confidence': result.get('sickle_confidence', 0.0)
+                    })
+                else:
+                    error_msg = result.get('error', 'Unknown error') if result else 'No result'
+                    print(f"[ConvNeXt] Colab batch item failed: {error_msg}")
+                    converted_results.append(None)
+            return converted_results
+        
         if self.model is None:
             return [None] * len(cell_crops_pil)
         
