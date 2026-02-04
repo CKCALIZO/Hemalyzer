@@ -5,7 +5,7 @@ services:
   - type: web
     name: hemalyzer-backend
     runtime: python
-    region: oregon  # Change to your preferred region
+    region: singapore  # Change to your preferred region
     plan: free
     rootDir: backend
     buildCommand: pip install -r requirements-render.txt
