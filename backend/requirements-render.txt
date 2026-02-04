@@ -7,7 +7,7 @@ flask-cors==4.0.0
 
 # Roboflow Inference SDK (for YOLO detection - if needed)
 # Comment this out if detection also runs on Colab
-inference-sdk>=0.9.0
+inference-sdk>=0.9.0,<0.65.0  # Pin to compatible version with Python 3.11
 
 # Image Processing (for preprocessing before sending to Colab)
 opencv-python-headless==4.8.1.78
