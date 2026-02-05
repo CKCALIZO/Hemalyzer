@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Sidebar } from '../components/Sidebar';
-import { API_URL } from '../config/api';
+import { API_URL, getApiHeaders } from '../config/api';
 import '../styles/index.css';
 
 export function Simulation() {
@@ -41,7 +41,9 @@ export function Simulation() {
 
   const fetchTestImages = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/simulation/test-images`);
+      const response = await fetch(`${API_URL}/api/simulation/test-images`, {
+        headers: getApiHeaders()
+      });
       const data = await response.json();
       if (data.success) {
         setTestImages(data.images);
@@ -68,7 +70,9 @@ export function Simulation() {
   // Select test image
   const selectTestImage = async (image) => {
     try {
-      const response = await fetch(`${API_URL}${image.path}`);
+      const response = await fetch(`${API_URL}${image.path}`, {
+        headers: getApiHeaders()
+      });
       const blob = await response.blob();
       const file = new File([blob], image.filename, { type: 'image/jpeg' });
       setSelectedImage(file);
@@ -94,6 +98,7 @@ export function Simulation() {
 
       const response = await fetch(`${API_URL}/api/simulation/compare-models`, {
         method: 'POST',
+        headers: getApiHeaders(),
         body: formData
       });
 
@@ -136,7 +141,7 @@ export function Simulation() {
     try {
       const response = await fetch(`${API_URL}/api/simulation/calculate`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getApiHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           cell_type: cellType,
           average_per_field: avgPerField,
@@ -163,7 +168,9 @@ export function Simulation() {
   // Fetch methodology data
   const fetchMethodology = async () => {
     try {
-      const response = await fetch(`${API_URL}/api/simulation/classification-basis`);
+      const response = await fetch(`${API_URL}/api/simulation/classification-basis`, {
+        headers: getApiHeaders()
+      });
       const data = await response.json();
       if (data.success) {
         setMethodologyData(data.classification_methodology);

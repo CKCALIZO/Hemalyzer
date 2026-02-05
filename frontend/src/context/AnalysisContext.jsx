@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { saveSession, loadSession, clearSession, migrateFromLocalStorage } from '../utils/sessionStorage';
-import { API_URL } from '../config/api';
+import { API_URL, getApiHeaders } from '../config/api';
 
 const AnalysisContext = createContext();
 const TARGET_IMAGE_COUNT = 10;
@@ -643,6 +643,7 @@ export const AnalysisProvider = ({ children }) => {
 
             const response = await fetch(`${API_URL}/api/analyze`, {
                 method: 'POST',
+                headers: getApiHeaders(),
                 body: formData
             });
 
@@ -783,6 +784,7 @@ export const AnalysisProvider = ({ children }) => {
 
                 const response = await fetch(`${API_URL}/api/analyze`, {
                     method: 'POST',
+                    headers: getApiHeaders(),
                     body: formData
                 });
 
