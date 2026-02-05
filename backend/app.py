@@ -1024,7 +1024,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             # Simple random sampling - no double-processing
             original_rbc_count = len(rbc_crops)
             
-            if ENABLE_RBC_SAMPLING and len(rbc_crops) > RBC_SAMPLE_LIMIT:
+            if ENABLE_RBC_CLASSIFICATION and len(rbc_crops) > RBC_SAMPLE_LIMIT:
                 import random
                 # Simple random sampling - no pre-check needed
                 sample_indices = random.sample(range(len(rbc_crops)), RBC_SAMPLE_LIMIT)
