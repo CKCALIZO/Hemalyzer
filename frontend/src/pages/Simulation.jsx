@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Header } from '../components/Header';
 import { Footer } from '../components/Footer';
 import { Sidebar } from '../components/Sidebar';
+import { API_URL } from '../config/api';
 import '../styles/index.css';
 
 export function Simulation() {
@@ -32,7 +33,6 @@ export function Simulation() {
   const [methodologyData, setMethodologyData] = useState(null);
   
   const fileInputRef = useRef(null);
-  const API_URL = 'http://localhost:5000';
 
   // Load test images on mount
   useEffect(() => {

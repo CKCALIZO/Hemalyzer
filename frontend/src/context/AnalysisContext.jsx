@@ -1,10 +1,9 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { saveSession, loadSession, clearSession, migrateFromLocalStorage } from '../utils/sessionStorage';
+import { API_URL } from '../config/api';
 
 const AnalysisContext = createContext();
-
-const API_URL = 'http://localhost:5000';
 const TARGET_IMAGE_COUNT = 10;
 const WBC_NORMAL_RANGES = {
     'Neutrophil': { min: 45, max: 65 },

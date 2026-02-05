@@ -5,5 +5,6 @@ import tailwindcss from '@tailwindcss/vite'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(),tailwindcss()],
-  base: "/Hemalyzer",
+  // base: "/Hemalyzer", // Uncomment for GitHub Pages deployment
+  base: "/", // For Netlify deployment
 })
