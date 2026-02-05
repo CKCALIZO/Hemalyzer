@@ -29,7 +29,8 @@ class ColabModelClient:
         self.session = requests.Session()
         self.session.headers.update({
             'X-API-Key': self.api_key,
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true'  # Bypass ngrok browser warning page
         })
         self._model_info_cache = None
         self._last_health_check = 0

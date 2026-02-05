@@ -56,7 +56,12 @@ from calculations import (
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for React frontend
+# Enable CORS for React frontend with explicit configuration
+CORS(app, origins=[
+    "https://hemalyzer.netlify.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173"
+], supports_credentials=True, allow_headers=["Content-Type", "X-API-Key"])
 
 
 # ============================================================
