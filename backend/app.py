@@ -613,8 +613,8 @@ MODEL_ID = "hemalens-6807i/2"  # Enhanced YOLOv8-NAS model
 # ============================================================
 
 # Performance tuning constants
-RBC_SAMPLE_LIMIT = 100  # Max RBCs to classify per image (reduced for memory constraints on free tier)
-ENABLE_RBC_SAMPLING = True  # Enable sampling for faster processing (1000 total RBCs across 10 images)
+RBC_SAMPLE_LIMIT = 100  # Max RBCs to classify per image
+ENABLE_RBC_CLASSIFICATION = True  # Enable RBC classification (requires adequate RAM or PC-based server)
 
 def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
     """
@@ -1133,7 +1133,8 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         })
 
             # 3. Batch Classify RBCs (ALL RBCs for maximum sickle cell detection)
-            if rbc_crops:
+            # Only run if enabled (requires adequate RAM or PC-based ConvNeXt server)
+            if ENABLE_RBC_CLASSIFICATION and rbc_crops:
                 if not classifier.is_loaded(): 
                     load_convnext_model()
                 print(f"   > Batch classifying {len(rbc_crops)} RBCs (sampled from {original_rbc_count} total)...")
