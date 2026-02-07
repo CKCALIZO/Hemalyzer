@@ -1635,7 +1635,7 @@ export const FinalResults = ({
                 <div className="flex items-start gap-3 justify-center">
                     <span className="font-bold bg-red-200 text-red-800 px-2 py-0.5 rounded text-xs shrink-0 mt-0.5">CLINICAL DISCLAIMER:</span>
                     <p className="text-xs text-red-800 leading-relaxed max-w-3xl">
-                        This AI-generated analysis is for research and educational purposes only. It is not a definitive medical diagnosis.
+                        This analysis is for research and educational purposes only. It is not a definitive medical diagnosis.
                         All findings must be verified by a board-certified pathologist or hematologist.
                         Additional diagnostic tests (e.g., Flow Cytometry, Bone Marrow Biopsy, Hb Electrophoresis) may be required for confirmation.
                     </p>
