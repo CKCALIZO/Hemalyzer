@@ -386,7 +386,7 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             cml_condition = f'5-19% CML cells ({cml_count} cells)'
         elif cml_count > 0:
             cml_interpretation = "Rare CML cells detected. Clinical correlation required."
-            cml_severity = 'INFO'
+            cml_severity = 'NORMAL'
             cml_condition = f'< 5% CML cells ({cml_count} cells)'
         
         if cml_interpretation:
@@ -428,7 +428,7 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             cll_condition = f'5-19% CLL cells ({cll_count} cells)'
         elif cll_count > 0:
             cll_interpretation = "Rare CLL cells detected. Clinical correlation required."
-            cll_severity = 'INFO'
+            cll_severity = 'NORMAL'
             cll_condition = f'< 5% CLL cells ({cll_count} cells)'
         
         if cll_interpretation:
@@ -587,7 +587,7 @@ CLIENT = InferenceHTTPClient(
 )
 
 # Your Roboflow model IDs
-MODEL_ID = "hemalens-6807i/2"  # Enhanced YOLOv8-NAS model
+MODEL_ID = "hema-dci5u/1"  # Enhanced YOLOv8-NAS model
 # Note: If baseline model doesn't exist, we'll simulate with reduced detection rate
 
 
@@ -1062,7 +1062,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                             wbc_class, wbc_confidence = 'Neutrophil: Normal', 0.5
 
                     # Disease thresholds
-                    DISEASE_THRESHOLDS_CONF = {'cml': 0.90, 'aml': 0.75, 'all': 0.75, 'cll': 0.87, 'default': 0.75}
+                    DISEASE_THRESHOLDS_CONF = {'cml': 0.88, 'aml': 0.75, 'all': 0.75, 'cll': 0.87, 'default': 0.75}
                     is_disease = ': normal' not in wbc_class.lower()
                     
                     if is_disease:

@@ -178,7 +178,7 @@ export const FinalResults = ({
 
 
 
-    // Disease Interpretation Reference
+    // Disease Interpretation Reference - CML/CLL based on specifically classified disease cells
     const diseaseInterprestationRef = {
         'AML': [
             { level: 'Normal', range: '< 10%', desc: 'No significant myeloblasts detected.' },
@@ -191,16 +191,16 @@ export const FinalResults = ({
             { level: 'High', range: '≥ 20%', desc: 'Diagnostic level for ALL.' }
         ],
         'CML': [
-            { level: 'Normal', range: '< 60%', desc: 'Granulocytes within reactive ranges.' },
-            { level: 'Low', range: '60-75%', desc: 'Reactive / Secondary Leukocytosis.' },
-            { level: 'Moderate', range: '76-89%', desc: 'Suspicious for Early CML.' },
-            { level: 'High', range: '≥ 90%', desc: 'Typical / Accelerated Phase CML.' }
+            { level: 'Normal', range: '< 5%', desc: 'Rare CML cells. Clinical correlation required.' },
+            { level: 'Low', range: '5-19%', desc: 'Suspicious for Early CML (Chronic Phase).' },
+            { level: 'Moderate', range: '20-50%', desc: 'Typical Chronic Phase CML.' },
+            { level: 'High', range: '> 50%', desc: 'Accelerated Phase CML.' }
         ],
         'CLL': [
-            { level: 'Normal', range: '< 35%', desc: 'Lymphocytes within reactive ranges.' },
-            { level: 'Low', range: '35-50%', desc: 'Reactive / Secondary Lymphocytosis.' },
-            { level: 'Moderate', range: '51-65%', desc: 'Suspicious for Early CLL.' },
-            { level: 'High', range: '≥ 66%', desc: 'Typical / Advanced CLL.' }
+            { level: 'Normal', range: '< 5%', desc: 'Rare CLL cells. Clinical correlation required.' },
+            { level: 'Low', range: '5-19%', desc: 'Suspicious for Early / Smoldering CLL.' },
+            { level: 'Moderate', range: '20-50%', desc: 'Typical Chronic Lymphocytic Leukemia.' },
+            { level: 'High', range: '> 50%', desc: 'Advanced / Progressive CLL.' }
         ]
     };
 
@@ -429,16 +429,16 @@ export const FinalResults = ({
                                 const finding = diseaseFindings.find(f => f.type.includes(diseaseType));
                                 const pct = finding ? finding.percentage : 0;
                                 const sev = finding ? finding.severity : 'NORMAL';
-                                // Treat 'NORMAL' or 'INFO' as effectively 'Normal/Low concern' for styling - use Green
-                                const style = (pct === 0 || sev === 'NORMAL' || sev === 'INFO') ? 'bg-white border-green-200' : sev === 'HIGH' ? 'bg-red-50 border-red-300' : sev === 'MODERATE' ? 'bg-amber-50 border-amber-300' : 'bg-yellow-50 border-yellow-300';
-                                const textStyle = (pct === 0 || sev === 'NORMAL' || sev === 'INFO') ? 'text-green-600' : sev === 'HIGH' ? 'text-red-700' : 'text-amber-700';
+                                // Treat 'NORMAL' as effectively 'Normal/Low concern' for styling - use Green
+                                const style = (pct === 0 || sev === 'NORMAL') ? 'bg-white border-green-200' : sev === 'HIGH' ? 'bg-red-50 border-red-300' : sev === 'MODERATE' ? 'bg-amber-50 border-amber-300' : 'bg-yellow-50 border-yellow-300';
+                                const textStyle = (pct === 0 || sev === 'NORMAL') ? 'text-green-600' : sev === 'HIGH' ? 'text-red-700' : 'text-amber-700';
                                 const refData = diseaseInterprestationRef[diseaseType];
 
                                 return (
                                     <div key={diseaseType} className={`group relative rounded-lg border ${style} p-3 transition-all hover:shadow-md cursor-help`}>
                                         <div className="flex justify-between items-center mb-1">
                                             <h4 className="font-bold text-slate-800 text-sm">{diseaseType}</h4>
-                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/50 border">{sev === 'INFO' ? 'NORMAL' : sev}</span>
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/50 border">{sev}</span>
                                         </div>
                                         <p className={`text-2xl font-bold ${textStyle}`}>{pct.toFixed(2)}%</p>
                                         <p className="text-xs text-slate-500 mt-1 truncate">{finding ? finding.interpretation : 'Not Detected'}</p>
@@ -448,7 +448,7 @@ export const FinalResults = ({
                                             <p className="font-bold border-b border-slate-600 pb-1 mb-1">{diseaseType} Severity Scale</p>
                                             {refData.map((r, idx) => (
                                                 <div key={idx} className="flex justify-between mb-1 last:mb-0">
-                                                    <span className={`font-mono ${(sev === r.level.toUpperCase()) || ((sev === 'NORMAL' || sev === 'INFO') && r.level === 'Normal') ? 'text-yellow-400 font-bold' : 'text-slate-400'}`}>{r.range}</span>
+                                                    <span className={`font-mono ${(sev === r.level.toUpperCase()) || (sev === 'NORMAL' && r.level === 'Normal') ? 'text-yellow-400 font-bold' : 'text-slate-400'}`}>{r.range}</span>
                                                     <span className="text-right truncate ml-2">{r.level}</span>
                                                 </div>
                                             ))}
@@ -1635,7 +1635,7 @@ export const FinalResults = ({
                 <div className="flex items-start gap-3 justify-center">
                     <span className="font-bold bg-red-200 text-red-800 px-2 py-0.5 rounded text-xs shrink-0 mt-0.5">CLINICAL DISCLAIMER:</span>
                     <p className="text-xs text-red-800 leading-relaxed max-w-3xl">
-                        This AI-generated analysis is for research and educational purposes only. It is not a definitive medical diagnosis.
+                        This analysis is for research and educational purposes only. It is not a definitive medical diagnosis.
                         All findings must be verified by a board-certified pathologist or hematologist.
                         Additional diagnostic tests (e.g., Flow Cytometry, Bone Marrow Biopsy, Hb Electrophoresis) may be required for confirmation.
                     </p>

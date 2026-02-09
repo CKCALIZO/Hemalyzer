@@ -310,11 +310,12 @@ export const AnalysisProvider = ({ children }) => {
 
         if (cmlCount > 0) {
             let interpretation = '', severity = 'NORMAL', condition = 'Monitor for CML';
-            if (cmlPercentage > 95) { interpretation = 'Accelerated Phase CML'; condition = 'CML (Accelerated)'; severity = 'HIGH'; }
-            else if (cmlPercentage >= 90) { interpretation = 'Typical Chronic Phase CML'; condition = 'CML (Chronic)'; severity = 'HIGH'; }
-            else if (cmlPercentage >= 76) { interpretation = 'Suspicious for Early CML'; condition = 'Suspicious for Early CML'; severity = 'MODERATE'; }
-            else if (cmlPercentage >= 60) { interpretation = 'Reactive / Secondary Leukocytosis'; condition = 'Reactive Leukocytosis'; severity = 'LOW'; }
-            else { interpretation = 'CML-marked cells detected but below threshold'; }
+            // Use CML cell percentage thresholds (matching backend app.py logic)
+            // These thresholds are for specifically CML-classified cells, not total granulocytes
+            if (cmlPercentage > 50) { interpretation = 'Accelerated Phase CML - extreme granulocytic proliferation'; condition = 'CML (Accelerated)'; severity = 'HIGH'; }
+            else if (cmlPercentage >= 20) { interpretation = 'Typical Chronic Phase CML - granulocytes dominate differential'; condition = 'CML (Chronic)'; severity = 'MODERATE'; }
+            else if (cmlPercentage >= 5) { interpretation = 'Suspicious for Early Chronic Myeloid Leukemia (CML - Chronic Phase)'; condition = 'Suspicious for Early CML'; severity = 'LOW'; }
+            else { interpretation = 'Rare CML cells detected. Clinical correlation required.'; severity = 'NORMAL'; condition = 'CML cells present (<5%)'; }
 
             const cmlBreakdown = {};
             if (cmlGranulocyteBreakdown.basophil > 0) cmlBreakdown["CML:Basophil"] = cmlGranulocyteBreakdown.basophil;
@@ -333,11 +334,12 @@ export const AnalysisProvider = ({ children }) => {
 
         if (cllCount > 0) {
             let interpretation = '', severity = 'NORMAL', condition = 'Monitor for CLL';
-            if (cllPercentage > 80) { interpretation = 'Advanced / Progressive CLL'; condition = 'CLL (Advanced)'; severity = 'HIGH'; }
-            else if (cllPercentage >= 66) { interpretation = 'Typical CLL'; condition = 'CLL'; severity = 'HIGH'; }
-            else if (cllPercentage >= 51) { interpretation = 'Suspicious for Early CLL'; condition = 'Suspicious for Early CML'; severity = 'MODERATE'; }
-            else if (cllPercentage >= 35) { interpretation = 'Reactive / Secondary Lymphocytosis'; condition = 'Reactive Lymphocytosis'; severity = 'LOW'; }
-            else { interpretation = 'CLL-marked cells detected but below threshold'; }
+            // Use CLL cell percentage thresholds (matching backend app.py logic)
+            // These thresholds are for specifically CLL-classified cells, not total lymphocytes
+            if (cllPercentage > 50) { interpretation = 'Advanced / Progressive CLL - lymphocytes dominate smear'; condition = 'CLL (Advanced)'; severity = 'HIGH'; }
+            else if (cllPercentage >= 20) { interpretation = 'Typical Chronic Lymphocytic Leukemia (CLL)'; condition = 'CLL'; severity = 'MODERATE'; }
+            else if (cllPercentage >= 5) { interpretation = 'Suspicious for Early / Smoldering CLL'; condition = 'Suspicious for Early CLL'; severity = 'LOW'; }
+            else { interpretation = 'Rare CLL cells detected. Clinical correlation required.'; severity = 'NORMAL'; condition = 'CLL cells present (<5%)'; }
             diseaseFindings.push({
                 type: 'CLL (Chronic Lymphocytic Leukemia)', percentage: cllPercentage, interpretation, severity, condition, breakdown: { "CLL:Lymphocytes": cllCount },
                 recommendation: getDiseaseRecommendation('CLL', severity)
@@ -409,12 +411,12 @@ export const AnalysisProvider = ({ children }) => {
 
                     const isThresholdMet = session.thresholdMet === true || (session.processedImages && session.processedImages.length >= TARGET_IMAGE_COUNT);
                     setThresholdMet(isThresholdMet);
-                    
+
                     // Restore finalResults if available (the useEffect will recalculate if needed)
                     if (session.finalResults) {
                         setFinalResults(session.finalResults);
                     }
-                    
+
                     console.log('Session restored:', {
                         imagesCount: session.processedImages?.length || 0,
                         thresholdMet: isThresholdMet,
@@ -437,7 +439,7 @@ export const AnalysisProvider = ({ children }) => {
         try {
             // Create a meaningful report ID using MRN and timestamp
             const reportId = patientId ? `${patientId}_${Date.now()}` : `UNKNOWN_${Date.now()}`;
-            
+
             const newReport = {
                 id: reportId,
                 timestamp: new Date().toLocaleString(),
@@ -537,10 +539,10 @@ export const AnalysisProvider = ({ children }) => {
             // Load image to check dimensions and basic properties
             const img = new Image();
             const objectUrl = URL.createObjectURL(file);
-            
+
             img.onload = () => {
                 URL.revokeObjectURL(objectUrl);
-                
+
                 // Check minimum dimensions (blood smear images should be reasonably sized)
                 const minDimension = 200;
                 if (img.width < minDimension || img.height < minDimension) {
@@ -574,7 +576,7 @@ export const AnalysisProvider = ({ children }) => {
             try {
                 // Validate image before showing preview
                 await validateImageFile(file);
-                
+
                 setSelectedFile(file);
                 setPreviewUrl(URL.createObjectURL(file));
                 setError(null);
@@ -763,12 +765,12 @@ export const AnalysisProvider = ({ children }) => {
         for (let i = 0; i < filesToProcess.length; i++) {
             const file = filesToProcess[i];
             setBulkProgress({ current: i + 1, total: filesToProcess.length });
-            
+
             // Per-image progress: Upload phase (10%)
-            setAnalysisProgress({ 
-                stage: 'Uploading', 
-                percentage: 10, 
-                message: `Image ${i + 1}/${filesToProcess.length}: Uploading ${file.name}...` 
+            setAnalysisProgress({
+                stage: 'Uploading',
+                percentage: 10,
+                message: `Image ${i + 1}/${filesToProcess.length}: Uploading ${file.name}...`
             });
 
             try {
@@ -776,10 +778,10 @@ export const AnalysisProvider = ({ children }) => {
                 formData.append('image', file);
 
                 // Per-image progress: Detection phase (50%)
-                setAnalysisProgress({ 
-                    stage: 'Processing', 
-                    percentage: 50, 
-                    message: `Image ${i + 1}/${filesToProcess.length}: Detecting cells...` 
+                setAnalysisProgress({
+                    stage: 'Processing',
+                    percentage: 50,
+                    message: `Image ${i + 1}/${filesToProcess.length}: Detecting cells...`
                 });
 
                 const response = await fetch(`${API_URL}/api/analyze`, {
@@ -793,10 +795,10 @@ export const AnalysisProvider = ({ children }) => {
                 }
 
                 // Per-image progress: Classification phase (80%)
-                setAnalysisProgress({ 
-                    stage: 'Classifying', 
-                    percentage: 80, 
-                    message: `Image ${i + 1}/${filesToProcess.length}: Classifying cells...` 
+                setAnalysisProgress({
+                    stage: 'Classifying',
+                    percentage: 80,
+                    message: `Image ${i + 1}/${filesToProcess.length}: Classifying cells...`
                 });
 
                 const data = await response.json();
@@ -808,10 +810,10 @@ export const AnalysisProvider = ({ children }) => {
                 }
 
                 // Per-image progress: Complete (100%)
-                setAnalysisProgress({ 
-                    stage: 'Complete', 
-                    percentage: 100, 
-                    message: `Image ${i + 1}/${filesToProcess.length}: Complete!` 
+                setAnalysisProgress({
+                    stage: 'Complete',
+                    percentage: 100,
+                    message: `Image ${i + 1}/${filesToProcess.length}: Complete!`
                 });
 
                 const newImage = {

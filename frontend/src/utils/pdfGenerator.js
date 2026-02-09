@@ -14,9 +14,8 @@ export const generatePDF = (report) => {
             diseaseFindings.forEach(finding => {
                 if (finding.recommendation) {
                     // Use the pre-computed recommendation from AnalysisContext
-                    const severity = finding.severity || 'NORMAL';
-                    const prefix = severity === 'HIGH' ? '⚠️ ' : severity === 'MODERATE' ? '⚡ ' : '';
-                    recommendations.push(`${prefix}${finding.condition || finding.type}: ${finding.recommendation}`);
+                    const condition = finding.condition || finding.type || 'Finding';
+                    recommendations.push(`- ${condition}: ${finding.recommendation}`);
                 } else if (finding.severity && finding.severity !== 'NORMAL') {
                     // Fallback: Generate recommendation based on disease type and severity
                     const type = finding.type || '';
@@ -24,21 +23,21 @@ export const generatePDF = (report) => {
 
                     if (type.includes('AML') || type.includes('ALL')) {
                         if (finding.severity === 'HIGH') {
-                            recommendations.push(`Acute Leukemia (${pct}% blasts): Immediate hematologist referral. Bone marrow biopsy and cytogenetic testing recommended.`);
+                            recommendations.push(`- Acute Leukemia (${pct}% blasts): Immediate hematologist referral. Bone marrow biopsy and cytogenetic testing recommended.`);
                         } else if (finding.severity === 'MODERATE') {
-                            recommendations.push(`Suspicious Blasts (${pct}%): Close monitoring advised. Repeat CBC in 1-2 weeks.`);
+                            recommendations.push(`- Suspicious Blasts (${pct}%): Close monitoring advised. Repeat CBC in 1-2 weeks.`);
                         }
                     } else if (type.includes('CML')) {
                         if (finding.severity === 'HIGH') {
-                            recommendations.push(`CML Detected (${pct}%): BCR-ABL testing required. Tyrosine kinase inhibitor therapy evaluation advised.`);
+                            recommendations.push(`- CML Detected (${pct}%): BCR-ABL testing required. Tyrosine kinase inhibitor therapy evaluation advised.`);
                         } else if (finding.severity === 'MODERATE') {
-                            recommendations.push(`Early CML Pattern (${pct}%): Confirm with BCR-ABL testing. Monitor WBC trend. Follow-up in 2-4 weeks.`);
+                            recommendations.push(`- Early CML Pattern (${pct}%): Confirm with BCR-ABL testing. Monitor WBC trend. Follow-up in 2-4 weeks.`);
                         }
                     } else if (type.includes('CLL')) {
                         if (finding.severity === 'HIGH') {
-                            recommendations.push(`CLL Detected (${pct}%): Immunophenotyping recommended. Regular monitoring every 3-6 months.`);
+                            recommendations.push(`- CLL Detected (${pct}%): Immunophenotyping recommended. Regular monitoring every 3-6 months.`);
                         } else if (finding.severity === 'MODERATE') {
-                            recommendations.push(`Early CLL Pattern (${pct}%): Observe and monitor. Repeat CBC in 3 months.`);
+                            recommendations.push(`- Early CLL Pattern (${pct}%): Observe and monitor. Repeat CBC in 3 months.`);
                         }
                     }
                 }
@@ -48,15 +47,15 @@ export const generatePDF = (report) => {
         // Sickle Cell Analysis
         if (sickleCell && sickleCell.percentage !== undefined && sickleCell.percentage >= 3) {
             if (sickleCell.recommendation) {
-                recommendations.push(`Sickle Cell: ${sickleCell.recommendation}`);
+                recommendations.push(`- Sickle Cell: ${sickleCell.recommendation}`);
             } else {
                 const sicklePct = sickleCell.percentage;
                 if (sicklePct > 30) {
-                    recommendations.push("Severe Sickle Cell Disease (HbSS): Comprehensive management required. Hydroxyurea therapy evaluation. Pain management protocols advised.");
+                    recommendations.push("- Severe Sickle Cell Disease (HbSS): Comprehensive management required. Hydroxyurea therapy evaluation. Pain management protocols advised.");
                 } else if (sicklePct >= 10) {
-                    recommendations.push("Moderate Sickling: Hemoglobin electrophoresis recommended. Avoid dehydration. Regular follow-up advised.");
+                    recommendations.push("- Moderate Sickling: Hemoglobin electrophoresis recommended. Avoid dehydration. Regular follow-up advised.");
                 } else if (sicklePct >= 3) {
-                    recommendations.push("Sickle Cell Trait (HbAS): Genetic counseling recommended. Avoid extreme exertion and altitude.");
+                    recommendations.push("- Sickle Cell Trait (HbAS): Genetic counseling recommended. Avoid extreme exertion and altitude.");
                 }
             }
         }
@@ -66,7 +65,8 @@ export const generatePDF = (report) => {
             return "Blood parameters within normal limits. No significant hematological abnormalities detected. Continue routine health monitoring.";
         }
 
-        return recommendations.join(" | ");
+        // Join with newlines for better readability in PDF
+        return recommendations.join("\n");
     };
 
     doc.setFillColor(255, 0, 0); // Sets the color to pure red
@@ -206,16 +206,16 @@ export const generatePDF = (report) => {
     doc.setFontSize(11);
     doc.setTextColor(139, 0, 0); // Dark Red
     doc.text("Clinical Recommendations:", 15, y);
-    y += 6;
+    y += 8;
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setTextColor(50, 50, 50);
     const recommendationText = getDiseaseRecommendations(report.data.diseaseFindings || {}, report.data.sickleCell || {});
-    const splitText = doc.splitTextToSize(recommendationText, 180);
+    const splitText = doc.splitTextToSize(recommendationText, 175);
     doc.text(splitText, 15, y);
 
-    y += splitText.length * 4 + 10;
+    y += splitText.length * 5 + 10;
 
     // --- Footer / Disclaimer ---
     // Position at bottom
