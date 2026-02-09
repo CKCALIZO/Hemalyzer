@@ -588,7 +588,7 @@ CLIENT = InferenceHTTPClient(
 )
 
 # Your Roboflow model IDs
-MODEL_ID = "hema-dci5u/1"  # Enhanced YOLOv8-NAS model
+MODEL_ID = "hemalens-6807i/2"  # Enhanced YOLOv8-NAS model
 # Note: If baseline model doesn't exist, we'll simulate with reduced detection rate
 
 
@@ -1046,8 +1046,8 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 # Otherwise, use normal classification without black bg
                 # NOTE: Only applies when top classification is lymphoid (Lymphocyte/B_lymphoblast)
                 #       Non-lymphoid cells (Myeloblast, etc.) are ALWAYS reclassified without black bg
-                LYMPHOBLAST_ALL_THRESHOLD = 0.30    # >= 30% = consider for ALL
-                LYMPHOBLAST_NORMAL_THRESHOLD = 0.20  # 20-30% = borderline
+                LYMPHOBLAST_ALL_THRESHOLD = 0.15    # >= 30% = consider for ALL
+                LYMPHOBLAST_NORMAL_THRESHOLD = 0.10  # 20-30% = borderline
                 
                 print(f"   > Creating black background crops for {len(wbc_crops)} WBCs...")
                 
@@ -1071,6 +1071,14 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     if not result:
                         # If black bg classification failed, try with original crop
                         print(f"      WBC {i+1}: Black bg classification FAILED - will reclassify")
+                        # Set a fallback in case reclassification also fails
+                        final_results[i] = {
+                            'class': 'Unknown',
+                            'confidence': 0.0,
+                            'probabilities': {},
+                            'used_black_bg': False,
+                            'is_fallback': True
+                        }
                         needs_reclassify.append((i, wbc_crops[i]))
                         continue
                     
@@ -1081,109 +1089,117 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     # DEBUG: Show what black bg classification returned
                     print(f"      WBC {i+1} (black bg): Top class = '{wbc_class}' ({wbc_confidence:.2%})")
                     
-                    # Check if the TOP classification is lymphoid (Lymphocyte or B_lymphoblast)
-                    # Only apply black bg preference for lymphoid cells
-                    is_lymphoid_top_class = ('lymphoblast' in wbc_class.lower() or 
-                                              'lymphocyte' in wbc_class.lower())
-                    
-                    # If top class is NOT lymphoid (e.g., Myeloblast, Neutrophil, etc.)
-                    # -> Reclassify WITHOUT black background for accurate results
-                    if not is_lymphoid_top_class:
-                        print(f"                 -> Non-lymphoid, will reclassify without mask")
-                        needs_reclassify.append((i, wbc_crops[i]))
-                        continue
-                    
-                    # For lymphoid cells, get B_lymphoblast:ALL probability
+                    # Get B_lymphoblast probabilities from black bg classification
                     lymphoblast_all_prob = 0.0
                     lymphoblast_normal_prob = 0.0
-                    cll_prob = 0.0
-                    lymphocyte_normal_prob = 0.0
                     for cls_name, prob in probs.items():
                         cls_lower = cls_name.lower()
                         if 'lymphoblast' in cls_lower and ': all' in cls_lower:
                             lymphoblast_all_prob = max(lymphoblast_all_prob, prob)
                         elif 'lymphoblast' in cls_lower and ': normal' in cls_lower:
                             lymphoblast_normal_prob = max(lymphoblast_normal_prob, prob)
-                        elif 'lymphocyte' in cls_lower and ': cll' in cls_lower:
-                            cll_prob = max(cll_prob, prob)
-                        elif 'lymphocyte' in cls_lower and ': normal' in cls_lower:
-                            lymphocyte_normal_prob = max(lymphocyte_normal_prob, prob)
                     
-                    # DEBUG: Show all lymphoid probabilities
-                    print(f"                 -> Lymphoblast ALL: {lymphoblast_all_prob:.2%}, Normal: {lymphoblast_normal_prob:.2%}")
-                    print(f"                 -> Lymphocyte CLL: {cll_prob:.2%}, Normal: {lymphocyte_normal_prob:.2%}")
+                    combined_lymphoblast = lymphoblast_all_prob + lymphoblast_normal_prob
+                    print(f"                 -> Lymphoblast ALL: {lymphoblast_all_prob:.2%}, Normal: {lymphoblast_normal_prob:.2%}, Combined: {combined_lymphoblast:.2%}")
                     
-                    # Apply threshold logic for lymphoblast
-                    # Key: If B_lymphoblast:ALL >= threshold AND higher than CLL, classify as ALL
-                    # This gives priority to ALL detection when black background is used
-                    if lymphoblast_all_prob >= LYMPHOBLAST_ALL_THRESHOLD:
-                        # Check if ALL prob is also higher than CLL (to avoid false positives)
-                        if lymphoblast_all_prob >= cll_prob:
-                            # >= 30% AND higher than CLL: Classify as ALL
-                            all_class = next((k for k in probs.keys() if 'lymphoblast' in k.lower() and ': all' in k.lower()), 'B_lymphoblast: ALL')
-                            final_results[i] = {
-                                'class': all_class,
-                                'confidence': lymphoblast_all_prob,
-                                'probabilities': probs,
-                                'used_black_bg': True
-                            }
-                            print(f"                 => CLASSIFIED AS ALL (>= 30% and higher than CLL)")
-                        else:
-                            # ALL prob < CLL prob - use black bg result directly
-                            final_results[i] = {
-                                'class': wbc_class,
-                                'confidence': wbc_confidence,
-                                'probabilities': probs,
-                                'used_black_bg': True
-                            }
-                            print(f"                 => Using black bg result (CLL higher than ALL)")
-                    elif lymphoblast_all_prob >= LYMPHOBLAST_NORMAL_THRESHOLD:
-                        # 20-30%: Borderline - still worth keeping black bg result
-                        if lymphoblast_all_prob >= cll_prob * 0.8:  # ALL is close to CLL
-                            # Classify as Normal lymphoblast (borderline ALL)
-                            normal_class = next((k for k in probs.keys() if 'lymphoblast' in k.lower() and ': normal' in k.lower()), 'B_lymphoblast: Normal')
-                            final_results[i] = {
-                                'class': normal_class,
-                                'confidence': lymphoblast_normal_prob if lymphoblast_normal_prob > 0 else lymphoblast_all_prob,
-                                'probabilities': probs,
-                                'used_black_bg': True
-                            }
-                            print(f"                 => BORDERLINE (20-30%), classified as B_lymphoblast:Normal")
-                        else:
-                            # Use original black bg classification
-                            final_results[i] = {
-                                'class': wbc_class,
-                                'confidence': wbc_confidence,
-                                'probabilities': probs,
-                                'used_black_bg': True
-                            }
-                            print(f"                 => Using black bg result directly")
+                    # ===== BALANCED CLASSIFICATION LOGIC =====
+                    # Combined Lymphoblast probability determines classification:
+                    # - Combined = 85% -> B_lymphoblast: Normal
+                    # - Combined >= 86% -> B_lymphoblast: ALL
+                    # - Combined < 85% -> reclassify with original crop
+                    
+                    LYMPHOBLAST_NORMAL_THRESHOLD = 0.85  # 85% = Normal Lymphoblast
+                    LYMPHOBLAST_ALL_THRESHOLD = 0.86    # >= 86% = ALL Lymphoblast
+                    
+                    if combined_lymphoblast >= LYMPHOBLAST_ALL_THRESHOLD:
+                        # Combined >= 86% -> classify as ALL
+                        all_class = next((k for k in probs.keys() if 'lymphoblast' in k.lower() and ': all' in k.lower()), 'B_lymphoblast: ALL')
+                        final_results[i] = {
+                            'class': all_class,
+                            'confidence': combined_lymphoblast,
+                            'probabilities': probs,
+                            'used_black_bg': True
+                        }
+                        print(f"                 => B_lymphoblast: ALL (combined {combined_lymphoblast:.2%} >= 86%)")
+                    elif combined_lymphoblast >= LYMPHOBLAST_NORMAL_THRESHOLD:
+                        # Combined 85-85.99% -> classify as Normal Lymphoblast
+                        normal_class = next((k for k in probs.keys() if 'lymphoblast' in k.lower() and ': normal' in k.lower()), 'B_lymphoblast: Normal')
+                        final_results[i] = {
+                            'class': normal_class,
+                            'confidence': combined_lymphoblast,
+                            'probabilities': probs,
+                            'used_black_bg': True
+                        }
+                        print(f"                 => B_lymphoblast: Normal (combined {combined_lymphoblast:.2%} = 85%)")
                     else:
-                        # < 20%: Need to reclassify without mask
-                        # The cell is lymphoid but very unlikely to be lymphoblast
-                        print(f"                 => LOW ALL prob (<20%), will reclassify without mask")
+                        # Below 85% - reclassify with original crop
+                        print(f"                 => LOW ({combined_lymphoblast:.2%} < 85%), will reclassify with original crop")
                         needs_reclassify.append((i, wbc_crops[i]))
                 
-                # Pass 2: Reclassify cells that had low lymphoblast confidence without black background
+                # Pass 2: Reclassify cells with original crops (no black background)
                 if needs_reclassify:
-                    print(f"   > Pass 2: Reclassifying {len(needs_reclassify)} WBCs WITHOUT black background...")
+                    print(f"   > Pass 2: Reclassifying {len(needs_reclassify)} WBCs with ORIGINAL crops...")
                     reclassify_crops = [crop for _, crop in needs_reclassify]
                     reclassify_results = classifier.classify_batch(reclassify_crops, ['WBC']*len(reclassify_crops), batch_size=16)
                     
                     for j, (original_idx, _) in enumerate(needs_reclassify):
                         if reclassify_results[j]:
+                            result_class = reclassify_results[j]['class']
+                            result_conf = reclassify_results[j]['confidence']
+                            
+                            # Skip RBC results - find next highest WBC class
+                            if 'rbc' in result_class.lower() or 'sickle' in result_class.lower():
+                                print(f"      WBC {original_idx+1}: RBC result '{result_class}' - finding next best WBC class...")
+                                
+                                # Find the highest probability WBC class (not RBC/Sickle)
+                                best_wbc_class = None
+                                best_wbc_prob = 0.0
+                                for class_name, prob in reclassify_results[j]['probabilities'].items():
+                                    if 'rbc' not in class_name.lower() and 'sickle' not in class_name.lower():
+                                        if prob > best_wbc_prob:
+                                            best_wbc_class = class_name
+                                            best_wbc_prob = prob
+                                
+                                if best_wbc_class and best_wbc_prob > 0.05:
+                                    print(f"                 -> Using next best: '{best_wbc_class}' ({best_wbc_prob:.2%})")
+                                    final_results[original_idx] = {
+                                        'class': best_wbc_class,
+                                        'confidence': best_wbc_prob,
+                                        'probabilities': reclassify_results[j]['probabilities'],
+                                        'used_black_bg': False
+                                    }
+                                else:
+                                    # No valid WBC class found - use Neutrophil: Normal as fallback
+                                    print(f"                 -> No valid WBC class found, using Neutrophil: Normal")
+                                    final_results[original_idx] = {
+                                        'class': 'Neutrophil: Normal',
+                                        'confidence': 0.0,
+                                        'probabilities': reclassify_results[j]['probabilities'],
+                                        'used_black_bg': False
+                                    }
+                                continue
+                            
+                            # Use the reclassification result
                             final_results[original_idx] = {
-                                'class': reclassify_results[j]['class'],
-                                'confidence': reclassify_results[j]['confidence'],
+                                'class': result_class,
+                                'confidence': result_conf,
                                 'probabilities': reclassify_results[j]['probabilities'],
                                 'used_black_bg': False
                             }
+                            print(f"      WBC {original_idx+1} (reclassified): '{result_class}' ({result_conf:.2%})")
                 
                 print(f"   > Processing {len(wbc_crops)} WBC classification results...")
+                
+                # Count cells with valid results vs None (for debugging)
+                none_count = sum(1 for r in final_results if r is None)
+                fallback_count = sum(1 for r in final_results if r and r.get('is_fallback'))
+                valid_count = len(final_results) - none_count
+                print(f"   > Results: {valid_count} valid, {none_count} None (lost), {fallback_count} using fallback")
                 
                 # Process all results with existing disease threshold logic
                 for i, result in enumerate(final_results):
                     if not result:
+                        print(f"      WARNING: WBC {i+1} has None result - cell lost!")
                         continue
                     
                     idx = wbc_indices[i]

@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { saveSession, loadSession, clearSession, migrateFromLocalStorage } from '../utils/sessionStorage';
 import { API_URL, getApiHeaders } from '../config/api';
 
@@ -176,6 +176,30 @@ export const AnalysisProvider = ({ children }) => {
     const [imageProgress, setImageProgress] = useState(0);
     const [isBulkProcessing, setIsBulkProcessing] = useState(false);
 
+    // Abort controller for cancelling in-flight requests
+    const abortControllerRef = useRef(null);
+    const cancelledRef = useRef(false);
+
+    // Cancel/End Session function
+    const cancelAnalysis = useCallback(() => {
+        // Abort any in-flight fetch requests
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort();
+            abortControllerRef.current = null;
+        }
+        cancelledRef.current = true;
+
+        // Reset processing states
+        setLoading(false);
+        setIsBulkProcessing(false);
+        setBulkProgress({ current: 0, total: 0 });
+        setAnalysisProgress({ stage: '', percentage: 0, message: '' });
+        setError('Analysis cancelled by user.');
+        setBulkFiles([]);
+        setSelectedFile(null);
+        setPreviewUrl(null);
+    }, []);
+
     // Calculate aggregated results
     const calculateFinalResults = useCallback((allClassifications, allProcessedImages, counts, allRBCClassifications = []) => {
         const wbcTypeCounts = {};
@@ -183,6 +207,7 @@ export const AnalysisProvider = ({ children }) => {
         const differentialCounts = { 'Neutrophil': 0, 'Lymphocyte': 0, 'Monocyte': 0, 'Eosinophil': 0, 'Basophil': 0 };
 
         let cmlCount = 0, cllCount = 0, allCount = 0, amlCount = 0;
+        let lymphoblastNormalCount = 0, lymphocyteNormalCount = 0;  // For monitoring
         const cmlGranulocyteBreakdown = { basophil: 0, eosinophil: 0, myeloblast: 0, promyelocyte: 0, myelocyte: 0, metamyelocyte: 0, neutrophil: 0 };
         const blastBreakdown = { lymphoblast: 0, myeloblast: 0 };
         const abnormalWBCs = [];
@@ -250,6 +275,15 @@ export const AnalysisProvider = ({ children }) => {
             if (hasAML) {
                 amlCount++;
                 blastBreakdown.myeloblast++;
+            }
+
+            // Track Lymphoblast:Normal and Lymphocyte:Normal for monitoring
+            const isNormalVariant = classificationStr.includes(': normal');
+            if (isLymphoblast && isNormalVariant) {
+                lymphoblastNormalCount++;
+            }
+            if (isLymphocyte && isNormalVariant) {
+                lymphocyteNormalCount++;
             }
         });
 
@@ -343,6 +377,34 @@ export const AnalysisProvider = ({ children }) => {
             });
         }
 
+        // Monitor for ALL: High Lymphoblast:Normal count (>= 20% of WBCs)
+        const lymphoblastNormalPercentage = totalWBC > 0 ? (lymphoblastNormalCount / totalWBC) * 100 : 0;
+        if (lymphoblastNormalCount > 0 && lymphoblastNormalPercentage >= 20) {
+            diseaseFindings.push({
+                type: 'Monitor for ALL',
+                percentage: lymphoblastNormalPercentage,
+                interpretation: 'Elevated normal lymphoblasts detected. Recommend monitoring for potential ALL development.',
+                severity: 'LOW',
+                condition: 'Monitor for ALL',
+                breakdown: { "Lymphoblast:Normal": lymphoblastNormalCount },
+                recommendation: 'Clinical Recommendation: Serial CBC monitoring. Repeat in 2-4 weeks. Consider flow cytometry if persistent.'
+            });
+        }
+
+        // Monitor for CLL: High Lymphocyte:Normal count (>= 40% of WBCs)
+        const lymphocyteNormalPercentage = totalWBC > 0 ? (lymphocyteNormalCount / totalWBC) * 100 : 0;
+        if (lymphocyteNormalCount > 0 && lymphocyteNormalPercentage >= 40) {
+            diseaseFindings.push({
+                type: 'Monitor for CLL',
+                percentage: lymphocyteNormalPercentage,
+                interpretation: 'Elevated normal lymphocytes detected. Recommend monitoring for potential CLL development.',
+                severity: 'LOW',
+                condition: 'Monitor for CLL',
+                breakdown: { "Lymphocyte:Normal": lymphocyteNormalCount },
+                recommendation: 'Clinical Recommendation: Serial CBC monitoring. Repeat in 3 months. Consider immunophenotyping if lymphocyte count persists above normal.'
+            });
+        }
+
         let sickleCount = 0;
         allProcessedImages.forEach(img => { if (img.sickleCount) sickleCount += img.sickleCount; });
         const sicklePercentage = counts.rbc > 0 ? (sickleCount / counts.rbc) * 100 : 0;
@@ -355,8 +417,10 @@ export const AnalysisProvider = ({ children }) => {
         let patientStatus = 'Normal';
         const hasCritical = diseaseFindings.some(f => f.severity === 'HIGH');
         const hasAbnormal = diseaseFindings.some(f => f.severity === 'MODERATE' || f.severity === 'LOW');
+        // Also mark as Abnormal if high Lymphoblast:Normal or Lymphocyte:Normal counts
+        const hasMonitoringConcern = (lymphoblastNormalPercentage >= 20) || (lymphocyteNormalPercentage >= 40);
         if (hasCritical || sicklePercentage > 30) patientStatus = 'Critical';
-        else if (hasAbnormal || sicklePercentage >= 3) patientStatus = 'Abnormal';
+        else if (hasAbnormal || sicklePercentage >= 3 || hasMonitoringConcern) patientStatus = 'Abnormal';
 
         return {
             thresholdMet: true, totalWBC: counts.wbc, totalRBC: counts.rbc, totalPlatelets: counts.platelets,
@@ -408,12 +472,12 @@ export const AnalysisProvider = ({ children }) => {
 
                     const isThresholdMet = session.thresholdMet === true || (session.processedImages && session.processedImages.length >= TARGET_IMAGE_COUNT);
                     setThresholdMet(isThresholdMet);
-                    
+
                     // Restore finalResults if available (the useEffect will recalculate if needed)
                     if (session.finalResults) {
                         setFinalResults(session.finalResults);
                     }
-                    
+
                     console.log('Session restored:', {
                         imagesCount: session.processedImages?.length || 0,
                         thresholdMet: isThresholdMet,
@@ -436,7 +500,7 @@ export const AnalysisProvider = ({ children }) => {
         try {
             // Create a meaningful report ID using MRN and timestamp
             const reportId = patientId ? `${patientId}_${Date.now()}` : `UNKNOWN_${Date.now()}`;
-            
+
             const newReport = {
                 id: reportId,
                 timestamp: new Date().toLocaleString(),
@@ -536,10 +600,10 @@ export const AnalysisProvider = ({ children }) => {
             // Load image to check dimensions and basic properties
             const img = new Image();
             const objectUrl = URL.createObjectURL(file);
-            
+
             img.onload = () => {
                 URL.revokeObjectURL(objectUrl);
-                
+
                 // Check minimum dimensions (blood smear images should be reasonably sized)
                 const minDimension = 200;
                 if (img.width < minDimension || img.height < minDimension) {
@@ -573,7 +637,7 @@ export const AnalysisProvider = ({ children }) => {
             try {
                 // Validate image before showing preview
                 await validateImageFile(file);
-                
+
                 setSelectedFile(file);
                 setPreviewUrl(URL.createObjectURL(file));
                 setError(null);
@@ -641,10 +705,15 @@ export const AnalysisProvider = ({ children }) => {
 
             setAnalysisProgress({ stage: 'Processing', percentage: 30, message: 'Processing image...' });
 
+            // Create abort controller for this request
+            abortControllerRef.current = new AbortController();
+            cancelledRef.current = false;
+
             const response = await fetch(`${API_URL}/api/analyze`, {
                 method: 'POST',
                 headers: getApiHeaders(),
-                body: formData
+                body: formData,
+                signal: abortControllerRef.current.signal
             });
 
             if (!response.ok) {
@@ -729,9 +798,14 @@ export const AnalysisProvider = ({ children }) => {
             });
 
         } catch (error) {
+            if (error.name === 'AbortError') {
+                console.log('Analysis cancelled by user');
+                return;
+            }
             console.error('Analysis error:', error);
             setError(error.message || 'Failed to analyze image');
         } finally {
+            abortControllerRef.current = null;
             setLoading(false);
             setAnalysisProgress({ stage: '', percentage: 0, message: '' });
         }
@@ -755,20 +829,30 @@ export const AnalysisProvider = ({ children }) => {
         setBulkProgress({ current: 0, total: filesToProcess.length });
         setError(null);
 
+        // Create abort controller for bulk processing
+        abortControllerRef.current = new AbortController();
+        cancelledRef.current = false;
+
         let newProcessedImages = [...processedImages];
         let newCounts = { ...aggregatedCounts };
         let newClassifications = [...aggregatedClassifications];
         let newRBCClassifications = [...aggregatedRBCClassifications];
 
         for (let i = 0; i < filesToProcess.length; i++) {
+            // Check if cancelled before processing next image
+            if (cancelledRef.current) {
+                console.log('Bulk processing cancelled by user');
+                break;
+            }
+
             const file = filesToProcess[i];
             setBulkProgress({ current: i + 1, total: filesToProcess.length });
-            
+
             // Per-image progress: Upload phase (10%)
-            setAnalysisProgress({ 
-                stage: 'Uploading', 
-                percentage: 10, 
-                message: `Image ${i + 1}/${filesToProcess.length}: Uploading ${file.name}...` 
+            setAnalysisProgress({
+                stage: 'Uploading',
+                percentage: 10,
+                message: `Image ${i + 1}/${filesToProcess.length}: Uploading ${file.name}...`
             });
 
             try {
@@ -776,16 +860,17 @@ export const AnalysisProvider = ({ children }) => {
                 formData.append('image', file);
 
                 // Per-image progress: Detection phase (50%)
-                setAnalysisProgress({ 
-                    stage: 'Processing', 
-                    percentage: 50, 
-                    message: `Image ${i + 1}/${filesToProcess.length}: Detecting cells...` 
+                setAnalysisProgress({
+                    stage: 'Processing',
+                    percentage: 50,
+                    message: `Image ${i + 1}/${filesToProcess.length}: Detecting cells...`
                 });
 
                 const response = await fetch(`${API_URL}/api/analyze`, {
                     method: 'POST',
                     headers: getApiHeaders(),
-                    body: formData
+                    body: formData,
+                    signal: abortControllerRef.current?.signal
                 });
 
                 if (!response.ok) {
@@ -794,10 +879,10 @@ export const AnalysisProvider = ({ children }) => {
                 }
 
                 // Per-image progress: Classification phase (80%)
-                setAnalysisProgress({ 
-                    stage: 'Classifying', 
-                    percentage: 80, 
-                    message: `Image ${i + 1}/${filesToProcess.length}: Classifying cells...` 
+                setAnalysisProgress({
+                    stage: 'Classifying',
+                    percentage: 80,
+                    message: `Image ${i + 1}/${filesToProcess.length}: Classifying cells...`
                 });
 
                 const data = await response.json();
@@ -809,10 +894,10 @@ export const AnalysisProvider = ({ children }) => {
                 }
 
                 // Per-image progress: Complete (100%)
-                setAnalysisProgress({ 
-                    stage: 'Complete', 
-                    percentage: 100, 
-                    message: `Image ${i + 1}/${filesToProcess.length}: Complete!` 
+                setAnalysisProgress({
+                    stage: 'Complete',
+                    percentage: 100,
+                    message: `Image ${i + 1}/${filesToProcess.length}: Complete!`
                 });
 
                 const newImage = {
@@ -854,9 +939,15 @@ export const AnalysisProvider = ({ children }) => {
                 setCurrentResults(data);
 
             } catch (error) {
+                if (error.name === 'AbortError') {
+                    console.log('Bulk processing cancelled by user');
+                    break;
+                }
                 console.error(`Error processing ${file.name}:`, error);
             }
         }
+
+        abortControllerRef.current = null;
 
         // Final state update (redundant but ensures consistency)
         setProcessedImages(newProcessedImages);
@@ -917,6 +1008,7 @@ export const AnalysisProvider = ({ children }) => {
         imageProgress, setImageProgress,
         isBulkProcessing, setIsBulkProcessing,
         calculateFinalResults,
+        cancelAnalysis,
         saveReport,
         handleReset,
         handleFileChange,
