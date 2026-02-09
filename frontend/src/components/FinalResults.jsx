@@ -3,6 +3,13 @@ import { useNavigate } from "react-router-dom";
 
 import { generatePDF } from '../utils/pdfGenerator';
 
+// Helper to transform cell type names for display (UI only - backend unchanged)
+const formatCellTypeForDisplay = (name) => {
+    if (!name) return name;
+    // Transform B_Lymphoblast or B_lymphoblast to just Lymphoblast
+    return name.replace(/B_[Ll]ymphoblast/g, 'Lymphoblast');
+};
+
 export const getClinicalAnalysis = (type, status) => {
     const analyses = {
         'Neutrophil': {
@@ -134,8 +141,8 @@ export const FinalResults = ({
         // Check for disease markers in the classification string
         // ALL (Acute Lymphoblastic Leukemia)
         if (lowerClass.includes(': all') || lowerClass.includes('lymphoblast: all') || lowerClass.includes('b_lymphoblast: all')) {
-            const cellType = classification.split(':')[0] || 'Lymphoblast';
-            return { category: 'ALL', label: `ALL: ${cellType} `, color: 'bg-red-100 text-red-800 border-red-300' };
+            const cellType = formatCellTypeForDisplay(classification.split(':')[0]) || 'Lymphoblast';
+            return { category: 'ALL', label: `ALL: ${cellType}`, color: 'bg-red-100 text-red-800 border-red-300' };
         }
 
         // AML (Acute Myeloid Leukemia)

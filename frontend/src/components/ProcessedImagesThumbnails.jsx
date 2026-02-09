@@ -8,6 +8,13 @@ const MIN_IMAGES_FOR_AVERAGE = 10;
 // WBC Normal Range (updated)
 const WBC_NORMAL_RANGE = { min: 4000, max: 6000 }; // cells/μL
 
+// Helper to transform cell type names for display (UI only - backend unchanged)
+const formatCellTypeForDisplay = (name) => {
+    if (!name) return name;
+    // Transform B_Lymphoblast or B_lymphoblast to just Lymphoblast
+    return name.replace(/B_[Ll]ymphoblast/g, 'Lymphoblast');
+};
+
 /**
  * ProcessedImagesThumbnails Component
  * Displays a clickable thumbnail bar of all processed images
@@ -57,7 +64,7 @@ export const ProcessedImagesThumbnails = ({
 
         // Main WBC types to track (only mature cells count in the 5-part differential)
         const mainWBCTypes = ['Neutrophil', 'Basophil', 'Monocyte', 'Eosinophil', 'Lymphocyte'];
-        
+
         // Immature/precursor cells - these go to "Other WBCs", not the main differential
         const immatureCells = ['Promyelocyte', 'Myelocyte', 'Metamyelocyte', 'Myeloblast', 'Lymphoblast', 'B_Lymphoblast'];
 
@@ -89,13 +96,13 @@ export const ProcessedImagesThumbnails = ({
 
                 // Check if it's one of the main 5 WBC types (mature cells only)
                 const isMainType = mainWBCTypes.some(t => cellTypeLower.includes(t.toLowerCase()));
-                
+
                 // Check if it's an immature/precursor cell (goes to Other WBCs)
                 const isImmatureCell = immatureCells.some(t => cellTypeLower.includes(t.toLowerCase()));
-                
+
                 // Check for disease markers in status
-                const hasDisease = statusLower.includes('cml') || statusLower.includes('cll') || 
-                                   statusLower.includes('aml') || statusLower.includes('all');
+                const hasDisease = statusLower.includes('cml') || statusLower.includes('cll') ||
+                    statusLower.includes('aml') || statusLower.includes('all');
 
                 if (isMainType && !isImmatureCell) {
                     // Increment main type counter
@@ -573,8 +580,8 @@ export const ProcessedImagesThumbnails = ({
                                         <div>
                                             <h4 className="text-sm font-semibold text-slate-600 mb-2">Annotated Image</h4>
                                             <img
-                                                src={selectedImage.annotatedImage ? `data:image/jpeg;base64,${selectedImage.annotatedImage}` : 
-                                                     (selectedImage.annotated ? `data:image/jpeg;base64,${selectedImage.annotated}` : selectedImage.preview)}
+                                                src={selectedImage.annotatedImage ? `data:image/jpeg;base64,${selectedImage.annotatedImage}` :
+                                                    (selectedImage.annotated ? `data:image/jpeg;base64,${selectedImage.annotated}` : selectedImage.preview)}
                                                 alt="Annotated"
                                                 className="w-full rounded-lg border border-slate-200"
                                             />
@@ -613,7 +620,7 @@ export const ProcessedImagesThumbnails = ({
                                         // Check multiple possible field names for backward compatibility
                                         const classifications = selectedImage.wbcClassifications || selectedImage.classifications || selectedImage.results?.wbc_classifications || selectedImage.results?.stage2_classification || [];
                                         if (!classifications || classifications.length === 0) return null;
-                                        
+
                                         const breakdown = getWBCBreakdown(classifications);
                                         if (!breakdown) return null;
 
@@ -704,7 +711,7 @@ export const ProcessedImagesThumbnails = ({
                                                                         {breakdown.normalWBCs.map((normal, idx) => (
                                                                             <tr key={idx} className="border-b border-green-100">
                                                                                 <td className="py-1 text-slate-700">
-                                                                                    {normal.type}
+                                                                                    {formatCellTypeForDisplay(normal.type)}
                                                                                 </td>
                                                                                 <td className="text-right font-medium">{normal.count}</td>
                                                                                 <td className="text-right text-slate-500">
@@ -754,7 +761,7 @@ export const ProcessedImagesThumbnails = ({
                                                                         {breakdown.abnormalWBCs.map((abnormal, idx) => (
                                                                             <tr key={idx} className="border-b border-orange-100 bg-orange-50">
                                                                                 <td className="py-1 text-orange-700 font-medium">
-                                                                                    {abnormal.type}
+                                                                                    {formatCellTypeForDisplay(abnormal.type)}
                                                                                 </td>
                                                                                 <td className="text-right font-medium">{abnormal.count}</td>
                                                                                 <td className="text-right text-slate-500">
@@ -804,7 +811,7 @@ export const ProcessedImagesThumbnails = ({
                                                                         {breakdown.otherWBCs.map((other, idx) => (
                                                                             <tr key={idx} className={`border-b border-amber-100 ${other.isDisease ? 'bg-red-50' : ''}`}>
                                                                                 <td className={`py-1 ${other.isDisease ? 'text-red-700 font-medium' : 'text-slate-700'}`}>
-                                                                                    {other.type}
+                                                                                    {formatCellTypeForDisplay(other.type)}
                                                                                     {other.isDisease && <span className="ml-1 text-xs">🔴</span>}
                                                                                 </td>
                                                                                 <td className="text-right font-medium">{other.count}</td>

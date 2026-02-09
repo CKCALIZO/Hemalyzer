@@ -174,6 +174,91 @@ class AdaptiveCellPreprocessing:
 
 
 # ============================================================
+# BLACK BACKGROUND CELL MASKING (For ALL Detection)
+# ============================================================
+def create_black_background_crop(img_pil, focus_center=True, center_focus_ratio=0.6):
+    """
+    Create a black background version of a WBC crop for better ALL classification.
+    
+    This is needed because B_Lymphoblast:ALL training images have black backgrounds,
+    but real blood smear crops have pinkish backgrounds. Creating a black background
+    version helps the model correctly classify ALL cells.
+    
+    Args:
+        img_pil: PIL Image of the WBC crop
+        focus_center: If True, focus on the central cell (ignores peripheral RBCs)
+        center_focus_ratio: Ratio of image to consider as "center" (default 0.6 = 60%)
+        
+    Returns:
+        PIL Image: WBC crop with black background
+    """
+    try:
+        img_array = np.array(img_pil)
+        h, w = img_array.shape[:2]
+        
+        # Convert to grayscale for thresholding
+        if len(img_array.shape) == 3:
+            gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img_array.copy()
+        
+        # Apply Gaussian blur to reduce noise
+        gray_blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+        
+        # Otsu's thresholding to find cell regions
+        _, binary = cv2.threshold(gray_blurred, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+        
+        # Morphological operations to clean up
+        kernel = np.ones((5, 5), np.uint8)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel, iterations=2)
+        binary = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel, iterations=1)
+        
+        if focus_center:
+            # Create a mask that emphasizes the center of the image
+            # This helps focus on the WBC and ignore peripheral RBCs
+            center_mask = np.zeros((h, w), dtype=np.uint8)
+            center_y, center_x = h // 2, w // 2
+            radius = int(min(h, w) * center_focus_ratio / 2)
+            cv2.circle(center_mask, (center_x, center_y), radius, 255, -1)
+            
+            # Combine with cell detection mask
+            binary = cv2.bitwise_and(binary, center_mask)
+        
+        # Find contours of cells
+        contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if contours:
+            # Find the largest contour (the main WBC)
+            largest_contour = max(contours, key=cv2.contourArea)
+            
+            # Create clean mask from largest contour
+            final_mask = np.zeros((h, w), dtype=np.uint8)
+            cv2.drawContours(final_mask, [largest_contour], -1, 255, -1)
+            
+            # Dilate slightly to ensure cell edges are included
+            final_mask = cv2.dilate(final_mask, kernel, iterations=1)
+            
+            # Apply Gaussian blur to smooth edges
+            final_mask = cv2.GaussianBlur(final_mask, (7, 7), 0)
+            
+            # Create black background image
+            black_bg = np.zeros_like(img_array)
+            
+            # Apply mask (with soft edges)
+            mask_3d = final_mask[:, :, np.newaxis] / 255.0
+            result = (img_array * mask_3d + black_bg * (1 - mask_3d)).astype(np.uint8)
+            
+            return Image.fromarray(result)
+        else:
+            # No contours found - return original (shouldn't happen often)
+            return img_pil
+            
+    except Exception as e:
+        print(f"Error creating black background crop: {e}")
+        return img_pil  # Return original on error
+
+
+# ============================================================
 # GLOBAL CLASSIFIER STATE
 # ============================================================
 class ConvNeXtClassifier:
