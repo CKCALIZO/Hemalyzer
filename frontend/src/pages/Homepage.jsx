@@ -90,7 +90,7 @@ const Homepage = () => {
                             <div>
                                 <h1 className="text-2xl font-bold text-slate-800">Blood Smear Analysis</h1>
                                 <p className="text-slate-600 text-sm mt-1">
-                                    TEsting Upload 10 blood smear images for accurate differential count and disease assessment
+                                    Upload 10 blood smear images for accurate differential count and disease assessment
                                 </p>
                             </div>
 
