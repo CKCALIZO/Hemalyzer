@@ -193,21 +193,23 @@ export const FinalResults = ({
             { level: 'High', range: '≥ 20%', desc: 'Diagnostic level for AML.' }
         ],
         'ALL': [
-            { level: 'Normal', range: '< 10%', desc: 'No significant lymphoblasts detected.' },
-            { level: 'Moderate', range: '10-20%', desc: 'Suspicious / Pre-leukemic (ALL).' },
-            { level: 'High', range: '≥ 20%', desc: 'Diagnostic level for ALL.' }
+            { level: 'Normal', range: '< 35%', desc: 'Lymphoblasts within reactive ranges.' },
+            { level: 'Low', range: '35-50%', desc: 'Reactive / Secondary Lymphocytosis.' },
+            { level: 'Moderate', range: '51-65%', desc: 'Suspicious for Early ALL.' },
+            { level: 'High', range: '66-80%', desc: 'Typical ALL.' },
+            { level: 'Advanced', range: '> 80%', desc: 'Advanced / Progressive ALL.' }
         ],
         'CML': [
-            { level: 'Normal', range: '< 60%', desc: 'Granulocytes within reactive ranges.' },
-            { level: 'Low', range: '60-75%', desc: 'Reactive / Secondary Leukocytosis.' },
-            { level: 'Moderate', range: '76-89%', desc: 'Suspicious for Early CML.' },
-            { level: 'High', range: '≥ 90%', desc: 'Typical / Accelerated Phase CML.' }
+            { level: 'Normal', range: '< 10%', desc: 'No significant CML markers detected.' },
+            { level: 'Moderate', range: '10-20%', desc: 'Suspicious / Pre-leukemic (CML).' },
+            { level: 'High', range: '≥ 20%', desc: 'Diagnostic level for CML.' }
         ],
         'CLL': [
             { level: 'Normal', range: '< 35%', desc: 'Lymphocytes within reactive ranges.' },
             { level: 'Low', range: '35-50%', desc: 'Reactive / Secondary Lymphocytosis.' },
             { level: 'Moderate', range: '51-65%', desc: 'Suspicious for Early CLL.' },
-            { level: 'High', range: '≥ 66%', desc: 'Typical / Advanced CLL.' }
+            { level: 'High', range: '66-80%', desc: 'Typical CLL.' },
+            { level: 'Advanced', range: '> 80%', desc: 'Advanced / Progressive CLL.' }
         ]
     };
 
@@ -469,36 +471,44 @@ export const FinalResults = ({
                     {/* Detailed Disease Reference Guide */}
                     <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-lg border border-slate-200">
                         <div>
-                            <h4 className="font-bold text-slate-700 mb-3 border-b pb-2">Acute Leukemias (AML & ALL)</h4>
+                            <h4 className="font-bold text-slate-700 mb-3 border-b pb-2">AML & CML</h4>
                             <div className="space-y-3 text-sm text-slate-600">
                                 <div>
                                     <span className="font-bold text-green-700">Normal (&lt; 10%)</span>
-                                    <p>Presence of rare blasts may be reactive or artifactual. However, any blast count warrants clinical correlation.</p>
+                                    <p>Presence of rare blasts or CML-marked cells may be reactive or artifactual. Any blast count warrants clinical correlation.</p>
                                 </div>
                                 <div>
                                     <span className="font-bold text-amber-600">Moderate (10-20%)</span>
-                                    <p>Suspicious for pre-leukemic conditions (MDS) or evolving acute leukemia. Requires bone marrow biopsy.</p>
+                                    <p>Suspicious for pre-leukemic conditions (MDS) or evolving leukemia. Requires bone marrow biopsy. BCR-ABL1 testing recommended for CML.</p>
                                 </div>
                                 <div>
                                     <span className="font-bold text-red-700">High (&ge; 20%)</span>
-                                    <p>Diagnostic threshold for Acute Leukemia (WHO criteria). Immediate hematology referral required.</p>
+                                    <p>Diagnostic threshold for AML (WHO criteria) or CML. Immediate hematology referral required.</p>
                                 </div>
                             </div>
                         </div>
                         <div>
-                            <h4 className="font-bold text-slate-700 mb-3 border-b pb-2">Chronic Leukemias (CML & CLL)</h4>
+                            <h4 className="font-bold text-slate-700 mb-3 border-b pb-2">ALL & CLL</h4>
                             <div className="space-y-3 text-sm text-slate-600">
                                 <div>
-                                    <span className="font-bold text-green-700">Normal / Reactive</span>
-                                    <p>Granulocytosis or Lymphocytosis can be caused by infections/stress (Reactive). Lower percentages are often secondary.</p>
+                                    <span className="font-bold text-green-700">Normal (&lt; 35%)</span>
+                                    <p>Lymphoblasts or lymphocytes within reactive ranges. Balanced white cell differential.</p>
                                 </div>
                                 <div>
-                                    <span className="font-bold text-amber-600">Moderate / Suspicious</span>
-                                    <p>Unexplained persistent elevation markers. Suggestive of early-stage Myeloproliferative or Lymphoproliferative disorders.</p>
+                                    <span className="font-bold text-blue-600">Low (35-50%)</span>
+                                    <p>Reactive / Secondary Lymphocytosis. May occur with viral infections (e.g., EBV, CMV) or stress.</p>
                                 </div>
                                 <div>
-                                    <span className="font-bold text-red-700">High / Typical</span>
-                                    <p>Counts highly specific for CML or CLL diagnosis. check for splenomegaly and B-symptoms.</p>
+                                    <span className="font-bold text-amber-600">Moderate (51-65%)</span>
+                                    <p>Suspicious for early ALL or CLL. Persistent elevation suggestive of lymphoproliferative disorder.</p>
+                                </div>
+                                <div>
+                                    <span className="font-bold text-orange-600">High (66-80%)</span>
+                                    <p>Typical ALL or CLL. Marked lymphoblastic/lymphocytic predominance. Hematology referral required.</p>
+                                </div>
+                                <div>
+                                    <span className="font-bold text-red-700">High / Advanced (&gt; 80%)</span>
+                                    <p>Advanced / Progressive disease. Lymphoblasts or lymphocytes overwhelmingly dominate the smear. Immediate referral required.</p>
                                 </div>
                             </div>
                         </div>
@@ -738,28 +748,28 @@ export const FinalResults = ({
                                                             };
                                                         }
                                                         if (type.includes('CML')) {
-                                                            if (pct >= 50) return {
-                                                                title: 'CML - Probable Accelerated/Blast Phase',
+                                                            if (pct >= 20) return {
+                                                                title: 'CML - Diagnostic Level',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'IMMEDIATE REFERRAL: Significant leukocytosis with left shift.',
-                                                                clinicalNote: 'Risk of leukostasis. BCR-ABL1 testing mandatory.',
-                                                                reference: 'Extreme granulocytosis with left shift strongly suggestive of CML or leukemoid reaction.',
+                                                                action: 'IMMEDIATE REFERRAL: Significant CML-marked granulocyte proliferation. BCR-ABL1 testing mandatory.',
+                                                                clinicalNote: 'Diagnostic threshold for CML reached. Immediate hematology referral required.',
+                                                                reference: 'Significant CML-marked cells strongly suggestive of Chronic Myeloid Leukemia.',
                                                                 color: 'red'
                                                             };
-                                                            if (pct >= 20) return {
-                                                                title: 'CML - Chronic Phase Likely',
+                                                            if (pct >= 10) return {
+                                                                title: 'CML - Suspicious / Pre-leukemic',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'REFERRAL: Hematology appointment for BCR-ABL1 testing.',
-                                                                clinicalNote: 'Classic CML appearance (myelocyte bulge).',
-                                                                reference: 'Presence of entire granulocytic series (myeloblast to neutrophil) suggests CML.',
+                                                                action: 'REFERRAL: Hematology appointment for BCR-ABL1 testing recommended.',
+                                                                clinicalNote: 'Suspicious for pre-leukemic conditions or early CML.',
+                                                                reference: 'Presence of CML-marked granulocytes warrants further investigation.',
                                                                 color: 'amber'
                                                             };
                                                             return {
-                                                                title: 'Granulocytic Left Shift',
+                                                                title: 'CML Markers Detected',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'Monitor. Rule out severe bacterial infection.',
-                                                                clinicalNote: 'Left shift can be reactive (infection, inflammation) or early MPN.',
-                                                                reference: 'Toxic granulation and Dohle bodies would suggest infection over CML.',
+                                                                action: 'Monitor. CML-marked cells below diagnostic threshold.',
+                                                                clinicalNote: 'Low-level CML markers may be reactive or artifactual.',
+                                                                reference: 'Below diagnostic threshold. Serial CBC monitoring recommended.',
                                                                 color: 'yellow'
                                                             };
                                                         }

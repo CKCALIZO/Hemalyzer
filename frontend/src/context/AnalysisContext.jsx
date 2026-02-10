@@ -330,23 +330,23 @@ export const AnalysisProvider = ({ children }) => {
 
         if (allCount > 0) {
             const allPercentage = totalWBC > 0 ? (allCount / totalWBC) * 100 : 0;
-            let interpretation = '', severity = 'NORMAL';
-            if (allPercentage >= 20) { interpretation = 'Diagnostic level for ALL'; severity = 'HIGH'; }
-            else if (allPercentage >= 10) { interpretation = 'Suspicious / Pre-leukemic (ALL)'; severity = 'MODERATE'; }
-            else { interpretation = 'Lymphoblasts detected'; severity = 'NORMAL'; }
+            let interpretation = '', severity = 'NORMAL', condition = 'Monitor for ALL';
+            if (allPercentage > 80) { interpretation = 'Advanced / Progressive ALL'; condition = 'ALL (Advanced)'; severity = 'HIGH'; }
+            else if (allPercentage >= 66) { interpretation = 'Typical ALL'; condition = 'ALL'; severity = 'HIGH'; }
+            else if (allPercentage >= 51) { interpretation = 'Suspicious for Early ALL'; condition = 'Suspicious for Early ALL'; severity = 'MODERATE'; }
+            else if (allPercentage >= 35) { interpretation = 'Reactive / Secondary Lymphocytosis'; condition = 'Reactive Lymphocytosis'; severity = 'LOW'; }
+            else { interpretation = 'ALL-marked cells detected but below threshold'; }
             diseaseFindings.push({
                 type: 'ALL (Acute Lymphoblastic Leukemia)', percentage: allPercentage, interpretation, severity,
-                condition: 'Acute Lymphoblastic Leukemia', breakdown: { "ALL:B_Lymphoblast": blastBreakdown.lymphoblast },
+                condition, breakdown: { "ALL:B_Lymphoblast": blastBreakdown.lymphoblast },
                 recommendation: getDiseaseRecommendation('ALL', severity)
             });
         }
 
         if (cmlCount > 0) {
             let interpretation = '', severity = 'NORMAL', condition = 'Monitor for CML';
-            if (cmlPercentage > 95) { interpretation = 'Accelerated Phase CML'; condition = 'CML (Accelerated)'; severity = 'HIGH'; }
-            else if (cmlPercentage >= 90) { interpretation = 'Typical Chronic Phase CML'; condition = 'CML (Chronic)'; severity = 'HIGH'; }
-            else if (cmlPercentage >= 76) { interpretation = 'Suspicious for Early CML'; condition = 'Suspicious for Early CML'; severity = 'MODERATE'; }
-            else if (cmlPercentage >= 60) { interpretation = 'Reactive / Secondary Leukocytosis'; condition = 'Reactive Leukocytosis'; severity = 'LOW'; }
+            if (cmlPercentage >= 20) { interpretation = 'Diagnostic level for CML'; condition = 'Chronic Myeloid Leukemia'; severity = 'HIGH'; }
+            else if (cmlPercentage >= 10) { interpretation = 'Suspicious / Pre-leukemic (CML)'; condition = 'Suspicious for CML'; severity = 'MODERATE'; }
             else { interpretation = 'CML-marked cells detected but below threshold'; }
 
             const cmlBreakdown = {};

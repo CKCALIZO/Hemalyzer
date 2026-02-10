@@ -7,38 +7,51 @@ export const generatePDF = (report) => {
 
     // --- Helper for Disease-Based Clinical Recommendations ---
     const getDiseaseRecommendations = (diseaseFindings, sickleCell) => {
-        const recommendations = [];
+        const abnormalLines = [];
+        const normalDiseases = [];
 
         // diseaseFindings is an array of disease objects
         if (diseaseFindings && Array.isArray(diseaseFindings)) {
             diseaseFindings.forEach(finding => {
+                const severity = finding.severity || 'NORMAL';
+                const label = finding.condition || finding.type || 'Unknown';
+
+                if (severity === 'NORMAL') {
+                    // Collect normal diseases for a single grouped line
+                    normalDiseases.push(label);
+                    return;
+                }
+
+                // Abnormal: show detailed recommendation
                 if (finding.recommendation) {
-                    // Use the pre-computed recommendation from AnalysisContext
-                    const severity = finding.severity || 'NORMAL';
-                    const prefix = severity === 'HIGH' ? '⚠️ ' : severity === 'MODERATE' ? '⚡ ' : '';
-                    recommendations.push(`${prefix}${finding.condition || finding.type}: ${finding.recommendation}`);
-                } else if (finding.severity && finding.severity !== 'NORMAL') {
+                    const icon = '-';
+                    abnormalLines.push(`${icon} ${label}: ${finding.recommendation}`);
+                } else {
                     // Fallback: Generate recommendation based on disease type and severity
                     const type = finding.type || '';
                     const pct = finding.percentage ? finding.percentage.toFixed(1) : '0';
 
                     if (type.includes('AML') || type.includes('ALL')) {
-                        if (finding.severity === 'HIGH') {
-                            recommendations.push(`Acute Leukemia (${pct}% blasts): Immediate hematologist referral. Bone marrow biopsy and cytogenetic testing recommended.`);
-                        } else if (finding.severity === 'MODERATE') {
-                            recommendations.push(`Suspicious Blasts (${pct}%): Close monitoring advised. Repeat CBC in 1-2 weeks.`);
+                        if (severity === 'HIGH') {
+                            abnormalLines.push(`- ${label} (${pct}% blasts): Immediate hematologist referral. Bone marrow biopsy and cytogenetic testing recommended.`);
+                        } else if (severity === 'MODERATE') {
+                            abnormalLines.push(`- ${label} (${pct}%): Close monitoring advised. Repeat CBC in 1-2 weeks.`);
+                        } else if (severity === 'LOW') {
+                            abnormalLines.push(`- ${label} (${pct}%): Reactive lymphocytosis possible. Repeat CBC in 2-4 weeks.`);
                         }
                     } else if (type.includes('CML')) {
-                        if (finding.severity === 'HIGH') {
-                            recommendations.push(`CML Detected (${pct}%): BCR-ABL testing required. Tyrosine kinase inhibitor therapy evaluation advised.`);
-                        } else if (finding.severity === 'MODERATE') {
-                            recommendations.push(`Early CML Pattern (${pct}%): Confirm with BCR-ABL testing. Monitor WBC trend. Follow-up in 2-4 weeks.`);
+                        if (severity === 'HIGH') {
+                            abnormalLines.push(`- ${label} (${pct}%): BCR-ABL testing required. Tyrosine kinase inhibitor therapy evaluation advised.`);
+                        } else if (severity === 'MODERATE') {
+                            abnormalLines.push(`- ${label} (${pct}%): Confirm with BCR-ABL testing. Monitor WBC trend. Follow-up in 2-4 weeks.`);
                         }
                     } else if (type.includes('CLL')) {
-                        if (finding.severity === 'HIGH') {
-                            recommendations.push(`CLL Detected (${pct}%): Immunophenotyping recommended. Regular monitoring every 3-6 months.`);
-                        } else if (finding.severity === 'MODERATE') {
-                            recommendations.push(`Early CLL Pattern (${pct}%): Observe and monitor. Repeat CBC in 3 months.`);
+                        if (severity === 'HIGH') {
+                            abnormalLines.push(`- ${label} (${pct}%): Immunophenotyping recommended. Regular monitoring every 3-6 months.`);
+                        } else if (severity === 'MODERATE') {
+                            abnormalLines.push(`- ${label} (${pct}%): Observe and monitor. Repeat CBC in 3 months.`);
+                        } else if (severity === 'LOW') {
+                            abnormalLines.push(`- ${label} (${pct}%): Reactive lymphocytosis possible. Repeat CBC in 2-4 weeks.`);
                         }
                     }
                 }
@@ -48,25 +61,36 @@ export const generatePDF = (report) => {
         // Sickle Cell Analysis
         if (sickleCell && sickleCell.percentage !== undefined && sickleCell.percentage >= 3) {
             if (sickleCell.recommendation) {
-                recommendations.push(`Sickle Cell: ${sickleCell.recommendation}`);
+                abnormalLines.push(`- Sickle Cell: ${sickleCell.recommendation}`);
             } else {
                 const sicklePct = sickleCell.percentage;
                 if (sicklePct > 30) {
-                    recommendations.push("Severe Sickle Cell Disease (HbSS): Comprehensive management required. Hydroxyurea therapy evaluation. Pain management protocols advised.");
+                    abnormalLines.push("- Severe Sickle Cell Disease (HbSS): Comprehensive management required. Hydroxyurea therapy evaluation. Pain management protocols advised.");
                 } else if (sicklePct >= 10) {
-                    recommendations.push("Moderate Sickling: Hemoglobin electrophoresis recommended. Avoid dehydration. Regular follow-up advised.");
+                    abnormalLines.push("- Moderate Sickling: Hemoglobin electrophoresis recommended. Avoid dehydration. Regular follow-up advised.");
                 } else if (sicklePct >= 3) {
-                    recommendations.push("Sickle Cell Trait (HbAS): Genetic counseling recommended. Avoid extreme exertion and altitude.");
+                    abnormalLines.push("- Sickle Cell Trait (HbAS): Genetic counseling recommended. Avoid extreme exertion and altitude.");
                 }
             }
         }
 
-        // Default if no significant findings
-        if (recommendations.length === 0) {
+        // Build final output
+        const lines = [];
+
+        if (abnormalLines.length > 0) {
+            abnormalLines.forEach(line => lines.push(line));
+        }
+
+        if (normalDiseases.length > 0) {
+            lines.push(`For Monitoring / Normal: ${normalDiseases.join(', ')}. No significant abnormalities detected.`);
+        }
+
+        // Default if no findings at all
+        if (lines.length === 0) {
             return "Blood parameters within normal limits. No significant hematological abnormalities detected. Continue routine health monitoring.";
         }
 
-        return recommendations.join(" | ");
+        return lines.join("\n");
     };
 
     doc.setFillColor(255, 0, 0); // Sets the color to pure red
@@ -233,6 +257,6 @@ export const generatePDF = (report) => {
     const patientMRN = report.patientData?.id || 'UNKNOWN';
     const patientName = report.patientData?.name ? report.patientData.name.replace(/[^a-zA-Z0-9]/g, '_') : 'Unknown_Patient';
     const filename = `Hemalyzer_${patientName}_${patientMRN}.pdf`;
-    
+
     doc.save(filename);
 };
