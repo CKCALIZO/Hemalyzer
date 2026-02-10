@@ -335,9 +335,9 @@ export const ProcessedImagesThumbnails = ({
                                         onClick={() => handleImageClick(img, idx)}
                                     >
                                         {/* Image header with thumbnail */}
-                                        <div className="flex items-center gap-3 mb-3">
+                                        <div className="flex flex-col items-center gap-2 mb-3">
                                             <div className="relative">
-                                                <div className="w-14 h-14 rounded-lg overflow-hidden border-2 border-rose-300">
+                                                <div className="w-16 h-16 rounded-lg overflow-hidden border-2 border-rose-300">
                                                     <img
                                                         src={img.annotatedImage ? `data:image/jpeg;base64,${img.annotatedImage}` : (img.preview || `data:image/jpeg;base64,${img.annotated}`)}
                                                         alt={`Image ${idx + 1}`}
@@ -349,8 +349,8 @@ export const ProcessedImagesThumbnails = ({
                                                     <span className="text-white text-xs font-bold">{idx + 1}</span>
                                                 </div>
                                             </div>
-                                            <div className="flex-1">
-                                                <p className="text-rose-900 font-semibold text-sm truncate">{img.filename || `Image ${idx + 1}`}</p>
+                                            <div className="w-full text-center overflow-hidden">
+                                                <p className="text-rose-900 font-semibold text-xs overflow-wrap break-word word-break break-all leading-tight" style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}>{img.filename || `Image ${idx + 1}`}</p>
                                                 <p className="text-rose-600 text-xs">Blood Smear Analysis</p>
                                             </div>
                                         </div>
@@ -453,7 +453,7 @@ export const ProcessedImagesThumbnails = ({
 
                         {/* Estimated Cell Counts (only after 10 images) */}
                         {estimates ? (
-                            <div className="mt-4 pt-3 border-t border-rose-200 bg-white rounded-lg p-4 border border-rose-100">
+                            <div className="mt-4 pt-3 border-t border-rose-200 bg-white rounded-lg p-4 border">
                                 <h4 className="text-rose-900 font-bold text-sm mb-3 flex items-center gap-2">
                                     <svg className="w-5 h-5 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -507,7 +507,7 @@ export const ProcessedImagesThumbnails = ({
                                 </div>
                             </div>
                         ) : (
-                            <div className="mt-4 pt-3 border-t border-rose-200 bg-amber-50 rounded-lg p-4 border border-amber-200">
+                            <div className="mt-4 pt-3 border-t border-rose-200 bg-amber-50 rounded-lg p-4 border">
                                 <p className="text-amber-800 text-sm flex items-center gap-2">
                                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -563,7 +563,7 @@ export const ProcessedImagesThumbnails = ({
                             </div>
                             <button
                                 onClick={closeModal}
-                                className="text-white hover:text-slate-300 transition-colors"
+                                className="text-black hover:text-slate-500 cursor-pointer transition-colors"
                             >
                                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

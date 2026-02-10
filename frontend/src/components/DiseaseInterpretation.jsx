@@ -26,8 +26,6 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                 return 'bg-amber-50 border-amber-500 text-amber-800';
             case 'LOW':
                 return 'bg-yellow-50 border-yellow-500 text-yellow-800';
-            case 'INFO':
-                return 'bg-slate-50 border-slate-400 text-slate-700';
             case 'NORMAL':
             default:
                 return 'bg-green-50 border-green-500 text-green-800';
@@ -42,8 +40,6 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                 return '!';
             case 'LOW':
                 return '•';
-            case 'INFO':
-                return 'i';
             case 'NORMAL':
             default:
                 return '✓';
@@ -67,7 +63,7 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                     <span className="font-mono font-semibold">{percentage}%</span>
                 </div>
                 <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
-                    <div 
+                    <div
                         className={`h-full ${getBarColor(percentage)} transition-all duration-300`}
                         style={{ width: `${Math.min(100, percentage)}%` }}
                     />
@@ -91,15 +87,14 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                     <h4 className="font-semibold text-slate-700 mb-3 text-sm">Overall Assessment</h4>
                     <div className="space-y-2">
                         {overallAssessment.map((item, idx) => (
-                            <div 
-                                key={idx} 
-                                className={`p-2 rounded border-l-4 text-sm ${
-                                    item.type === 'warning' 
+                            <div
+                                key={idx}
+                                className={`p-2 rounded border-l-4 text-sm ${item.type === 'warning'
                                         ? 'bg-amber-50 border-amber-400 text-amber-800'
                                         : item.type === 'finding'
-                                        ? getSeverityColor(item.severity)
-                                        : 'bg-slate-100 border-slate-400 text-slate-700'
-                                }`}
+                                            ? getSeverityColor(item.severity)
+                                            : 'bg-slate-100 border-slate-400 text-slate-700'
+                                    }`}
                             >
                                 <span>{item.message}</span>
                             </div>
@@ -116,8 +111,8 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                     </div>
                     <div className="p-4 space-y-4">
                         {leukemia.findings.map((finding, idx) => (
-                            <div 
-                                key={idx} 
+                            <div
+                                key={idx}
                                 className={`rounded-lg p-4 border-l-4 ${getSeverityColor(finding.severity)}`}
                             >
                                 <div className="flex items-start justify-between">
@@ -177,15 +172,15 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                             <div className="bg-slate-50 rounded-lg p-3">
                                 <p className="text-sm font-semibold text-slate-700 mb-2">Cell Type Distribution</p>
                                 <div className="space-y-2">
-                                    <PercentageBar 
+                                    <PercentageBar
                                         percentage={leukemia.disease_percentages.blast_cells?.percentage || 0}
                                         label={`Blast Cells (AML/ALL): ${leukemia.disease_percentages.blast_cells?.count || 0} cells`}
                                     />
-                                    <PercentageBar 
+                                    <PercentageBar
                                         percentage={leukemia.disease_percentages.granulocytes?.percentage || 0}
                                         label={`Granulocytes (CML): ${leukemia.disease_percentages.granulocytes?.count || 0} cells`}
                                     />
-                                    <PercentageBar 
+                                    <PercentageBar
                                         percentage={leukemia.disease_percentages.lymphocytes?.percentage || 0}
                                         label={`Lymphocytes (CLL): ${leukemia.disease_percentages.lymphocytes?.count || 0} cells`}
                                     />
@@ -256,14 +251,13 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                             {/* Percentage Bar */}
                             <div className="mt-4">
                                 <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
-                                    <div 
-                                        className={`h-full transition-all duration-300 ${
-                                            sickleCell.severity === 'HIGH' ? 'bg-red-500' :
+                                    <div
+                                        className={`h-full transition-all duration-300 ${sickleCell.severity === 'HIGH' ? 'bg-red-500' :
                                             sickleCell.severity === 'MODERATE' ? 'bg-amber-500' :
-                                            sickleCell.severity === 'LOW' ? 'bg-yellow-500' :
-                                            sickleCell.severity === 'INFO' ? 'bg-slate-500' :
-                                            'bg-green-500'
-                                        }`}
+                                                sickleCell.severity === 'LOW' ? 'bg-yellow-500' :
+                                                    'bg-green-500'
+                                            }`}
+
                                         style={{ width: `${Math.min(100, sickleCell.percentage * 50)}%` }}
                                     />
                                 </div>

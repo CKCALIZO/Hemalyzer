@@ -387,7 +387,7 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             cml_condition = f'5-19% CML cells ({cml_count} cells)'
         elif cml_count > 0:
             cml_interpretation = "Rare CML cells detected. Clinical correlation required."
-            cml_severity = 'INFO'
+            cml_severity = 'NORMAL'
             cml_condition = f'< 5% CML cells ({cml_count} cells)'
         
         if cml_interpretation:
@@ -429,7 +429,7 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             cll_condition = f'5-19% CLL cells ({cll_count} cells)'
         elif cll_count > 0:
             cll_interpretation = "Rare CLL cells detected. Clinical correlation required."
-            cll_severity = 'INFO'
+            cll_severity = 'Normal'
             cll_condition = f'< 5% CLL cells ({cll_count} cells)'
         
         if cll_interpretation:

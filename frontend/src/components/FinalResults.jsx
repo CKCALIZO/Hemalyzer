@@ -439,15 +439,15 @@ export const FinalResults = ({
                                 const pct = finding ? finding.percentage : 0;
                                 const sev = finding ? finding.severity : 'NORMAL';
                                 // Treat 'NORMAL' or 'INFO' as effectively 'Normal/Low concern' for styling - use Green
-                                const style = (pct === 0 || sev === 'NORMAL' || sev === 'INFO') ? 'bg-white border-green-200' : sev === 'HIGH' ? 'bg-red-50 border-red-300' : sev === 'MODERATE' ? 'bg-amber-50 border-amber-300' : 'bg-yellow-50 border-yellow-300';
-                                const textStyle = (pct === 0 || sev === 'NORMAL' || sev === 'INFO') ? 'text-green-600' : sev === 'HIGH' ? 'text-red-700' : 'text-amber-700';
+                                const style = (pct === 0 || sev === 'NORMAL') ? 'bg-white border-green-200' : sev === 'HIGH' ? 'bg-red-50 border-red-300' : sev === 'MODERATE' ? 'bg-amber-50 border-amber-300' : 'bg-yellow-50 border-yellow-300';
+                                const textStyle = (pct === 0 || sev === 'NORMAL') ? 'text-green-600' : sev === 'HIGH' ? 'text-red-700' : 'text-amber-700';
                                 const refData = diseaseInterprestationRef[diseaseType];
 
                                 return (
                                     <div key={diseaseType} className={`group relative rounded-lg border ${style} p-3 transition-all hover:shadow-md cursor-help`}>
                                         <div className="flex justify-between items-center mb-1">
                                             <h4 className="font-bold text-slate-800 text-sm">{diseaseType}</h4>
-                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/50 border">{sev === 'INFO' ? 'NORMAL' : sev}</span>
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/50 border">{sev}</span>
                                         </div>
                                         <p className={`text-2xl font-bold ${textStyle}`}>{pct.toFixed(2)}%</p>
                                         <p className="text-xs text-slate-500 mt-1 truncate">{finding ? finding.interpretation : 'Not Detected'}</p>
@@ -457,7 +457,7 @@ export const FinalResults = ({
                                             <p className="font-bold border-b border-slate-600 pb-1 mb-1">{diseaseType} Severity Scale</p>
                                             {refData.map((r, idx) => (
                                                 <div key={idx} className="flex justify-between mb-1 last:mb-0">
-                                                    <span className={`font-mono ${(sev === r.level.toUpperCase()) || ((sev === 'NORMAL' || sev === 'INFO') && r.level === 'Normal') ? 'text-yellow-400 font-bold' : 'text-slate-400'}`}>{r.range}</span>
+                                                    <span className={`font-mono ${(sev === r.level.toUpperCase()) || (sev === 'NORMAL' && r.level === 'Normal') ? 'text-yellow-400 font-bold' : 'text-slate-400'}`}>{r.range}</span>
                                                     <span className="text-right truncate ml-2">{r.level}</span>
                                                 </div>
                                             ))}

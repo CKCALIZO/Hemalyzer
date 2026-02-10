@@ -21,6 +21,18 @@ export const RegistrationForm = ({
     };
 
     /**
+     * Handle age input - only accept digits, max 2 digits (0-99)
+     */
+    const handleAgeChange = (e) => {
+        const value = e.target.value;
+        // Only allow digits and limit to 2 characters
+        const digitsOnly = value.replace(/\D/g, '').slice(0, 2);
+        // Ensure value is between 0-99
+        const ageValue = digitsOnly ? Math.min(parseInt(digitsOnly, 10), 99) : '';
+        setPatientAge(ageValue);
+    };
+
+    /**
      * Get the current date prefix and storage key for MRN generation
      */
     const getDateInfo = () => {
@@ -235,13 +247,12 @@ export const RegistrationForm = ({
                         <input
                             id="patientAge"
                             name="patientAge"
-                            type="number"
+                            type="text"
+                            inputMode="numeric"
                             required
-                            min="0"
-                            max="120"
                             autoComplete="off"
                             value={patientAge}
-                            onChange={(e) => setPatientAge(e.target.value)}
+                            onChange={handleAgeChange}
                             className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-rose-500 outline-none transition-all"
                             placeholder="Age"
                         />
