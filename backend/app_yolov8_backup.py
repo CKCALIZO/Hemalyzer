@@ -722,8 +722,8 @@ def test_detection():
 if __name__ == '__main__':
     # Initialize models before starting server
     if initialize_models():
-        print("\n🚀 Starting Flask server on http://localhost:5000")
-        app.run(debug=True, host='0.0.0.0', port=5000)
+        print("\n🚀 Starting Flask server on http://localhost:8000")
+        app.run(debug=True, host='0.0.0.0', port=8000)
     else:
         print("\n❌ Failed to initialize models. Server not started.")
         sys.exit(1)

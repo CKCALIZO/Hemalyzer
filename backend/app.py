@@ -2233,7 +2233,7 @@ def classification_basis():
                     'neck': 'Enhanced Feature Pyramid Network (FPN)',
                     'head': 'Decoupled detection head',
                     'input_size': '640x640',
-                    'training_images': 5000
+                    'training_images': 8000
                 }
             },
             'classification_stage': {
@@ -2403,6 +2403,6 @@ if __name__ == '__main__':
         print("ConvNeXt model not loaded - classification will be disabled")
     print("="*60)
     
-    print("\nStarting Flask server on http://localhost:5000\n")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    print("\nStarting Flask server on http://localhost:8000\n")
+    app.run(debug=True, host='0.0.0.0', port=8000)
     
