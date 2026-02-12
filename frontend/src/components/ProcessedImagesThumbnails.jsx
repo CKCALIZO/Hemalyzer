@@ -17,6 +17,75 @@ const SHORT_LABELS = {
     'Sickle Cell Anemia': 'SCA'
 };
 
+// Bar chart class order and colors
+const BAR_CLASSES = [
+    { key: 'Normal WBC', label: 'Normal', color: 'bg-green-500', text: 'text-green-700' },
+    { key: 'Acute Lymphoblastic Leukemia', label: 'ALL', color: 'bg-purple-500', text: 'text-purple-700' },
+    { key: 'Acute Myeloid Leukemia', label: 'AML', color: 'bg-red-500', text: 'text-red-700' },
+    { key: 'Chronic Lymphocytic Leukemia', label: 'CLL', color: 'bg-orange-500', text: 'text-orange-700' },
+    { key: 'Chronic Myeloid Leukemia', label: 'CML', color: 'bg-amber-500', text: 'text-amber-700' },
+    { key: 'Sickle Cell Anemia', label: 'SCA', color: 'bg-rose-500', text: 'text-rose-700' },
+];
+
+// Determine per-image severity based on disease cell ratio
+const getImageSeverity = (breakdown) => {
+    if (!breakdown || breakdown.totalWBC === 0) return { level: 'Normal', color: 'bg-green-100 text-green-700 border-green-300', icon: '✓' };
+    const diseaseCount = breakdown.diseaseWBCs.reduce((s, d) => s + d.count, 0);
+    const diseasePercent = (diseaseCount / breakdown.totalWBC) * 100;
+    if (diseasePercent >= 20) return { level: 'Critical', color: 'bg-red-100 text-red-700 border-red-300', icon: '❗' };
+    if (diseasePercent > 0) return { level: 'Abnormal', color: 'bg-amber-100 text-amber-700 border-amber-300', icon: '⚠' };
+    return { level: 'Normal', color: 'bg-green-100 text-green-700 border-green-300', icon: '✓' };
+};
+
+// Calculate combined average confidence for all classified WBCs in an image
+const getAverageConfidence = (classifications) => {
+    if (!classifications || classifications.length === 0) return 0;
+    const confs = classifications.map(c => c.classification_confidence || c.confidence || 0).filter(c => c > 0);
+    if (confs.length === 0) return 0;
+    return confs.reduce((a, b) => a + b, 0) / confs.length;
+};
+
+// Calculate average confidence PER CLASS for all classified WBCs in an image
+const getPerClassConfidence = (classifications) => {
+    if (!classifications || classifications.length === 0) return [];
+    const groups = {};
+    classifications.forEach(c => {
+        const cls = c.classification || 'Unknown';
+        const conf = c.classification_confidence || c.confidence || 0;
+        if (conf <= 0) return;
+        if (!groups[cls]) groups[cls] = [];
+        groups[cls].push(conf);
+    });
+    // Map to BAR_CLASSES for consistent display, sorted by avgConf highest to lowest
+    return BAR_CLASSES
+        .filter(bc => groups[bc.key])
+        .map(bc => ({
+            key: bc.key,
+            label: bc.label,
+            color: bc.color,
+            text: bc.text,
+            count: groups[bc.key].length,
+            avgConf: groups[bc.key].reduce((a, b) => a + b, 0) / groups[bc.key].length
+        }))
+        .sort((a, b) => b.avgConf - a.avgConf);
+};
+
+// Build percentage breakdown for bar chart (all 6 classes)
+const getClassPercentages = (classifications) => {
+    if (!classifications || classifications.length === 0) return BAR_CLASSES.map(c => ({ ...c, count: 0, pct: 0 }));
+    const counts = {};
+    classifications.forEach(cls => {
+        const t = cls.classification || '';
+        counts[t] = (counts[t] || 0) + 1;
+    });
+    const total = classifications.length;
+    return BAR_CLASSES.map(c => ({
+        ...c,
+        count: counts[c.key] || 0,
+        pct: total > 0 ? ((counts[c.key] || 0) / total) * 100 : 0
+    }));
+};
+
 /**
  * ProcessedImagesThumbnails Component
  * Displays a clickable thumbnail bar of all processed images
@@ -241,48 +310,51 @@ export const ProcessedImagesThumbnails = ({
                                             </div>
                                         </div>
 
-                                        {/* WBC Classification - Normal vs Disease */}
+                                        {/* Severity Badge + Confidence */}
+                                        {(() => {
+                                            const severity = getImageSeverity(breakdown);
+                                            const avgConf = getAverageConfidence(classifications);
+                                            return (
+                                                <>
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full border ${severity.color}`}>
+                                                            {severity.icon} {severity.level}
+                                                        </span>
+                                                        {avgConf > 0 && (
+                                                            <span className="text-xs text-slate-500" title="Average classification confidence">
+                                                                Conf: <span className="font-semibold text-slate-700">{(avgConf * 100).toFixed(1)}%</span>
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </>
+                                            );
+                                        })()}
+
+                                        {/* WBC Classification Bar Chart */}
                                         {(breakdown && breakdown.totalWBC > 0) ? (
                                             <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
                                                 <p className="text-slate-600 text-xs mb-2 font-medium">WBC Classification</p>
                                                 <div className="space-y-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-green-600 text-xs w-14 font-medium">Normal</span>
-                                                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
-                                                            <div
-                                                                className="h-full bg-green-500 transition-all duration-500"
-                                                                style={{ width: `${breakdown.totalWBC > 0 ? (breakdown.normalWBC / breakdown.totalWBC) * 100 : 0}%` }}
-                                                            />
-                                                        </div>
-                                                        <span className="text-slate-700 text-xs font-medium w-6 text-right">
-                                                            {breakdown.normalWBC}
-                                                        </span>
-                                                    </div>
-                                                    {breakdown.diseaseWBCs.map((d, i) => {
-                                                        const pct = breakdown.totalWBC > 0 ? (d.count / breakdown.totalWBC) * 100 : 0;
+                                                    {[...getClassPercentages(classifications)].sort((a, b) => b.pct - a.pct).map((cls) => {
                                                         return (
-                                                            <div key={i} className="flex items-center gap-2">
-                                                                <span className="text-red-600 text-xs w-14 font-medium truncate" title={d.type}>
-                                                                    {d.type.replace('Acute Lymphoblastic Leukemia', 'ALL')
-                                                                        .replace('Acute Myeloid Leukemia', 'AML')
-                                                                        .replace('Chronic Lymphocytic Leukemia', 'CLL')
-                                                                        .replace('Chronic Myeloid Leukemia', 'CML')
-                                                                        .replace('Sickle Cell Anemia', 'SCA')}
+                                                            <div key={cls.key} className="flex items-center gap-1.5">
+                                                                <span className={`${cls.text} text-[10px] w-12 font-semibold truncate`} title={cls.key}>
+                                                                    {cls.label}
                                                                 </span>
                                                                 <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                                                                     <div
-                                                                        className="h-full bg-red-500 transition-all duration-500"
-                                                                        style={{ width: `${pct}%` }}
+                                                                        className={`h-full ${cls.color} transition-all duration-500`}
+                                                                        style={{ width: `${cls.pct}%` }}
                                                                     />
                                                                 </div>
-                                                                <span className="text-slate-700 text-xs font-medium w-6 text-right">
-                                                                    {d.count}
+                                                                <span className="text-slate-600 text-[10px] font-medium w-10 text-right">
+                                                                    {cls.pct.toFixed(0)}%
                                                                 </span>
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
-                                                {/* Disease indicator */}
+                                                {/* Disease alert row */}
                                                 {breakdown.diseaseWBCs.length > 0 && (
                                                     <div className="mt-2 pt-2 border-t border-slate-200">
                                                         <div className="flex items-center gap-1 text-red-500 text-xs">
@@ -405,19 +477,13 @@ export const ProcessedImagesThumbnails = ({
                         )}
 
                         {/* Cell Type Legend */}
-                        <div className="mt-4 pt-3 border-t border-rose-200 flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-600">
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-green-500 shadow-sm"></span>
-                                <span>Normal WBC</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-red-500 shadow-sm"></span>
-                                <span>Disease</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-cyan-500 shadow-sm"></span>
-                                <span>Normal RBC</span>
-                            </div>
+                        <div className="mt-4 pt-3 border-t border-rose-200 flex flex-wrap justify-center gap-4 text-xs font-medium text-slate-600">
+                            {BAR_CLASSES.map(cls => (
+                                <div key={cls.key} className="flex items-center gap-1.5">
+                                    <span className={`w-3 h-3 rounded-full ${cls.color} shadow-sm`}></span>
+                                    <span>{cls.label}</span>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 )}
@@ -493,19 +559,73 @@ export const ProcessedImagesThumbnails = ({
                                         </table>
                                     </div>
 
-                                    {/* WBC Breakdown */}
+                                    {/* WBC Classification with Severity, Confidence & Bar Chart */}
                                     {(() => {
-                                        // Check multiple possible field names for backward compatibility
                                         const classifications = selectedImage.wbcClassifications || selectedImage.classifications || selectedImage.results?.wbc_classifications || selectedImage.results?.stage2_classification || [];
                                         if (!classifications || classifications.length === 0) return null;
 
                                         const breakdown = getWBCBreakdown(classifications);
                                         if (!breakdown) return null;
 
+                                        const severity = getImageSeverity(breakdown);
+                                        const avgConf = getAverageConfidence(classifications);
+                                        const classPcts = getClassPercentages(classifications);
+                                        const diseaseTotal = breakdown.diseaseWBCs.reduce((s, d) => s + d.count, 0);
+                                        const perClassConf = getPerClassConfidence(classifications);
+
                                         return (
                                             <div className="bg-blue-50 rounded-lg p-4 mb-4">
-                                                <h5 className="font-semibold text-blue-800 mb-3">WBC Classification Summary</h5>
+                                                {/* Header: Title + Severity Badge + Confidence */}
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <h5 className="font-semibold text-blue-800">WBC Classification Summary</h5>
+                                                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${severity.color}`}>
+                                                        {severity.icon} {severity.level}
+                                                    </span>
+                                                </div>
                                                 
+                                                {/* Combined Confidence */}
+                                                {avgConf > 0 && (
+                                                    <div className="mb-3 flex items-center gap-2">
+                                                        <span className="text-xs text-slate-500">Avg. Confidence:</span>
+                                                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                            <div className={`h-full rounded-full transition-all duration-500 ${
+                                                                avgConf >= 0.8 ? 'bg-green-500' : avgConf >= 0.6 ? 'bg-amber-500' : 'bg-red-500'
+                                                            }`} style={{ width: `${avgConf * 100}%` }} />
+                                                        </div>
+                                                        <span className={`text-xs font-bold ${
+                                                            avgConf >= 0.8 ? 'text-green-700' : avgConf >= 0.6 ? 'text-amber-700' : 'text-red-700'
+                                                        }`}>{(avgConf * 100).toFixed(1)}%</span>
+                                                    </div>
+                                                )}
+
+                                                {/* Per-Class Average Confidence */}
+                                                {perClassConf.length > 0 && (
+                                                    <div className="mb-3 bg-white rounded-lg p-3 border border-blue-200">
+                                                        <p className="text-xs font-semibold text-slate-600 mb-2">Average Confidence per Class</p>
+                                                        <div className="space-y-1.5">
+                                                            {perClassConf.map(cls => (
+                                                                <div key={cls.key} className="flex items-center gap-2">
+                                                                    <span className={`${cls.text} text-xs w-14 font-semibold`}>{cls.label}</span>
+                                                                    <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                                        <div
+                                                                            className={`h-full rounded-full transition-all duration-500 ${
+                                                                                cls.avgConf >= 0.8 ? 'bg-green-500' : cls.avgConf >= 0.6 ? 'bg-amber-500' : 'bg-red-400'
+                                                                            }`}
+                                                                            style={{ width: `${cls.avgConf * 100}%` }}
+                                                                        />
+                                                                    </div>
+                                                                    <span className={`text-xs font-bold w-12 text-right ${
+                                                                        cls.avgConf >= 0.8 ? 'text-green-700' : cls.avgConf >= 0.6 ? 'text-amber-700' : 'text-red-600'
+                                                                    }`}>
+                                                                        {(cls.avgConf * 100).toFixed(1)}%
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-400">({cls.count})</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* Normal vs Disease Summary */}
                                                 <div className="grid grid-cols-2 gap-3 mb-3">
                                                     <div className="bg-green-50 rounded-lg p-3 border border-green-200 text-center">
@@ -516,25 +636,46 @@ export const ProcessedImagesThumbnails = ({
                                                         </p>
                                                     </div>
                                                     <div className={`rounded-lg p-3 border text-center ${
-                                                        breakdown.diseaseWBCs.length > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'
+                                                        diseaseTotal > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'
                                                     }`}>
                                                         <p className={`text-xs font-medium mb-1 ${
-                                                            breakdown.diseaseWBCs.length > 0 ? 'text-red-700' : 'text-slate-600'
+                                                            diseaseTotal > 0 ? 'text-red-700' : 'text-slate-600'
                                                         }`}>Disease Cells</p>
                                                         <p className={`text-xl font-bold ${
-                                                            breakdown.diseaseWBCs.length > 0 ? 'text-red-800' : 'text-slate-700'
-                                                        }`}>{breakdown.diseaseWBCs.reduce((s, d) => s + d.count, 0)}</p>
+                                                            diseaseTotal > 0 ? 'text-red-800' : 'text-slate-700'
+                                                        }`}>{diseaseTotal}</p>
                                                         <p className={`text-xs ${
-                                                            breakdown.diseaseWBCs.length > 0 ? 'text-red-600' : 'text-slate-500'
+                                                            diseaseTotal > 0 ? 'text-red-600' : 'text-slate-500'
                                                         }`}>
-                                                            {breakdown.totalWBC > 0 ? ((breakdown.diseaseWBCs.reduce((s, d) => s + d.count, 0) / breakdown.totalWBC) * 100).toFixed(1) : 0}%
+                                                            {breakdown.totalWBC > 0 ? ((diseaseTotal / breakdown.totalWBC) * 100).toFixed(1) : 0}%
                                                         </p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Full Bar Chart Breakdown */}
+                                                <div className="bg-white rounded-lg p-3 border border-blue-200 mb-3">
+                                                    <p className="text-xs font-semibold text-slate-600 mb-2">Classification Breakdown</p>
+                                                    <div className="space-y-1.5">
+                                                        {[...classPcts].sort((a, b) => b.pct - a.pct).map((cls) => (
+                                                            <div key={cls.key} className="flex items-center gap-2">
+                                                                <span className={`${cls.text} text-xs w-14 font-semibold`}>{cls.label}</span>
+                                                                <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                                                                    <div
+                                                                        className={`h-full ${cls.color} transition-all duration-500 rounded-full`}
+                                                                        style={{ width: `${cls.pct}%` }}
+                                                                    />
+                                                                </div>
+                                                                <span className="text-slate-700 text-xs font-medium w-14 text-right">
+                                                                    {cls.count > 0 ? `${cls.count} (${cls.pct.toFixed(1)}%)` : '0'}
+                                                                </span>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
 
                                                 {/* Disease WBCs Expandable */}
                                                 {breakdown.diseaseWBCs.length > 0 && (
-                                                    <div className="mt-3 pt-3 border-t border-blue-200">
+                                                    <div className="pt-3 border-t border-blue-200">
                                                         <button
                                                             onClick={() => setShowDiseaseWBCs(!showDiseaseWBCs)}
                                                             className="w-full flex items-center justify-between px-3 py-2 bg-red-100 hover:bg-red-200 text-red-800 rounded-lg transition-colors"
@@ -546,7 +687,7 @@ export const ProcessedImagesThumbnails = ({
                                                                 Disease Cells (Detailed)
                                                             </span>
                                                             <span className="bg-red-600 text-white px-2 py-1 rounded text-xs font-bold">
-                                                                {breakdown.diseaseWBCs.reduce((sum, d) => sum + d.count, 0)}
+                                                                {diseaseTotal}
                                                             </span>
                                                         </button>
 

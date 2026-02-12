@@ -79,7 +79,7 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                Disease Interpretation
+                Classification Analysis
             </h3>
 
             {/* Overall Assessment Summary */}
@@ -253,11 +253,11 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
 
             {/* Reference Note */}
             <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-sm">
-                <p className="font-semibold text-slate-700">Clinical Disclaimer</p>
+                <p className="font-semibold text-slate-700">Disclaimer</p>
                 <p className="text-slate-600 text-xs mt-1">
-                    This analysis is based on automated cell classification and threshold comparisons.
-                    Results should be verified by a qualified hematologist. Additional diagnostic tests
-                    (bone marrow biopsy, genetic testing, flow cytometry) may be required for confirmation.
+                    This analysis is based on automated cell classification and established threshold comparisons.
+                    All results represent classification outputs and should be verified by a qualified professional
+                    before any clinical interpretation.
                 </p>
             </div>
         </div>

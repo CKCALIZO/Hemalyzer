@@ -27,6 +27,11 @@ from disease_thresholds import (
     RECOMMENDED_FIELDS,
     EXPECTED_CELLS_PER_ANALYSIS,
     DISEASE_THRESHOLDS,
+    AML_CLASSIFICATION_THRESHOLDS,
+    ALL_CLASSIFICATION_THRESHOLDS,
+    CML_CLASSIFICATION_THRESHOLDS,
+    CLL_CLASSIFICATION_THRESHOLDS,
+    OVERALL_CLASSIFICATION_THRESHOLDS,
     MINIMUM_CELLS_FOR_DIAGNOSIS,
     HEMOCYTOMETER_CONSTANTS,
     ESTIMATED_COUNT_CONSTANTS,
@@ -58,12 +63,6 @@ CORS(app)  # Enable CORS for React frontend
 # calculate_confidence_interval() - now in calculations.py
 # assess_sample_adequacy() - now in calculations.py
 # Disease thresholds - now in disease_thresholds.py
-
-
-# ============================================================
-# DISEASE INTERPRETATION FUNCTION (Simplified for 7-class ConvNeXt)
-# Classes: Normal WBC, Normal RBC, AML, ALL, CML, CLL, Sickle Cell Anemia
-# ============================================================
 
 def interpret_disease_classification(wbc_classifications, rbc_classifications, cell_counts, fields_analyzed=1):
     """
@@ -175,156 +174,151 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
             'total_wbc_analyzed': total_wbc
         }
         
-        # Disease findings
+        # Disease findings - clinically established disease-specific thresholds
         leukemia_findings = []
         
-        # AML Analysis
-        if aml_count > 0:
-            aml_pct = (aml_count / total_wbc) * 100
-            aml_thresholds = DISEASE_THRESHOLDS['acute_leukemia']
-            if aml_pct >= 20:
-                leukemia_findings.append({
-                    'type': 'Acute Myeloid Leukemia (AML)',
-                    'count': aml_count,
-                    'percentage': round(aml_pct, 1),
-                    'interpretation': aml_thresholds['acute_leukemia']['interpretation'],
-                    'severity': 'HIGH',
-                    'condition': '>= 20% blasts'
-                })
-            elif aml_pct >= 11:
-                leukemia_findings.append({
-                    'type': 'Acute Myeloid Leukemia (AML)',
-                    'count': aml_count,
-                    'percentage': round(aml_pct, 1),
-                    'interpretation': aml_thresholds['suspicious']['interpretation'],
-                    'severity': 'MODERATE',
-                    'condition': '11-19% blasts'
-                })
-            elif aml_pct >= 6:
-                leukemia_findings.append({
-                    'type': 'Acute Myeloid Leukemia (AML)',
-                    'count': aml_count,
-                    'percentage': round(aml_pct, 1),
-                    'interpretation': aml_thresholds['slightly_increased']['interpretation'],
-                    'severity': 'LOW',
-                    'condition': '6-10% blasts'
-                })
+        def classify_aml(type_count, total):
+            """Apply AML classification thresholds: >=20% blasts = Blast Phase."""
+            if type_count == 0:
+                return None
+            pct = (type_count / total) * 100
+            if pct >= 20:
+                severity = 'HIGH'
+                interp = AML_CLASSIFICATION_THRESHOLDS['blast_phase']['interpretation']
+                condition = 'Blast Phase (≥ 20% blasts)'
             else:
-                leukemia_findings.append({
-                    'type': 'Acute Myeloid Leukemia (AML)',
-                    'count': aml_count,
-                    'percentage': round(aml_pct, 1),
-                    'interpretation': 'AML cells detected at low levels',
-                    'severity': 'NORMAL',
-                    'condition': '< 6% blasts'
-                })
+                severity = 'BELOW_THRESHOLD'
+                interp = AML_CLASSIFICATION_THRESHOLDS['below_threshold']['interpretation']
+                condition = f'Below classification threshold ({pct:.1f}% blasts)'
+            return {
+                'type': 'Acute Myeloid Leukemia (AML)',
+                'count': type_count,
+                'percentage': round(pct, 1),
+                'interpretation': interp,
+                'severity': severity,
+                'condition': condition
+            }
         
-        # ALL Analysis  
-        if all_count > 0:
-            all_pct = (all_count / total_wbc) * 100
-            all_thresholds = DISEASE_THRESHOLDS['acute_leukemia']
-            if all_pct >= 20:
-                leukemia_findings.append({
-                    'type': 'Acute Lymphoblastic Leukemia (ALL)',
-                    'count': all_count,
-                    'percentage': round(all_pct, 1),
-                    'interpretation': all_thresholds['acute_leukemia']['interpretation'],
-                    'severity': 'HIGH',
-                    'condition': '>= 20% blasts'
-                })
-            elif all_pct >= 11:
-                leukemia_findings.append({
-                    'type': 'Acute Lymphoblastic Leukemia (ALL)',
-                    'count': all_count,
-                    'percentage': round(all_pct, 1),
-                    'interpretation': all_thresholds['suspicious']['interpretation'],
-                    'severity': 'MODERATE',
-                    'condition': '11-19% blasts'
-                })
-            elif all_pct >= 6:
-                leukemia_findings.append({
-                    'type': 'Acute Lymphoblastic Leukemia (ALL)',
-                    'count': all_count,
-                    'percentage': round(all_pct, 1),
-                    'interpretation': all_thresholds['slightly_increased']['interpretation'],
-                    'severity': 'LOW',
-                    'condition': '6-10% blasts'
-                })
+        def classify_all(type_count, total):
+            """Apply ALL classification thresholds: >=20% lymphoblasts = classification threshold."""
+            if type_count == 0:
+                return None
+            pct = (type_count / total) * 100
+            if pct >= 20:
+                severity = 'HIGH'
+                interp = ALL_CLASSIFICATION_THRESHOLDS['lymphoblast_phase']['interpretation']
+                condition = 'Lymphoblast Phase (≥ 20% lymphoblasts)'
             else:
-                leukemia_findings.append({
-                    'type': 'Acute Lymphoblastic Leukemia (ALL)',
-                    'count': all_count,
-                    'percentage': round(all_pct, 1),
-                    'interpretation': 'ALL cells detected at low levels',
-                    'severity': 'NORMAL',
-                    'condition': '< 6% blasts'
-                })
+                severity = 'BELOW_THRESHOLD'
+                interp = ALL_CLASSIFICATION_THRESHOLDS['below_threshold']['interpretation']
+                condition = f'Below classification threshold ({pct:.1f}% lymphoblasts)'
+            return {
+                'type': 'Acute Lymphoblastic Leukemia (ALL)',
+                'count': type_count,
+                'percentage': round(pct, 1),
+                'interpretation': interp,
+                'severity': severity,
+                'condition': condition
+            }
+        
+        def classify_cml(type_count, total):
+            """Apply CML phase-based thresholds: <10% Chronic, 10-19% Accelerated, >=20% Blast."""
+            if type_count == 0:
+                return None
+            pct = (type_count / total) * 100
+            if pct >= 20:
+                severity = 'HIGH'
+                interp = CML_CLASSIFICATION_THRESHOLDS['blast_phase']['interpretation']
+                condition = 'Blast Phase / Blast Crisis (≥ 20% blasts)'
+            elif pct >= 10:
+                severity = 'MODERATE'
+                interp = CML_CLASSIFICATION_THRESHOLDS['accelerated_phase']['interpretation']
+                condition = 'Accelerated Phase (10-19% blasts)'
+            else:
+                severity = 'LOW'
+                interp = CML_CLASSIFICATION_THRESHOLDS['chronic_phase']['interpretation']
+                condition = f'Chronic Phase (< 10% blasts)'
+            return {
+                'type': 'Chronic Myeloid Leukemia (CML)',
+                'count': type_count,
+                'percentage': round(pct, 1),
+                'interpretation': interp,
+                'severity': severity,
+                'condition': condition
+            }
+        
+        def classify_cll(type_count, total):
+            """Apply CLL lymphocyte proportion thresholds: 40-50% Suspicious, 50-70% Typical, >70% Advanced."""
+            if type_count == 0:
+                return None
+            pct = (type_count / total) * 100
+            if pct > 70:
+                severity = 'HIGH'
+                interp = CLL_CLASSIFICATION_THRESHOLDS['advanced_cll']['interpretation']
+                condition = 'Advanced/Untreated CLL (> 70% abnormal lymphocytes)'
+            elif pct >= 50:
+                severity = 'MODERATE'
+                interp = CLL_CLASSIFICATION_THRESHOLDS['typical_cll']['interpretation']
+                condition = 'Typical CLL (50-70% abnormal lymphocytes)'
+            elif pct >= 40:
+                severity = 'LOW'
+                interp = CLL_CLASSIFICATION_THRESHOLDS['suspicious_lymphocytosis']['interpretation']
+                condition = 'Suspicious Lymphocytosis (40-50%)'
+            else:
+                severity = 'BELOW_THRESHOLD'
+                interp = CLL_CLASSIFICATION_THRESHOLDS['below_suspicious']['interpretation']
+                condition = f'Below suspicious threshold ({pct:.1f}%)'
+            return {
+                'type': 'Chronic Lymphocytic Leukemia (CLL)',
+                'count': type_count,
+                'percentage': round(pct, 1),
+                'interpretation': interp,
+                'severity': severity,
+                'condition': condition
+            }
+        
+        # AML Analysis
+        finding = classify_aml(aml_count, total_wbc)
+        if finding:
+            leukemia_findings.append(finding)
+        
+        # ALL Analysis
+        finding = classify_all(all_count, total_wbc)
+        if finding:
+            leukemia_findings.append(finding)
         
         # CML Analysis
-        if cml_count > 0:
-            cml_pct = (cml_count / total_wbc) * 100
-            cml_thresholds = DISEASE_THRESHOLDS['cml']
-            if cml_pct >= 90:
-                severity = 'HIGH'
-                interp = cml_thresholds['accelerated']['interpretation']
-                condition = '> 90% CML cells'
-            elif cml_pct >= 76:
-                severity = 'MODERATE'
-                interp = cml_thresholds['early_cml']['interpretation']
-                condition = '76-89% CML cells'
-            elif cml_pct >= 60:
-                severity = 'LOW'
-                interp = cml_thresholds['reactive']['interpretation']
-                condition = '60-75% CML cells'
-            else:
-                severity = 'NORMAL'
-                interp = 'CML cells detected at low levels'
-                condition = f'< 60% CML cells ({cml_count} cells)'
-            
-            leukemia_findings.append({
-                'type': 'Chronic Myeloid Leukemia (CML)',
-                'count': cml_count,
-                'percentage': round(cml_pct, 1),
-                'interpretation': interp,
-                'severity': severity,
-                'condition': condition
-            })
+        finding = classify_cml(cml_count, total_wbc)
+        if finding:
+            leukemia_findings.append(finding)
         
         # CLL Analysis
-        if cll_count > 0:
-            cll_pct = (cll_count / total_wbc) * 100
-            cll_thresholds = DISEASE_THRESHOLDS['cll']
-            if cll_pct >= 80:
-                severity = 'HIGH'
-                interp = cll_thresholds['advanced_cll']['interpretation']
-                condition = '> 80% CLL cells'
-            elif cll_pct >= 51:
-                severity = 'MODERATE'
-                interp = cll_thresholds['early_cll']['interpretation']
-                condition = '51-79% CLL cells'
-            elif cll_pct >= 35:
-                severity = 'LOW'
-                interp = cll_thresholds['reactive']['interpretation']
-                condition = '35-50% CLL cells'
-            else:
-                severity = 'NORMAL'
-                interp = 'CLL cells detected at low levels'
-                condition = f'< 35% CLL cells ({cll_count} cells)'
-            
-            leukemia_findings.append({
-                'type': 'Chronic Lymphocytic Leukemia (CLL)',
-                'count': cll_count,
-                'percentage': round(cll_pct, 1),
-                'interpretation': interp,
-                'severity': severity,
-                'condition': condition
-            })
+        finding = classify_cll(cll_count, total_wbc)
+        if finding:
+            leukemia_findings.append(finding)
+        
+        # Overall Normal vs Disease classification
+        overall_classification = 'normal'
+        if normal_pct >= 95:
+            overall_classification = 'normal'
+            overall_interp = OVERALL_CLASSIFICATION_THRESHOLDS['normal']['interpretation']
+        elif normal_pct >= 85:
+            overall_classification = 'low'
+            overall_interp = OVERALL_CLASSIFICATION_THRESHOLDS['low']['interpretation']
+        elif normal_pct >= 70:
+            overall_classification = 'moderate'
+            overall_interp = OVERALL_CLASSIFICATION_THRESHOLDS['moderate']['interpretation']
+        else:
+            overall_classification = 'high'
+            overall_interp = OVERALL_CLASSIFICATION_THRESHOLDS['high']['interpretation']
         
         interpretation['leukemia_analysis'] = {
             'findings': leukemia_findings,
             'normal_wbc_percentage': round(normal_pct, 1),
             'disease_wbc_percentage': round(disease_pct, 1),
             'total_wbc_analyzed': total_wbc,
+            'overall_classification': overall_classification,
+            'overall_interpretation': overall_interp,
             'classification_counts': {
                 'Normal WBC': normal_wbc_count,
                 'AML': aml_count,
@@ -338,7 +332,7 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
     if interpretation['sample_adequacy']['confidence_level'] == 'very_low':
         interpretation['overall_assessment'].append({
             'type': 'warning',
-            'message': 'Insufficient sample size for reliable diagnosis. Results are preliminary.'
+            'message': 'Insufficient sample size for reliable classification. Results are preliminary.'
         })
     
     if sickle_count > 0:
@@ -457,25 +451,36 @@ MODEL_ID = "hema-dci5u/1"  # Enhanced YOLOv8-NAS model
 # HELPER FUNCTIONS
 # ============================================================
 
+# Legend mapping for numbered annotations on the image
+ANNOTATION_LEGEND = {
+    'Normal WBC': '1',
+    'Normal RBC': '1',
+    'Acute Myeloid Leukemia': '2',
+    'Acute Lymphoblastic Leukemia': '3',
+    'Chronic Lymphocytic Leukemia': '4',
+    'Chronic Myeloid Leukemia': '5',
+    'Sickle Cell Anemia': '6',
+}
+
 def _get_short_label(classification):
-    """Get a short label for bounding box display from the full classification name."""
+    """Get a numbered label for bounding box display from the full classification name."""
     cls_lower = classification.lower()
     if 'normal wbc' in cls_lower:
-        return 'Normal'
-    elif 'acute lymphoblastic' in cls_lower:
-        return 'ALL'
+        return '1'
     elif 'acute myeloid' in cls_lower:
-        return 'AML'
+        return '2'
+    elif 'acute lymphoblastic' in cls_lower:
+        return '3'
     elif 'chronic lymphocytic' in cls_lower:
-        return 'CLL'
+        return '4'
     elif 'chronic myeloid' in cls_lower:
-        return 'CML'
+        return '5'
     elif 'sickle' in cls_lower:
-        return 'SCA'
+        return '6'
     elif 'normal rbc' in cls_lower:
-        return 'Normal'
+        return '1'
     else:
-        return classification[:10]  # Fallback: first 10 chars
+        return '?'  # Fallback
 
 
 # ============================================================
@@ -496,10 +501,15 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         - Purpose: Initial cell detection and total cell counting
     
     STAGE 2 - ConvNeXt Classification:
-        - Classifies each detected WBC into specific types:
-          (Neutrophil, Lymphocyte, Monocyte, Eosinophil, Basophil, or disease types)
+        - Classifies each detected WBC into: Normal WBC, AML, ALL, CML, CLL
         - Classifies RBCs to detect Sickle Cells (>=95% confidence threshold)
-        - Purpose: WBC differential count and sickle cell detection
+        - Purpose: WBC disease classification and sickle cell detection
+    
+    BOUNDING BOX COLORS:
+    - RBC / SCA: Red
+    - Normal WBC: Green
+    - Disease WBC (AML, ALL, CML, CLL): Blue
+    - Platelets: Yellow
     
     DETECTION SETTINGS:
     - conf_threshold: 0.15 (15% confidence)
@@ -766,16 +776,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             # Convert RGB to BGR for OpenCV
             color_bgr = (color[2], color[1], color[0])
             cv2.rectangle(image_rgb, (x1, y1), (x2, y2), color, 1)  # Thickness = 1 (thinner)
-            
-            # Draw label with smaller font
-            label = f"{class_name}: {confidence:.2f}"
-            font_scale = 0.3  # Smaller font (was 0.5)
-            thickness = 1  # Thinner text (was 2)
-            label_size, _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
-            cv2.rectangle(image_rgb, (x1, y1 - label_size[1] - 4), 
-                         (x1 + label_size[0], y1), color, -1)
-            cv2.putText(image_rgb, label, (x1, y1 - 2), 
-                       cv2.FONT_HERSHEY_SIMPLEX, font_scale, (0, 0, 0), thickness)
+            # Stage 1: bounding boxes only, numbered labels added in Stage 2
         
         print(f"📊 Final counts: WBC={detections['counts']['WBC']}, "
               f"RBC={detections['counts']['RBC']}, "
@@ -909,11 +910,9 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 print(f"   > Two-pass classifying {len(wbc_crops)} WBCs...")
                 
                 # --- PASS 1: Original crops ---
-                print(f"      Pass 1: Original crops...")
                 pass1_results = classifier.classify_batch(wbc_crops, ['WBC']*len(wbc_crops), batch_size=16)
                 
                 # --- PASS 2: Black background crops (WBC only) ---
-                print(f"      Pass 2: Black background crops...")
                 black_bg_crops = []
                 for crop_pil in wbc_crops:
                     try:
@@ -997,7 +996,32 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         else:
                             wbc_class, wbc_confidence = 'Normal WBC', 0.5
                     
-                    print(f"      WBC {i+1}: '{wbc_class}' ({wbc_confidence:.2%}) [Pass {chosen_pass}]")
+                    # === ALL RECOVERY ===
+                    # The 70% ALL confidence threshold in classify_batch may cause genuine ALL cells
+                    # to fall back to CLL/other classes. Use raw probabilities from BOTH passes
+                    # to recover ALL when it was the strongest WBC signal.
+                    ALL_CLASS = 'Acute Lymphoblastic Leukemia'
+                    if wbc_class != ALL_CLASS and r1 and r2:
+                        NON_WBC_SET = {'normal rbc', 'sickle cell anemia'}
+                        # Get ALL probability from both passes (raw, before fallback)
+                        all_prob_p1 = r1['probabilities'].get(ALL_CLASS, 0)
+                        all_prob_p2 = r2['probabilities'].get(ALL_CLASS, 0)
+                        max_all_prob = max(all_prob_p1, all_prob_p2)
+                        
+                        # Check if ALL was the top WBC prediction in either pass (before fallback)
+                        wbc_probs_p1 = {k: v for k, v in r1['probabilities'].items() if k.lower() not in NON_WBC_SET}
+                        wbc_probs_p2 = {k: v for k, v in r2['probabilities'].items() if k.lower() not in NON_WBC_SET}
+                        p1_top = max(wbc_probs_p1.items(), key=lambda x: x[1])[0] if wbc_probs_p1 else None
+                        p2_top = max(wbc_probs_p2.items(), key=lambda x: x[1])[0] if wbc_probs_p2 else None
+                        
+                        # If EITHER pass had ALL as top WBC class AND probability >= 50%, recover ALL
+                        if (p1_top == ALL_CLASS or p2_top == ALL_CLASS) and max_all_prob >= 0.50:
+                            wbc_class = ALL_CLASS
+                            wbc_confidence = max_all_prob
+                            short_label = _get_short_label(wbc_class)
+                            is_disease = True
+                    
+                    print(f"      WBC {i+1}: '{wbc_class}' ({wbc_confidence:.2%})")
                     
                     # Generate display crop
                     display_crop = crop_pil.resize((384, 384), Image.LANCZOS)
@@ -1034,11 +1058,13 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         'is_abnormal': is_disease
                     })
                     
-                    # Draw classification label on annotated image bounding box
+                    # Draw numbered classification label on annotated image bounding box
                     x1, y1, x2, y2 = map(int, detection['bbox'])
-                    label_color = (0, 0, 255) if is_disease else (0, 255, 0)  # Red for disease, Green for normal
-                    label_text = f"{short_label} {wbc_confidence:.0%}"
-                    font_scale = 0.35
+                    label_color = (0, 100, 255) if is_disease else (0, 255, 0)  # Blue for disease WBC, Green for normal WBC
+                    # Redraw bounding box with classification-aware color
+                    cv2.rectangle(image_rgb, (x1, y1), (x2, y2), label_color, 1)
+                    label_text = short_label  # Numbered label only (1-5)
+                    font_scale = 0.4
                     thickness = 1
                     label_size, _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
                     # Draw label background above bounding box
@@ -1089,15 +1115,16 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     }
                     rbc_classifications.append(rbc_res)
                     
-                    # Draw label on sickle cells in annotated image
+                    # Draw numbered label on sickle cells in annotated image
                     if is_sickle:
                         x1, y1, x2, y2 = map(int, detection['bbox'])
-                        sca_label = f"SCA {sickle_conf:.0%}"
-                        font_scale = 0.35
+                        sca_color = (255, 0, 0)  # Red - matches RBC bounding box color
+                        sca_label = '6'  # Numbered label for SCA
+                        font_scale = 0.4
                         thickness = 1
                         label_size, _ = cv2.getTextSize(sca_label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
                         cv2.rectangle(image_rgb, (x1, y1 - label_size[1] - 6), 
-                                     (x1 + label_size[0] + 4, y1), (0, 0, 255), -1)
+                                     (x1 + label_size[0] + 4, y1), sca_color, -1)
                         cv2.putText(image_rgb, sca_label, (x1 + 2, y1 - 3), 
                                    cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness)
                         
@@ -1121,6 +1148,42 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             print(f"ConvNeXt model not loaded - skipping classification")
         
         # Convert annotated image to base64 with high quality
+        # Draw legend on annotated image (top-left corner)
+        legend_items = [
+            ('1 = Normal (WBC/RBC)', (0, 255, 0)),
+            ('2 = AML', (0, 100, 255)),
+            ('3 = ALL', (0, 100, 255)),
+            ('4 = CLL', (0, 100, 255)),
+            ('5 = CML', (0, 100, 255)),
+            ('6 = SCA (RBC)', (255, 0, 0)),
+        ]
+        legend_font_scale = 0.35
+        legend_thickness = 1
+        legend_line_height = 16
+        legend_padding = 6
+        legend_x = 4
+        legend_y_start = 4
+        
+        # Calculate legend background size
+        max_text_width = 0
+        for text, _ in legend_items:
+            text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, legend_font_scale, legend_thickness)
+            max_text_width = max(max_text_width, text_size[0])
+        legend_bg_width = max_text_width + legend_padding * 2 + 4
+        legend_bg_height = len(legend_items) * legend_line_height + legend_padding * 2
+        
+        # Draw semi-transparent background
+        overlay = image_rgb.copy()
+        cv2.rectangle(overlay, (0, 0), (legend_bg_width, legend_bg_height), (0, 0, 0), -1)
+        cv2.addWeighted(overlay, 0.7, image_rgb, 0.3, 0, image_rgb)
+        cv2.rectangle(image_rgb, (0, 0), (legend_bg_width, legend_bg_height), (255, 255, 255), 1)
+        
+        # Draw legend text
+        for i, (text, color) in enumerate(legend_items):
+            y_pos = legend_y_start + legend_padding + i * legend_line_height + 10
+            cv2.putText(image_rgb, text, (legend_x + legend_padding, y_pos),
+                       cv2.FONT_HERSHEY_SIMPLEX, legend_font_scale, color, legend_thickness)
+        
         pil_image = Image.fromarray(image_rgb)
         buffer = io.BytesIO()
         pil_image.save(buffer, format='JPEG', quality=95)
@@ -1195,8 +1258,10 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 'sickle_cell_count': sickle_cell_count,
                 
                 'color_legend': {
-                    'WBC': 'rgb(0, 255, 0)',
+                    'Normal WBC': 'rgb(0, 255, 0)',
+                    'Disease WBC': 'rgb(0, 100, 255)',
                     'RBC': 'rgb(255, 0, 0)',
+                    'SCA': 'rgb(255, 0, 0)',
                     'Platelets': 'rgb(255, 255, 0)'
                 },
                 
@@ -1208,7 +1273,8 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             
             'clinical_thresholds': {
                 'sickle_cell': DISEASE_THRESHOLDS['sickle_cell'],
-                'acute_leukemia': DISEASE_THRESHOLDS['acute_leukemia'],
+                'aml': DISEASE_THRESHOLDS['aml'],
+                'all': DISEASE_THRESHOLDS['all'],
                 'cml': DISEASE_THRESHOLDS['cml'],
                 'cll': DISEASE_THRESHOLDS['cll']
             },
@@ -1340,7 +1406,8 @@ def models_info():
         },
         'clinical_thresholds': {
             'sickle_cell': DISEASE_THRESHOLDS['sickle_cell'],
-            'acute_leukemia': DISEASE_THRESHOLDS['acute_leukemia'],
+            'aml': DISEASE_THRESHOLDS['aml'],
+            'all': DISEASE_THRESHOLDS['all'],
             'cml': DISEASE_THRESHOLDS['cml'],
             'cll': DISEASE_THRESHOLDS['cll']
         },
@@ -1359,7 +1426,8 @@ def get_thresholds():
         'success': True,
         'thresholds': {
             'sickle_cell': DISEASE_THRESHOLDS['sickle_cell'],
-            'acute_leukemia': DISEASE_THRESHOLDS['acute_leukemia'],
+            'aml': DISEASE_THRESHOLDS['aml'],
+            'all': DISEASE_THRESHOLDS['all'],
             'cml': DISEASE_THRESHOLDS['cml'],
             'cll': DISEASE_THRESHOLDS['cll']
         },
@@ -1380,7 +1448,7 @@ def get_thresholds():
 def analyze_multi_field():
     """
     Analyze multiple blood smear images from different fields of view.
-    Aggregates results for more accurate diagnosis.
+    Aggregates results for more accurate classification.
     
     Expected: multipart/form-data with multiple 'images' files
     Optional: conf_threshold, iou_threshold
@@ -2030,15 +2098,25 @@ def classification_basis():
                     'threshold': '95% confidence for Sickle Cell classification',
                     'interpretation': 'Presence of sickle-shaped RBCs detected by classifier'
                 },
-                'acute_leukemia': {
-                    'basis': 'Direct disease cell classification',
-                    'types': ['ALL (Acute Lymphoblastic Leukemia)', 'AML (Acute Myeloid Leukemia)'],
-                    'interpretation': 'Cells classified directly as ALL or AML by ConvNeXt'
+                'aml': {
+                    'basis': 'Blast percentage classification',
+                    'threshold': '>=20% blasts = AML Blast Phase',
+                    'interpretation': 'Cells classified as AML by ConvNeXt'
                 },
-                'chronic_leukemia': {
-                    'basis': 'Direct disease cell classification',
-                    'types': ['CLL (Chronic Lymphocytic Leukemia)', 'CML (Chronic Myeloid Leukemia)'],
-                    'interpretation': 'Cells classified directly as CLL or CML by ConvNeXt'
+                'all': {
+                    'basis': 'Lymphoblast percentage classification',
+                    'threshold': '>=20% lymphoblasts = ALL diagnostic threshold',
+                    'interpretation': 'Cells classified as ALL by ConvNeXt'
+                },
+                'cml': {
+                    'basis': 'Blast percentage phase classification',
+                    'threshold': '<10% Chronic, 10-19% Accelerated, >=20% Blast Phase',
+                    'interpretation': 'Cells classified as CML by ConvNeXt'
+                },
+                'cll': {
+                    'basis': 'Lymphocyte percentage classification',
+                    'threshold': '<40% Below Suspicious, 40-50% Suspicious, 50-70% Typical, >70% Advanced',
+                    'interpretation': 'Cells classified as CLL by ConvNeXt'
                 }
             }
         }

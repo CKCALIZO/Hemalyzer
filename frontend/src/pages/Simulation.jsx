@@ -379,20 +379,16 @@ export function Simulation() {
                         </div>
                       </div>
 
-                      {/* WBC Differential Breakdown */}
-                      {comparisonResults.enhanced_model.wbc_classification.differential && 
-                       Object.keys(comparisonResults.enhanced_model.wbc_classification.differential).length > 0 && (
+                      {/* WBC Classification Breakdown */}
+                      {comparisonResults.enhanced_model.wbc_classification.breakdown && 
+                       Object.keys(comparisonResults.enhanced_model.wbc_classification.breakdown).length > 0 && (
                         <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-xs font-semibold text-gray-700 mb-2">WBC Differential:</div>
-                          {Object.entries(comparisonResults.enhanced_model.wbc_classification.differential).map(([type, data]) => (
+                          <div className="text-xs font-semibold text-gray-700 mb-2">WBC Classification:</div>
+                          {Object.entries(comparisonResults.enhanced_model.wbc_classification.breakdown).map(([type, count]) => (
                             <div key={type} className="flex justify-between text-xs mb-1">
                               <span className="text-gray-600">{type}:</span>
-                              <span className={`font-medium ${
-                                data.status === 'high' ? 'text-red-600' : 
-                                data.status === 'low' ? 'text-amber-600' : 
-                                'text-green-600'
-                              }`}>
-                                {data.percentage?.toFixed(1)}% ({data.count})
+                              <span className={`font-medium ${type !== 'Normal WBC' ? 'text-red-600' : 'text-green-600'}`}>
+                                {count}
                               </span>
                             </div>
                           ))}
@@ -509,20 +505,16 @@ export function Simulation() {
                         </div>
                       </div>
 
-                      {/* WBC Differential Breakdown */}
-                      {comparisonResults.baseline_model.wbc_classification.differential && 
-                       Object.keys(comparisonResults.baseline_model.wbc_classification.differential).length > 0 && (
+                      {/* WBC Classification Breakdown */}
+                      {comparisonResults.baseline_model.wbc_classification.breakdown && 
+                       Object.keys(comparisonResults.baseline_model.wbc_classification.breakdown).length > 0 && (
                         <div className="mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-xs font-semibold text-gray-700 mb-2">WBC Differential:</div>
-                          {Object.entries(comparisonResults.baseline_model.wbc_classification.differential).map(([type, data]) => (
+                          <div className="text-xs font-semibold text-gray-700 mb-2">WBC Classification:</div>
+                          {Object.entries(comparisonResults.baseline_model.wbc_classification.breakdown).map(([type, count]) => (
                             <div key={type} className="flex justify-between text-xs mb-1">
                               <span className="text-gray-600">{type}:</span>
-                              <span className={`font-medium ${
-                                data.status === 'high' ? 'text-red-600' : 
-                                data.status === 'low' ? 'text-amber-600' : 
-                                'text-green-600'
-                              }`}>
-                                {data.percentage?.toFixed(1)}% ({data.count})
+                              <span className={`font-medium ${type !== 'Normal WBC' ? 'text-red-600' : 'text-green-600'}`}>
+                                {count}
                               </span>
                             </div>
                           ))}

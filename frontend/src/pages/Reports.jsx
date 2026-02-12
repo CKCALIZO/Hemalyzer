@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Trash2, FileText, Download, Filter, Search, ChevronDown, ChevronUp } from 'lucide-react';
 import { generatePDF } from '../utils/pdfGenerator';
 import { Header } from "../components/Header.jsx";
@@ -43,83 +43,101 @@ export const Reports = () => {
         }
     };
 
-    // Robust Clinical Analysis Helper
+    // Classification Analysis Helper - Updated for 7-class ConvNeXt model
     const getClinicalAnalysis = (type, status) => {
         const analyses = {
-            'Neutrophil': {
-                high: {
-                    interpretation: 'Neutrophilia: Increased neutrophils often indicate acute bacterial infection, severe stress, burns, or tissue necrosis.',
-                    recommendation: 'Clinical Recommendation: Evaluate for signs of infection (fever, localized pain). Consider CBC with differential repeats and inflammatory markers (CRP, ESR).'
-                },
-                low: {
-                    interpretation: 'Neutropenia: Decreased neutrophils significantly increase infection risk. May be caused by viral infections, chemotherapy, aplastic anemia, or severe overwhelming infection (sepsis).',
-                    recommendation: 'Clinical Recommendation: Urgent clinical assessment for infection. Review medication history (look for marrow-suppressive drugs). Hematology consultation recommended if persistent or severe (<1000/µL).'
-                },
+            'Normal WBC': {
                 normal: {
-                    interpretation: 'Neutrophil count is within the healthy reference range, suggesting adequate innate immune function against bacteria.',
-                    recommendation: 'Clinical Recommendation: Routine monitoring as part of standard wellness checks.'
+                    interpretation: 'Normal white blood cells detected. Healthy morphology consistent with standard leukocyte population.',
+                    recommendation: 'Note: Routine monitoring as part of standard wellness checks.'
                 }
             },
-            'Lymphocyte': {
+            'Acute Lymphoblastic Leukemia': {
                 high: {
-                    interpretation: 'Lymphocytosis: Elevated lymphocytes are common in viral infections (Epstein-Barr, Cytomegalovirus), chronic lymphocytic leukemia (CLL), or pertussis.',
-                    recommendation: 'Clinical Recommendation: Assess for viral symptoms (sore throat, lymphadenopathy). If elderly or asymptomatic, rule out lymphoproliferative disorders (CLL).'
+                    interpretation: 'ALL lymphoblasts detected at ≥ 20% of WBCs. ALL lymphoblast classification threshold reached.',
+                    recommendation: 'Note: ALL classification threshold reached (≥ 20% lymphoblasts).'
                 },
-                low: {
-                    interpretation: 'Lymphocytopenia: Decreased lymphocytes may be seen in HIV/AIDS, high-dose steroid therapy, autoimmune diseases (Lupus), or acute stress response.',
-                    recommendation: 'Clinical Recommendation: detailed history taking for autoimmune symptoms or immunodeficiency risk factors. Consider HIV screening if clinically indicated.'
+                below_threshold: {
+                    interpretation: 'ALL lymphoblasts detected below classification threshold (< 20%).',
+                    recommendation: 'Note: Below ALL classification threshold. Classification recorded.'
                 },
                 normal: {
-                    interpretation: 'Lymphocyte count is within the healthy reference range, indicating normal adaptive immune capacity.',
-                    recommendation: 'Clinical Recommendation: Routine monitoring.'
+                    interpretation: 'ALL lymphoblasts below classification threshold.',
+                    recommendation: 'Note: Below threshold.'
                 }
             },
-            'Monocyte': {
+            'Acute Myeloid Leukemia': {
                 high: {
-                    interpretation: 'Monocytosis: Often associated with chronic infections (Tuberculosis, fungal), bacterial endocarditis, recovery phase of acute infections, or autoimmune disorders.',
-                    recommendation: 'Clinical Recommendation: Evaluate for chronic inflammatory conditions. If persistent, consider screening for chronic infections or myelomonocytic leukemia in elderly patients.'
+                    interpretation: 'AML blasts detected at ≥ 20% of WBCs. AML blast phase classification threshold reached.',
+                    recommendation: 'Note: AML classification threshold reached (≥ 20% blasts).'
                 },
-                low: {
-                    interpretation: 'Monocytopenia: Rare. Can be associated with hairy cell leukemia, severe aplastic anemia, or acute stress.',
-                    recommendation: 'Clinical Recommendation: Usually not clinically significant in isolation. Monitor trend. Review peripheral smear for hairy cells.'
+                below_threshold: {
+                    interpretation: 'AML blasts detected below classification threshold (< 20%).',
+                    recommendation: 'Note: Below AML classification threshold. Classification recorded.'
                 },
                 normal: {
-                    interpretation: 'Monocyte count is within the healthy reference range.',
-                    recommendation: 'Clinical Recommendation: Routine monitoring.'
+                    interpretation: 'AML blasts below classification threshold.',
+                    recommendation: 'Note: Below threshold.'
                 }
             },
-            'Eosinophil': {
+            'Chronic Lymphocytic Leukemia': {
                 high: {
-                    interpretation: 'Eosinophilia: Strongly suggestive of allergic conditions (asthma, eczema), parasitic infections (worms), or drug hypersensitivity.',
-                    recommendation: 'Clinical Recommendation: Review allergy history and medications. Consider stool ova/parasite exam if travel history is relevant. Screen for asthma.'
+                    interpretation: 'Advanced CLL pattern - > 70% abnormal lymphocytes. High CLL classification threshold reached.',
+                    recommendation: 'Note: High CLL threshold exceeded (> 70% abnormal lymphocytes).'
+                },
+                moderate: {
+                    interpretation: 'Typical CLL range - 50-70% abnormal lymphocytes. Moderate CLL classification threshold reached.',
+                    recommendation: 'Note: Moderate CLL threshold reached (50-70%).'
                 },
                 low: {
-                    interpretation: 'Eosinopenia: Often occurs during acute adrenal stress (Cushing’s syndrome), severe acute infection, or corticosteroid use.',
-                    recommendation: 'Clinical Recommendation: Usually transient and responsive to stress/infection resolution. No specific intervention typically needed unless Cushing’s suspected.'
+                    interpretation: 'Suspicious Lymphocytosis - 40-50% abnormal lymphocytes. Above monitoring threshold.',
+                    recommendation: 'Note: CLL monitoring threshold met (40-50%).'
+                },
+                below_threshold: {
+                    interpretation: 'CLL lymphocytes below suspicious threshold (< 40%).',
+                    recommendation: 'Note: Below CLL suspicious threshold.'
                 },
                 normal: {
-                    interpretation: 'Eosinophil count is within the healthy reference range.',
-                    recommendation: 'Clinical Recommendation: Routine monitoring.'
+                    interpretation: 'CLL markers below suspicious threshold.',
+                    recommendation: 'Note: Below threshold.'
                 }
             },
-            'Basophil': {
+            'Chronic Myeloid Leukemia': {
                 high: {
-                    interpretation: 'Basophilia: Uncommon. Can be a marker for Chronic Myeloid Leukemia (CML) or other myeloproliferative neoplasms. Also seen in hypersensitivity reactions.',
-                    recommendation: 'Clinical Recommendation: IMPORTANT: Rule out myeloproliferative disorders (CML). Check for splenomegaly. Hematology referral suggested if persistent.'
+                    interpretation: 'Blast Phase - ≥ 20% blasts. CML blast phase classification threshold reached.',
+                    recommendation: 'Note: CML blast phase threshold reached (≥ 20% blasts).'
+                },
+                moderate: {
+                    interpretation: 'Accelerated Phase - 10-19% blasts. Accelerated phase classification threshold reached.',
+                    recommendation: 'Note: CML accelerated phase threshold reached (10-19%).'
                 },
                 low: {
-                    interpretation: 'Basopenia: Difficult to demonstrate as normal count is low. May be seen in acute phase of infection, hyperthyroidism, or stress.',
-                    recommendation: 'Clinical Recommendation: Generally not clinically significant.'
+                    interpretation: 'Chronic Phase - < 10% blasts. Below accelerated phase threshold.',
+                    recommendation: 'Note: CML chronic phase range (< 10% blasts).'
+                },
+                below_threshold: {
+                    interpretation: 'CML blasts in chronic phase range (< 10%).',
+                    recommendation: 'Note: Below accelerated phase threshold.'
                 },
                 normal: {
-                    interpretation: 'Basophil count is within the healthy reference range.',
-                    recommendation: 'Clinical Recommendation: Routine monitoring.'
+                    interpretation: 'CML markers in chronic phase range.',
+                    recommendation: 'Note: Below threshold.'
+                }
+            },
+            'Sickle Cell Anemia': {
+                high: {
+                    interpretation: 'Significant sickle cell morphology detected in RBCs. Severe sickling threshold met.',
+                    recommendation: 'Note: Classification consistent with significant sickle cell morphology.'
+                },
+                normal: {
+                    interpretation: 'Sickle cells absent or at trace levels.',
+                    recommendation: 'Note: Below sickling classification threshold.'
                 }
             }
         };
         return analyses[type]?.[status] || {
-            interpretation: 'Clinical correlation recommended.',
-            recommendation: 'Clinical Recommendation: Correlate with clinical findings.'
+            interpretation: 'Classification recorded.',
+            recommendation: 'Note: See threshold reference for interpretation.'
         };
     };
 
@@ -141,11 +159,11 @@ export const Reports = () => {
         const colorMap = {
             'Normal WBC': '#10B981',  // green
             'Normal RBC': '#06B6D4',  // cyan
-            'Acute Lymphoblastic Leukemia': '#EF4444', // red
-            'Acute Myeloid Leukemia': '#F97316', // orange
-            'Chronic Lymphocytic Leukemia': '#8B5CF6', // purple
-            'Chronic Myeloid Leukemia': '#F59E0B', // amber
-            'Sickle Cell Anemia': '#EC4899', // pink
+            'Acute Lymphoblastic Leukemia': '#A855F7', // purple (matches bar chart)
+            'Acute Myeloid Leukemia': '#EF4444', // red (matches bar chart)
+            'Chronic Lymphocytic Leukemia': '#F97316', // orange (matches bar chart)
+            'Chronic Myeloid Leukemia': '#F59E0B', // amber (matches bar chart)
+            'Sickle Cell Anemia': '#F43F5E', // rose (matches bar chart)
         };
         const defaultColors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#6366F1', '#EC4899', '#8B5CF6', '#64748B'];
 
@@ -155,7 +173,7 @@ export const Reports = () => {
             return [x, y];
         };
 
-        // Format label for display (e.g., "Neutrophil: Normal" -> "Neutrophil:\nNormal")
+        // Format label for display
         const formatLabel = (label) => {
             if (label.includes(':')) {
                 const [cellType, condition] = label.split(':').map(s => s.trim());
@@ -312,12 +330,12 @@ export const Reports = () => {
                                                                 <div>Images: {report.summary.imagesAnalyzed || report.imagesCount}/10</div>
                                                                 {report.summary.estimatedWBCCount > 0 && (
                                                                     <div className="text-blue-600 font-medium">
-                                                                        Est. WBC: {report.summary.estimatedWBCCount.toLocaleString()}/μL
+                                                                        Est. WBC: {report.summary.estimatedWBCCount.toLocaleString()}/Î¼L
                                                                     </div>
                                                                 )}
                                                                 {report.summary.estimatedRBCCount > 0 && (
                                                                     <div className="text-red-600 font-medium">
-                                                                        Est. RBC: {(report.summary.estimatedRBCCount / 1e6).toFixed(2)}M/μL
+                                                                        Est. RBC: {(report.summary.estimatedRBCCount / 1e6).toFixed(2)}M/Î¼L
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -384,7 +402,7 @@ export const Reports = () => {
                                                     <div className="bg-white p-3 rounded border border-slate-200">
                                                         <p className="text-xs text-slate-500">Demographics</p>
                                                         <p className="font-medium text-slate-800">
-                                                            {selectedReport.patientData.age ? `${selectedReport.patientData.age} yrs` : 'Age N/A'} • {selectedReport.patientData.gender || 'N/A'}
+                                                            {selectedReport.patientData.age ? `${selectedReport.patientData.age} yrs` : 'Age N/A'} â€¢ {selectedReport.patientData.gender || 'N/A'}
                                                         </p>
                                                     </div>
                                                     {selectedReport.patientData.phone && (
@@ -438,10 +456,10 @@ export const Reports = () => {
                                                             <div className="bg-blue-50 p-3 rounded border border-blue-200">
                                                                 <p className="text-sm text-blue-600">Estimated WBC Count</p>
                                                                 <p className="text-xl font-bold text-blue-700">
-                                                                    {selectedReport.summary.estimatedWBCCount.toLocaleString()} cells/μL
+                                                                    {selectedReport.summary.estimatedWBCCount.toLocaleString()} cells/Î¼L
                                                                 </p>
                                                                 <p className="text-xs text-blue-500 mt-1">
-                                                                    Formula: (Total WBC / 10) × 2,000
+                                                                    Formula: (Total WBC / 10) Ã— 2,000
                                                                 </p>
                                                             </div>
                                                         )}
@@ -449,10 +467,10 @@ export const Reports = () => {
                                                             <div className="bg-red-50 p-3 rounded border border-red-200">
                                                                 <p className="text-sm text-red-600">Estimated RBC Count</p>
                                                                 <p className="text-xl font-bold text-red-700">
-                                                                    {(selectedReport.summary.estimatedRBCCount / 1e6).toFixed(2)} × 10⁶ cells/μL
+                                                                    {(selectedReport.summary.estimatedRBCCount / 1e6).toFixed(2)} Ã— 10â¶ cells/Î¼L
                                                                 </p>
                                                                 <p className="text-xs text-red-500 mt-1">
-                                                                    Formula: (Average RBC per image ÷ 10) × 200,000
+                                                                    Formula: (Average RBC per image Ã· 10) Ã— 200,000
                                                                 </p>
                                                             </div>
                                                         )}
@@ -565,7 +583,7 @@ export const Reports = () => {
                                         {/* Clinical Interpretation */}
                                         {selectedReport.data?.disease_interpretation && (
                                             <div className="mt-6 bg-slate-50 border border-slate-200 p-4 rounded-lg">
-                                                <h3 className="font-semibold text-lg mb-3 text-slate-800">Clinical Thresholds & Interpretation</h3>
+                                                <h3 className="font-semibold text-lg mb-3 text-slate-800">Classification Thresholds & Analysis</h3>
                                                 <ThresholdResults
                                                     diseaseInterpretation={selectedReport.data.disease_interpretation}
                                                     clinicalThresholds={selectedReport.data.clinical_thresholds}
@@ -573,12 +591,11 @@ export const Reports = () => {
                                             </div>
                                         )}
 
-                                        {/* Clinical Note */}
                                         <div className="mt-6 bg-slate-50 border border-slate-200 p-4 rounded-lg">
-                                            <p className="font-semibold text-slate-700">Clinical Note:</p>
+                                            <p className="font-semibold text-slate-700">Note:</p>
                                             <p className="text-sm text-slate-600 mt-1">
                                                 This is a research tool for educational purposes. Results should be validated by trained
-                                                hematologists and confirmed with additional diagnostic tests.
+                                                hematologists and confirmed with additional confirmatory tests.
                                             </p>
                                         </div>
                                     </div>

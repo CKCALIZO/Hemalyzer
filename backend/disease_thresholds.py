@@ -1,6 +1,6 @@
 """
-Disease Classification Thresholds and Clinical Constants
-Based on standard hematology reference values and clinical guidelines
+Cell Classification Thresholds and Reference Constants
+Based on standard hematology reference values
 """
 
 # ============================================================
@@ -24,8 +24,9 @@ EXPECTED_CELLS_PER_ANALYSIS = {
 }
 
 # Normal WBC Differential Count (percentage ranges)
-# Reference: Standard hematology peripheral blood smear manual
-# Note: Band Neutrophil excluded (not in training dataset)
+# Note: These are traditional differential reference values retained for educational context.
+# The ConvNeXt model does NOT perform individual differential counts - it classifies
+# each WBC as Normal or Disease type. These ranges are informational only.
 NORMAL_WBC_DIFFERENTIAL = {
     'Neutrophil': {'min': 50, 'max': 70, 'display': 'Neutrophil (50-70%)'},
     'Lymphocyte': {'min': 18, 'max': 42, 'display': 'Lymphocyte (18-42%)'},
@@ -34,50 +35,79 @@ NORMAL_WBC_DIFFERENTIAL = {
     'Basophil': {'min': 0, 'max': 2, 'display': 'Basophil (0-2%)'},
 }
 
-# Disease Classification Thresholds (Based on About page reference tables)
+# ============================================================
+# CLASSIFICATION THRESHOLDS FOR CONVNEXT 7-CLASS MODEL
+# ============================================================
+# Since the ConvNeXt model directly classifies each WBC as Normal or
+# one of 4 disease types (AML, ALL, CML, CLL), disease-specific
+# thresholds are applied based on standard hematology classification criteria.
+#
+# Percentage = (disease_type_count / total_wbc) × 100
+# This is NOT a traditional differential count - it is the proportion
+# of WBCs that the model classified as a specific disease type.
+# ============================================================
+
+# Overall Normal vs Disease WBC Classification Ratio
+# Provides a top-level interpretation of the analysis
+OVERALL_CLASSIFICATION_THRESHOLDS = {
+    'normal': {'min_normal_pct': 95, 'interpretation': 'Predominantly Normal WBCs - no significant abnormalities classified'},
+    'low': {'min_normal_pct': 85, 'max_normal_pct': 95, 'interpretation': 'Mostly Normal - low proportion of abnormal WBC classifications detected'},
+    'moderate': {'min_normal_pct': 70, 'max_normal_pct': 85, 'interpretation': 'Notable Abnormal Classification - significant proportion of WBCs classified as abnormal'},
+    'high': {'max_normal_pct': 70, 'interpretation': 'High Abnormal Classification - majority of WBCs classified as abnormal'}
+}
+
+# AML Classification Thresholds (Standard Hematology Criteria)
+# AML classification threshold: >=20% blasts in peripheral blood
+# Reference: https://www.ncbi.nlm.nih.gov/books/NBK603716/
+AML_CLASSIFICATION_THRESHOLDS = {
+    'below_threshold': {'max_percent': 20, 'interpretation': 'Blasts detected below blast phase classification threshold (< 20%).'},
+    'blast_phase': {'min_percent': 20, 'interpretation': 'Blast Phase - >= 20% blasts detected. AML blast phase classification threshold reached.'}
+}
+
+# ALL Classification Thresholds (Standard Hematology Criteria)
+# ALL classification threshold: >=20% lymphoblasts in peripheral blood
+# Reference: https://www.msdmanuals.com/professional/hematology-and-oncology/leukemias/acute-lymphoblastic-leukemia-all
+ALL_CLASSIFICATION_THRESHOLDS = {
+    'below_threshold': {'max_percent': 20, 'interpretation': 'Lymphoblasts detected below lymphoblast classification threshold (< 20%).'},
+    'lymphoblast_phase': {'min_percent': 20, 'interpretation': 'Lymphoblast Phase - >= 20% lymphoblasts detected. ALL lymphoblast classification threshold reached.'}
+}
+
+# CML Classification Thresholds (Phase-Based)
+# CML categorized into phases based on blast proportion
+# Reference: https://emedicine.medscape.com/article/2006731
+CML_CLASSIFICATION_THRESHOLDS = {
+    'chronic_phase': {'max_percent': 10, 'interpretation': 'Chronic Phase - blasts < 10%. Below accelerated phase threshold.'},
+    'accelerated_phase': {'min_percent': 10, 'max_percent': 20, 'interpretation': 'Accelerated Phase - blasts 10-19%. Accelerated phase classification threshold reached.'},
+    'blast_phase': {'min_percent': 20, 'interpretation': 'Blast Phase (Blast Crisis) - >= 20% blasts. Blast phase classification threshold reached.'}
+}
+
+# CLL Classification Thresholds (Lymphocyte Proportion-Based)
+# CLL classification based on proportion of abnormal lymphocytes
+CLL_CLASSIFICATION_THRESHOLDS = {
+    'below_suspicious': {'max_percent': 40, 'interpretation': 'Abnormal lymphocytes below suspicious threshold (< 40%).'},
+    'suspicious_lymphocytosis': {'min_percent': 40, 'max_percent': 50, 'interpretation': 'Suspicious Lymphocytosis - 40-50% abnormal lymphocytes. Above monitoring threshold.'},
+    'typical_cll': {'min_percent': 50, 'max_percent': 70, 'interpretation': 'Typical CLL - 50-70% abnormal lymphocytes. Moderate CLL classification threshold reached.'},
+    'advanced_cll': {'min_percent': 70, 'interpretation': 'Advanced/Untreated CLL - > 70% abnormal lymphocytes. High CLL classification threshold reached.'}
+}
+
 DISEASE_THRESHOLDS = {
-    # Sickle Cell Anemia - RBC Analysis
-    # Reference: Updated Sickle Cell Anemia Classification table
+    # Sickle Cell Anemia - RBC Analysis (unchanged, already ratio-based)
     # Percentage calculated as: (Total Sickled Cells / Total RBCs) × 100
     'sickle_cell': {
-        'normal': {'max_percent': 3.0, 'interpretation': 'Normal / Smudge Cells - no clinical sickling observed'},
+        'normal': {'max_percent': 3.0, 'interpretation': 'Normal / Smudge Cells - no significant sickling observed'},
         'mild': {'min_percent': 3.0, 'max_percent': 10.0, 'interpretation': 'Mild Sickling - Heterozygous HbAS condition (Sickle Cell Trait)'},
         'moderate': {'min_percent': 10.0, 'max_percent': 30.0, 'interpretation': 'Moderate Sickling - may correlate with symptoms or stress (possible HbSS)'},
         'severe': {'min_percent': 30.0, 'interpretation': 'Severe Sickling - suggestive of Sickle Cell Disease (HbSS)'}
     },
     
-    # Acute Leukemia (AML/ALL) - Blast Cell Analysis
-    # Reference: AML / ALL Leukemia Classification table
-    'acute_leukemia': {
-        'normal': {'max_percent': 5, 'interpretation': 'Normal Blood - with some blast cells'},
-        'slightly_increased': {'min_percent': 6, 'max_percent': 10, 'interpretation': 'Slightly Increased - possibly reactive, may be normal/reactive condition'},
-        'suspicious': {'min_percent': 11, 'max_percent': 19, 'interpretation': 'Suspicious / Pre-leukemic - suspicious for evolving leukemia'},
-        'acute_leukemia': {'min_percent': 20, 'interpretation': 'Diagnostic level for Acute Leukemia (>= 20% blasts)'}
-    },
-    
-    # CML - Granulocyte Analysis (Basophil, Eosinophil, Myeloblast, Neutrophils)
-    # Reference: CML Leukemia Classification table
-    'cml': {
-        'normal': {'max_percent': 60, 'interpretation': 'Normal differential count - balanced white cell maturation'},
-        'reactive': {'min_percent': 60, 'max_percent': 75, 'interpretation': 'Reactive / Secondary Leukocytosis (CML) - mild granulocytic predominance'},
-        'early_cml': {'min_percent': 76, 'max_percent': 89, 'interpretation': 'Suspicious for Early Chronic Myeloid Leukemia (CML - Chronic Phase)'},
-        'chronic_phase': {'min_percent': 90, 'max_percent': 95, 'interpretation': 'Typical Chronic Phase CML - granulocytes dominate differential'},
-        'accelerated': {'min_percent': 95, 'interpretation': 'Accelerated Phase CML - extreme granulocytic proliferation'}
-    },
-    
-    # CLL - Lymphocyte Analysis
-    # Reference: CLL Leukemia Classification table
-    # Normal lymphocyte range: 20%-35% (standard differential count reference)
-    'cll': {
-        'normal': {'max_percent': 35, 'interpretation': 'Normal lymphocyte count - balanced white cell differential'},
-        'reactive': {'min_percent': 35, 'max_percent': 50, 'interpretation': 'Reactive / Secondary Lymphocytosis - may occur with viral infections'},
-        'early_cll': {'min_percent': 51, 'max_percent': 65, 'interpretation': 'Suspicious for Early / Smoldering CLL'},
-        'typical_cll': {'min_percent': 66, 'max_percent': 80, 'interpretation': 'Typical Chronic Lymphocytic Leukemia (CLL)'},
-        'advanced_cll': {'min_percent': 80, 'interpretation': 'Advanced / Progressive CLL - lymphocytes dominate smear'}
-    }
+    # Disease-specific thresholds based on standard hematology criteria
+    'aml': AML_CLASSIFICATION_THRESHOLDS,
+    'all': ALL_CLASSIFICATION_THRESHOLDS,
+    'cml': CML_CLASSIFICATION_THRESHOLDS,
+    'cll': CLL_CLASSIFICATION_THRESHOLDS
 }
 
-# Minimum cell counts for reliable diagnosis
+# Minimum cell counts for reliable classification
 # Based on standard hematology practice: count 100 WBCs for differential
 MINIMUM_CELLS_FOR_DIAGNOSIS = {
     'wbc_differential': 100,  # Need 100 WBCs for reliable differential
@@ -85,7 +115,7 @@ MINIMUM_CELLS_FOR_DIAGNOSIS = {
     'sickle_cell': 150,       # Need 150 RBCs minimum
     'single_field_warning': True,  # Warn if only single field analyzed
     'recommended_fields': RECOMMENDED_FIELDS,  # Recommended 5 fields
-    'min_fields_for_reliable': 5  # Minimum fields for reliable diagnosis
+    'min_fields_for_reliable': 5  # Minimum fields for reliable classification
 }
 
 # ============================================================

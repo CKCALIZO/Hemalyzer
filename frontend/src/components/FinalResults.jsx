@@ -59,6 +59,7 @@ export const FinalResults = ({
         diseaseFindings,
         normalWBCCount,
         diseaseWBCCount,
+        overallClassification,
         sickleCell,
         patientStatus
     } = aggregatedResults;
@@ -81,7 +82,7 @@ export const FinalResults = ({
             return { category: 'Normal', label: 'Normal RBC', color: 'bg-green-100 text-green-800 border-green-300' };
         }
         if (classification === 'Acute Lymphoblastic Leukemia') {
-            return { category: 'ALL', label: 'ALL', color: 'bg-red-100 text-red-800 border-red-300' };
+            return { category: 'ALL', label: 'ALL', color: 'bg-purple-100 text-purple-800 border-purple-300' };
         }
         if (classification === 'Acute Myeloid Leukemia') {
             return { category: 'AML', label: 'AML', color: 'bg-red-100 text-red-800 border-red-300' };
@@ -90,10 +91,10 @@ export const FinalResults = ({
             return { category: 'CML', label: 'CML', color: 'bg-amber-100 text-amber-800 border-amber-300' };
         }
         if (classification === 'Chronic Lymphocytic Leukemia') {
-            return { category: 'CLL', label: 'CLL', color: 'bg-amber-100 text-amber-800 border-amber-300' };
+            return { category: 'CLL', label: 'CLL', color: 'bg-orange-100 text-orange-800 border-orange-300' };
         }
         if (classification === 'Sickle Cell Anemia') {
-            return { category: 'Sickle', label: 'Sickle Cell', color: 'bg-red-100 text-red-800 border-red-300' };
+            return { category: 'Sickle', label: 'Sickle Cell', color: 'bg-rose-100 text-rose-800 border-rose-300' };
         }
 
         return { category: 'Other', label: classification, color: 'bg-slate-100 text-slate-800 border-slate-300' };
@@ -101,31 +102,27 @@ export const FinalResults = ({
 
 
 
-    // Disease Interpretation Reference
+    // Classification Reference - Clinically established disease-specific thresholds
+    // Each leukemia type uses clinically accurate thresholds
     const diseaseInterprestationRef = {
         'AML': [
-            { level: 'Normal', range: '< 10%', desc: 'No significant myeloblasts detected.' },
-            { level: 'Moderate', range: '10-20%', desc: 'Suspicious / Pre-leukemic (AML).' },
-            { level: 'High', range: '≥ 20%', desc: 'Diagnostic level for AML.' }
+            { level: 'Below Threshold', range: '< 20%', desc: 'Blasts detected below blast phase classification threshold.' },
+            { level: 'Blast Phase', range: '≥ 20%', desc: 'AML blast phase classification threshold reached (≥ 20% blasts).' }
         ],
         'ALL': [
-            { level: 'Normal', range: '< 35%', desc: 'Lymphoblasts within reactive ranges.' },
-            { level: 'Low', range: '35-50%', desc: 'Reactive / Secondary Lymphocytosis.' },
-            { level: 'Moderate', range: '51-65%', desc: 'Suspicious for Early ALL.' },
-            { level: 'High', range: '66-80%', desc: 'Typical ALL.' },
-            { level: 'Advanced', range: '> 80%', desc: 'Advanced / Progressive ALL.' }
+            { level: 'Below Threshold', range: '< 20%', desc: 'Lymphoblasts detected below lymphoblast classification threshold.' },
+            { level: 'Lymphoblast Phase', range: '≥ 20%', desc: 'ALL lymphoblast classification threshold reached (≥ 20% lymphoblasts).' }
         ],
         'CML': [
-            { level: 'Normal', range: '< 10%', desc: 'No significant CML markers detected.' },
-            { level: 'Moderate', range: '10-20%', desc: 'Suspicious / Pre-leukemic (CML).' },
-            { level: 'High', range: '≥ 20%', desc: 'Diagnostic level for CML.' }
+            { level: 'Chronic Phase', range: '< 10%', desc: 'Blasts below 10%. Below accelerated phase threshold.' },
+            { level: 'Accelerated Phase', range: '10% - 19%', desc: 'Blasts 10-19%. Accelerated phase classification threshold reached.' },
+            { level: 'Blast Phase', range: '≥ 20%', desc: 'Blast Crisis – Blast phase classification threshold reached (≥ 20% blasts).' }
         ],
         'CLL': [
-            { level: 'Normal', range: '< 35%', desc: 'Lymphocytes within reactive ranges.' },
-            { level: 'Low', range: '35-50%', desc: 'Reactive / Secondary Lymphocytosis.' },
-            { level: 'Moderate', range: '51-65%', desc: 'Suspicious for Early CLL.' },
-            { level: 'High', range: '66-80%', desc: 'Typical CLL.' },
-            { level: 'Advanced', range: '> 80%', desc: 'Advanced / Progressive CLL.' }
+            { level: 'Below Suspicious', range: '< 40%', desc: 'Abnormal lymphocytes below suspicious threshold.' },
+            { level: 'Suspicious Lymphocytosis', range: '40% - 50%', desc: 'Above monitoring threshold. Further evaluation may be warranted.' },
+            { level: 'Typical CLL', range: '50% - 70%', desc: 'Moderate CLL classification threshold reached. Consistent with CLL classification.' },
+            { level: 'Advanced/Untreated CLL', range: '> 70%', desc: 'High CLL classification threshold reached (> 70% abnormal lymphocytes).' }
         ]
     };
 
@@ -308,7 +305,7 @@ export const FinalResults = ({
                                         )}
                                     </span>
                                     <div>
-                                        <p className="text-sm font-medium opacity-75 text-slate-500">Overall Patient Status</p>
+                                        <p className="text-sm font-medium opacity-75 text-slate-500">Overall Classification Status</p>
                                         <p className="text-3xl font-bold text-slate-800">{patientStatus || 'Normal'}</p>
                                     </div>
                                 </div>
@@ -338,6 +335,179 @@ export const FinalResults = ({
                                 <p className="text-xs text-slate-500 mt-1">{totalRBC > 0 ? ((sickleCell.count / totalRBC) * 100).toFixed(1) : 0}% of RBCs</p>
                             </div>
                         </div>
+
+                        {/* Overall Normal vs Disease Classification */}
+                        {overallClassification && (
+                            <div className={`mt-4 p-4 rounded-xl border shadow-sm ${
+                                overallClassification.level === 'normal' ? 'bg-green-50 border-green-200' :
+                                overallClassification.level === 'low' ? 'bg-blue-50 border-blue-200' :
+                                overallClassification.level === 'moderate' ? 'bg-amber-50 border-amber-200' :
+                                'bg-red-50 border-red-200'
+                            }`}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <p className={`text-sm font-semibold ${
+                                        overallClassification.level === 'normal' ? 'text-green-700' :
+                                        overallClassification.level === 'low' ? 'text-blue-700' :
+                                        overallClassification.level === 'moderate' ? 'text-amber-700' :
+                                        'text-red-700'
+                                    }`}>Normal vs Disease WBC Ratio</p>
+                                    <span className={`px-2 py-0.5 rounded-full text-xs font-bold uppercase ${
+                                        overallClassification.level === 'normal' ? 'bg-green-200 text-green-800' :
+                                        overallClassification.level === 'low' ? 'bg-blue-200 text-blue-800' :
+                                        overallClassification.level === 'moderate' ? 'bg-amber-200 text-amber-800' :
+                                        'bg-red-200 text-red-800'
+                                    }`}>{overallClassification.level}</span>
+                                </div>
+                                <div className="flex items-center gap-4 mb-2">
+                                    <div className="flex-1">
+                                        <div className="w-full h-4 bg-slate-200 rounded-full overflow-hidden flex">
+                                            <div className="h-full bg-green-500 transition-all duration-700 rounded-l-full" 
+                                                style={{ width: `${overallClassification.normalPercentage}%` }} />
+                                            <div className="h-full bg-red-400 transition-all duration-700 rounded-r-full" 
+                                                style={{ width: `${overallClassification.diseasePercentage}%` }} />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-green-700 font-semibold">Normal: {overallClassification.normalPercentage?.toFixed(1)}%</span>
+                                    <span className="text-red-600 font-semibold">Disease: {overallClassification.diseasePercentage?.toFixed(1)}%</span>
+                                </div>
+                                <p className="text-xs text-slate-600 mt-2">{overallClassification.interpretation}</p>
+                            </div>
+                        )}
+
+                        {/* Combined Confidence + Classification Bar Chart + Per-Image Severity */}
+                        {(() => {
+                            // Combined average confidence across all classified WBCs
+                            const allConfs = (wbcClassifications || []).map(c => c.classification_confidence || c.confidence || 0).filter(c => c > 0);
+                            const avgConf = allConfs.length > 0 ? allConfs.reduce((a, b) => a + b, 0) / allConfs.length : 0;
+
+                            // Classification breakdown for bar chart
+                            const BAR_CLASSES = [
+                                { key: 'Normal WBC', label: 'Normal', color: 'bg-green-500', text: 'text-green-700' },
+                                { key: 'Acute Lymphoblastic Leukemia', label: 'ALL', color: 'bg-purple-500', text: 'text-purple-700' },
+                                { key: 'Acute Myeloid Leukemia', label: 'AML', color: 'bg-red-500', text: 'text-red-700' },
+                                { key: 'Chronic Lymphocytic Leukemia', label: 'CLL', color: 'bg-orange-500', text: 'text-orange-700' },
+                                { key: 'Chronic Myeloid Leukemia', label: 'CML', color: 'bg-amber-500', text: 'text-amber-700' },
+                                { key: 'Sickle Cell Anemia', label: 'SCA', color: 'bg-rose-500', text: 'text-rose-700' },
+                            ];
+                            const classCounts = {};
+                            (wbcClassifications || []).forEach(cls => {
+                                const t = cls.classification || '';
+                                classCounts[t] = (classCounts[t] || 0) + 1;
+                            });
+                            const classPcts = BAR_CLASSES.map(c => ({
+                                ...c,
+                                count: classCounts[c.key] || 0,
+                                pct: totalWBC > 0 ? ((classCounts[c.key] || 0) / totalWBC) * 100 : 0
+                            }));
+
+                            // Per-image severity breakdown
+                            const severityCounts = { Normal: 0, Abnormal: 0, Critical: 0 };
+                            (processedImages || []).forEach(img => {
+                                const classifications = img.wbcClassifications || img.classifications || img.results?.wbc_classifications || img.results?.stage2_classification || [];
+                                const imgTotal = classifications.length;
+                                if (imgTotal === 0) { severityCounts.Normal++; return; }
+                                const diseaseCount = classifications.filter(c => {
+                                    const cl = c.classification || '';
+                                    return cl !== 'Normal WBC' && cl !== 'Normal RBC' && cl !== '';
+                                }).length;
+                                const diseasePct = (diseaseCount / imgTotal) * 100;
+                                if (diseasePct >= 20) severityCounts.Critical++;
+                                else if (diseasePct > 0) severityCounts.Abnormal++;
+                                else severityCounts.Normal++;
+                            });
+
+                            return (
+                                <>
+                                    {/* Combined Classification Confidence */}
+                                    {avgConf > 0 && (
+                                        <div className="mt-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <div className="flex items-center justify-between mb-2">
+                                                <p className="text-sm font-medium text-slate-600">Combined Classification Confidence</p>
+                                                <span className={`text-sm font-bold ${
+                                                    avgConf >= 0.8 ? 'text-green-700' : avgConf >= 0.6 ? 'text-amber-700' : 'text-red-700'
+                                                }`}>{(avgConf * 100).toFixed(1)}%</span>
+                                            </div>
+                                            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                                                <div className={`h-full rounded-full transition-all duration-700 ${
+                                                    avgConf >= 0.8 ? 'bg-green-500' : avgConf >= 0.6 ? 'bg-amber-500' : 'bg-red-400'
+                                                }`} style={{ width: `${avgConf * 100}%` }} />
+                                            </div>
+                                            <p className="text-xs text-slate-400 mt-1">Based on {allConfs.length} classified cells across {processedImages?.length || 0} images</p>
+                                        </div>
+                                    )}
+
+                                    {/* Classification Breakdown Bar Chart */}
+                                    <div className="mt-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                        <p className="text-sm font-medium text-slate-600 mb-3">Classification Breakdown (All Images)</p>
+                                        <div className="space-y-2">
+                                            {[...classPcts].sort((a, b) => b.pct - a.pct).map((cls) => (
+                                                <div key={cls.key} className="flex items-center gap-2">
+                                                    <span className={`${cls.text} text-xs w-14 font-semibold`}>{cls.label}</span>
+                                                    <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full ${cls.color} transition-all duration-500 rounded-full`}
+                                                            style={{ width: `${cls.pct}%` }}
+                                                        />
+                                                    </div>
+                                                    <span className="text-slate-700 text-xs font-medium w-20 text-right">
+                                                        {cls.count > 0 ? `${cls.count} (${cls.pct.toFixed(1)}%)` : '0'}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {/* Legend matching bar colors */}
+                                        <div className="mt-3 pt-2 border-t border-slate-100 flex flex-wrap justify-center gap-4 text-xs font-medium text-slate-500">
+                                            {BAR_CLASSES.map(cls => (
+                                                <div key={cls.key} className="flex items-center gap-1.5">
+                                                    <span className={`w-2.5 h-2.5 rounded-full ${cls.color}`}></span>
+                                                    <span>{cls.label}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Per-Image Severity Summary */}
+                                    {processedImages && processedImages.length > 0 && (
+                                        <div className="mt-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                                            <p className="text-sm font-medium text-slate-600 mb-3">Per-Image Analysis Summary</p>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                <div className="bg-green-50 rounded-lg p-3 border border-green-200 text-center">
+                                                    <p className="text-green-600 text-xs font-medium">Normal</p>
+                                                    <p className="text-2xl font-bold text-green-700">{severityCounts.Normal}</p>
+                                                    <p className="text-green-500 text-xs">images</p>
+                                                </div>
+                                                <div className={`rounded-lg p-3 border text-center ${severityCounts.Abnormal > 0 ? 'bg-amber-50 border-amber-200' : 'bg-slate-50 border-slate-200'}`}>
+                                                    <p className={`text-xs font-medium ${severityCounts.Abnormal > 0 ? 'text-amber-600' : 'text-slate-500'}`}>Abnormal</p>
+                                                    <p className={`text-2xl font-bold ${severityCounts.Abnormal > 0 ? 'text-amber-700' : 'text-slate-400'}`}>{severityCounts.Abnormal}</p>
+                                                    <p className={`text-xs ${severityCounts.Abnormal > 0 ? 'text-amber-500' : 'text-slate-400'}`}>images</p>
+                                                </div>
+                                                <div className={`rounded-lg p-3 border text-center ${severityCounts.Critical > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
+                                                    <p className={`text-xs font-medium ${severityCounts.Critical > 0 ? 'text-red-600' : 'text-slate-500'}`}>Critical</p>
+                                                    <p className={`text-2xl font-bold ${severityCounts.Critical > 0 ? 'text-red-700' : 'text-slate-400'}`}>{severityCounts.Critical}</p>
+                                                    <p className={`text-xs ${severityCounts.Critical > 0 ? 'text-red-500' : 'text-slate-400'}`}>images</p>
+                                                </div>
+                                            </div>
+                                            {/* Alert banner if there are critical/abnormal images */}
+                                            {(severityCounts.Critical > 0 || severityCounts.Abnormal > 0) && (
+                                                <div className={`mt-3 px-3 py-2 rounded-lg text-xs font-medium flex items-center gap-2 ${
+                                                    severityCounts.Critical > 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                                                }`}>
+                                                    <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                    </svg>
+                                                    {severityCounts.Critical > 0 
+                                                        ? `${severityCounts.Critical} image(s) flagged as Critical (\u226520% disease cells). Further review recommended.`
+                                                        : `${severityCounts.Abnormal} image(s) flagged as Abnormal (disease cells detected). Further evaluation recommended.`
+                                                    }
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            );
+                        })()}
                     </div>
 
                         {/* Detailed Metrics Button */}
@@ -511,7 +681,7 @@ export const FinalResults = ({
                                         <p>
                                             <strong>Note:</strong> Estimated counts are calculated from {processedImages.length} fields of view 
                                             (100× oil immersion). WBC formula: Average WBC per HPF × 2,000. RBC formula: Average RBC per field × 200,000.
-                                            Reference ranges based on WHO/CLSI standards.
+                                            Reference ranges based on established hematology standards.
                                         </p>
                                     </div>
                                 </div>
@@ -525,8 +695,8 @@ export const FinalResults = ({
             {activeTab === 'analysis' && (
                 <div>
                     <div className="px-6 py-6 border-b border-slate-200 bg-white">
-                        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">Disease Analysis</h3>
-                        <p className="text-sm text-slate-500 mb-4">Specific leukemia markers based on cellular morphology.</p>
+                        <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">Classification Analysis</h3>
+                        <p className="text-sm text-slate-500 mb-4">Leukemia classification markers based on cellular morphology.</p>
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                             {['AML', 'ALL', 'CML', 'CLL'].map(diseaseType => {
                                 const finding = diseaseFindings.find(f => f.type.includes(diseaseType));
@@ -562,58 +732,58 @@ export const FinalResults = ({
                         </div>
                     </div>
 
-                    {/* Detailed Disease Reference Guide */}
-                    <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 p-6 rounded-lg border border-slate-200">
+                    {/* Disease-Specific Classification Thresholds */}
+                    <div className="mt-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
                         <div>
-                            <h4 className="font-bold text-slate-700 mb-3 border-b pb-2">AML & CML</h4>
-                            <div className="space-y-3 text-sm text-slate-600">
-                                <div>
-                                    <span className="font-bold text-green-700">Normal (&lt; 10%)</span>
-                                    <p>Presence of rare blasts or CML-marked cells may be reactive or artifactual. Any blast count warrants clinical correlation.</p>
-                                </div>
-                                <div>
-                                    <span className="font-bold text-amber-600">Moderate (10-20%)</span>
-                                    <p>Suspicious for pre-leukemic conditions (MDS) or evolving leukemia. Requires bone marrow biopsy. BCR-ABL1 testing recommended for CML.</p>
-                                </div>
-                                <div>
-                                    <span className="font-bold text-red-700">High (&ge; 20%)</span>
-                                    <p>Diagnostic threshold for AML (WHO criteria) or CML. Immediate hematology referral required.</p>
-                                </div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                </svg>
+                                <h4 className="font-bold text-slate-800 text-base">Disease Classification Thresholds</h4>
                             </div>
-                        </div>
-                        <div>
-                            <h4 className="font-bold text-slate-700 mb-3 border-b pb-2">ALL & CLL</h4>
-                            <div className="space-y-3 text-sm text-slate-600">
-                                <div>
-                                    <span className="font-bold text-green-700">Normal (&lt; 35%)</span>
-                                    <p>Lymphoblasts or lymphocytes within reactive ranges. Balanced white cell differential.</p>
-                                </div>
-                                <div>
-                                    <span className="font-bold text-blue-600">Low (35-50%)</span>
-                                    <p>Reactive / Secondary Lymphocytosis. May occur with viral infections (e.g., EBV, CMV) or stress.</p>
-                                </div>
-                                <div>
-                                    <span className="font-bold text-amber-600">Moderate (51-65%)</span>
-                                    <p>Suspicious for early ALL or CLL. Persistent elevation suggestive of lymphoproliferative disorder.</p>
-                                </div>
-                                <div>
-                                    <span className="font-bold text-orange-600">High (66-80%)</span>
-                                    <p>Typical ALL or CLL. Marked lymphoblastic/lymphocytic predominance. Hematology referral required.</p>
-                                </div>
-                                <div>
-                                    <span className="font-bold text-red-700">High / Advanced (&gt; 80%)</span>
-                                    <p>Advanced / Progressive disease. Lymphoblasts or lymphocytes overwhelmingly dominate the smear. Immediate referral required.</p>
-                                </div>
+                            <p className="text-xs text-slate-500 mb-5 ml-7">Percentage thresholds used for each leukemia subtype. Calculated as (disease-type count ÷ total WBC) × 100.</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                {Object.entries(diseaseInterprestationRef).map(([disease, levels]) => (
+                                    <div key={disease} className="bg-slate-50 rounded-xl p-4 border border-slate-200 hover:shadow-md transition-shadow">
+                                        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-200">
+                                            <span className={`w-2.5 h-2.5 rounded-full ${
+                                                disease === 'AML' ? 'bg-red-500' : disease === 'ALL' ? 'bg-purple-500' : disease === 'CML' ? 'bg-amber-500' : 'bg-orange-500'
+                                            }`}></span>
+                                            <h5 className="font-bold text-slate-800 text-sm tracking-wide uppercase">{disease}</h5>
+                                        </div>
+                                        <div className="space-y-2.5">
+                                            {levels.map((level, idx) => (
+                                                <div key={idx} className="flex items-start gap-3">
+                                                    <span className={`font-mono font-bold flex-shrink-0 w-[5.5rem] px-2 py-1 rounded-md text-center text-[11px] border ${
+                                                        idx === levels.length - 1 ? 'bg-red-50 text-red-700 border-red-200' :
+                                                        idx >= levels.length - 2 ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                                                        'bg-green-50 text-green-700 border-green-200'
+                                                    }`}>{level.range}</span>
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="font-semibold text-slate-700 text-xs leading-tight">{level.level}</p>
+                                                        <p className="text-slate-500 text-[11px] mt-0.5 leading-snug">{level.desc}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </div>
 
                     {sickleCell && (
-                        <div className="px-6 py-6 border-t border-slate-200 bg-white">
-                            <h3 className="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">Sickle Cell Detailed Analysis</h3>
-                            <div className={`rounded-lg border p-5 ${sickleCell.severity !== 'NORMAL' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                                <div className="flex justify-between items-center mb-4 border-b border-black/5 pb-3">
-                                    <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                        <div className="mt-8 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+                            <div className="flex items-center gap-2 mb-1">
+                                <svg className="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                                </svg>
+                                <h3 className="font-bold text-slate-800 text-base">Sickle Cell Detailed Analysis</h3>
+                            </div>
+                            <p className="text-xs text-slate-500 mb-5 ml-7">RBC morphology assessment for sickle cell classification based on detected cell proportions.</p>
+                            <div className={`rounded-xl border p-5 ${sickleCell.severity !== 'NORMAL' ? 'bg-red-50/50 border-red-200' : 'bg-green-50/50 border-green-200'}`}>
+                                <div className="flex justify-between items-center mb-4 pb-3 border-b border-black/5">
+                                    <h4 className="font-bold text-slate-800 text-sm tracking-wide uppercase flex items-center gap-2">
                                         RBC Morphology Status
                                     </h4>
                                     <span className={`text-xs font-bold px-3 py-1 rounded-full border ${sickleCell.severity !== 'NORMAL' ? 'bg-red-100 text-red-800 border-red-200' : 'bg-green-100 text-green-800 border-green-200'}`}>
@@ -651,7 +821,7 @@ export const FinalResults = ({
 
                                     <div className="bg-white/60 rounded-lg p-3 border border-black/5">
                                         <h5 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1">
-                                            Clinical Recommendation
+                                            Classification Note
                                         </h5>
                                         <p className="text-sm text-slate-800 leading-relaxed">
                                             {sickleCell.recommendation || 'No specific recommendation provided.'}
@@ -661,24 +831,39 @@ export const FinalResults = ({
                             </div>
 
                             {/* Detailed Sickle Cell Reference */}
-                            <div className="mt-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                                <h4 className="font-bold text-slate-700 mb-2 text-sm">Understanding Sickle Cell Levels</h4>
-                                <div className="grid grid-cols-1 gap-2 text-sm text-slate-600">
-                                    <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
-                                        <span className="font-bold text-green-700">Normal (&lt; 3%)</span>
-                                        <span>Likely artifact or normal variant. No intervention needed if asymptomatic.</span>
+                            <div className="mt-5 bg-white/80 p-4 rounded-xl border border-slate-200">
+                                <h4 className="font-bold text-slate-700 mb-3 text-xs tracking-wide uppercase flex items-center gap-2">
+                                    <span className="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+                                    Sickle Cell Classification Levels
+                                </h4>
+                                <div className="grid grid-cols-1 gap-2.5 text-sm text-slate-600">
+                                    <div className="flex items-start gap-3">
+                                        <span className="font-mono font-bold flex-shrink-0 w-[5.5rem] px-2 py-1 rounded-md text-center text-[11px] border bg-green-50 text-green-700 border-green-200">&lt; 3%</span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-slate-700 text-xs leading-tight">Normal</p>
+                                            <p className="text-slate-500 text-[11px] mt-0.5 leading-snug">Below classification threshold. Likely artifact or normal variant.</p>
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
-                                        <span className="font-bold text-yellow-600">Mild (3-10%)</span>
-                                        <span>Suggestive of Sickle Cell Trait (HbAS). Patient is typically a carrier. Genetic counseling advised.</span>
+                                    <div className="flex items-start gap-3">
+                                        <span className="font-mono font-bold flex-shrink-0 w-[5.5rem] px-2 py-1 rounded-md text-center text-[11px] border bg-yellow-50 text-yellow-700 border-yellow-200">3 – 10%</span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-slate-700 text-xs leading-tight">Mild</p>
+                                            <p className="text-slate-500 text-[11px] mt-0.5 leading-snug">Mild sickling threshold met. Suggestive of sickle cell trait (HbAS) pattern.</p>
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
-                                        <span className="font-bold text-amber-600">Moderate (10-30%)</span>
-                                        <span>Suggestive of Sickle Cell Disease (HbSS/HbSC). Referral to hematologist recommended.</span>
+                                    <div className="flex items-start gap-3">
+                                        <span className="font-mono font-bold flex-shrink-0 w-[5.5rem] px-2 py-1 rounded-md text-center text-[11px] border bg-amber-50 text-amber-700 border-amber-200">10 – 30%</span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-slate-700 text-xs leading-tight">Moderate</p>
+                                            <p className="text-slate-500 text-[11px] mt-0.5 leading-snug">Moderate sickling threshold met. Suggestive of sickle cell disease (HbSS/HbSC) pattern.</p>
+                                        </div>
                                     </div>
-                                    <div className="grid grid-cols-[140px_1fr] gap-2 items-start">
-                                        <span className="font-bold text-red-700">Severe (&gt; 30%)</span>
-                                        <span>Consistent with active Sickle Cell Disease crisis. Urgent medical evaluation required.</span>
+                                    <div className="flex items-start gap-3">
+                                        <span className="font-mono font-bold flex-shrink-0 w-[5.5rem] px-2 py-1 rounded-md text-center text-[11px] border bg-red-50 text-red-700 border-red-200">&gt; 30%</span>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="font-semibold text-slate-700 text-xs leading-tight">Severe</p>
+                                            <p className="text-slate-500 text-[11px] mt-0.5 leading-snug">Severe sickling threshold met. Classification consistent with active sickle cell morphology.</p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -715,7 +900,7 @@ export const FinalResults = ({
                                                 )}
                                             </span>
                                             <div>
-                                                <p className="text-sm font-medium opacity-75">Overall Patient Status</p>
+                                                <p className="text-sm font-medium opacity-75">Overall Classification Status</p>
                                                 <p className="text-3xl font-bold">{patientStatus || 'Normal'}</p>
                                             </div>
                                         </div>
@@ -789,116 +974,134 @@ export const FinalResults = ({
                                                         const pct = finding.percentage || 0;
                                                         const type = finding.type || '';
 
-                                                        if (type.includes('AML')) {
+                                                        // Disease-specific threshold interpretation
+                                                        const getAMLInfo = () => {
                                                             if (pct >= 20) return {
-                                                                title: 'AML - Diagnostic Level',
+                                                                title: 'AML - Blast Phase Threshold',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'IMMEDIATE REFERRAL: Urgent Hematology/Oncology admission required.',
-                                                                clinicalNote: 'Finding of ≥20% blasts is diagnostic for Acute Leukemia. Perform rapid workup.',
-                                                                reference: 'WHO criteria: ≥20% blasts in peripheral blood or bone marrow diagnostic for AML.',
+                                                                action: `AML classification threshold met (≥ 20% blasts).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% of WBCs classified as AML blasts. Classification threshold for AML blast phase reached.`,
+                                                                reference: `AML threshold: ≥ 20% blasts = classification threshold met.`,
                                                                 color: 'red'
                                                             };
                                                             if (pct >= 10) return {
-                                                                title: 'AML - Suspicious/High Risk',
+                                                                title: 'AML - Intermediate Level',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'URGENT REFERRAL: Hematology consultation within 24 hours.',
-                                                                clinicalNote: 'High suspicion for emerging acute leukemia or MDS with excess blasts.',
-                                                                reference: 'Blasts 10-19% suggest MDS with Excess Blasts-2 (MDS-EB-2) or evolving AML.',
+                                                                action: `AML blasts at intermediate level (10–19%). Below 20% classification threshold.`,
+                                                                clinicalNote: `${pct.toFixed(1)}% blasts detected. Below the 20% threshold for AML classification.`,
+                                                                reference: `AML threshold: ≥ 20% blasts required for classification.`,
                                                                 color: 'amber'
                                                             };
                                                             return {
-                                                                title: 'Blasts Detected - Monitor',
+                                                                title: 'AML - Below Threshold',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'Review blood smear manually. Repeat CBC in 1 week.',
-                                                                clinicalNote: 'Presence of circulating blasts is abnormal. Rule out physiological stress, infection, or sampling error.',
-                                                                reference: 'Circulating blasts <5-10% may be seen in severe infection (leukemoid reaction) or G-CSF therapy.',
+                                                                action: `AML blasts below classification threshold (< 10%).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% blasts detected. Well below 20% classification threshold.`,
+                                                                reference: `AML threshold: ≥ 20% blasts required for classification.`,
                                                                 color: 'yellow'
                                                             };
-                                                        }
-                                                        if (type.includes('ALL')) {
+                                                        };
+
+                                                        const getALLInfo = () => {
                                                             if (pct >= 20) return {
-                                                                title: 'ALL - Diagnostic Level',
+                                                                title: 'ALL - Lymphoblast Phase Threshold',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'IMMEDIATE REFERRAL: Urgent Hematology/Oncology admission required.',
-                                                                clinicalNote: 'Finding of ≥20% lymphoblasts is diagnostic for Acute Lymphoblastic Leukemia.',
-                                                                reference: 'WHO criteria: ≥20% lymphoblasts diagnostic for ALL.',
+                                                                action: `ALL classification threshold met (≥ 20% lymphoblasts).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% of WBCs classified as ALL lymphoblasts. Classification threshold reached.`,
+                                                                reference: `ALL threshold: ≥ 20% lymphoblasts = classification threshold met.`,
                                                                 color: 'red'
                                                             };
                                                             if (pct >= 10) return {
-                                                                title: 'ALL - Suspicious/High Risk',
+                                                                title: 'ALL - Intermediate Level',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'URGENT REFERRAL: Hematology consultation within 24-48 hours.',
-                                                                clinicalNote: 'Suspicious for lymphoproliferative disorder or viral etiology.',
-                                                                reference: 'Distinguish from reactive atypical lymphocytes (mononucleosis) via flow cytometry.',
+                                                                action: `ALL lymphoblasts at intermediate level (10–19%). Below 20% classification threshold.`,
+                                                                clinicalNote: `${pct.toFixed(1)}% lymphoblasts detected. Below the 20% classification threshold.`,
+                                                                reference: `ALL threshold: ≥ 20% lymphoblasts required for classification.`,
                                                                 color: 'amber'
                                                             };
                                                             return {
-                                                                title: 'Lymphoblasts Detected - Monitor',
+                                                                title: 'ALL - Below Threshold',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'Review smear. Correlate with viral symptoms.',
-                                                                clinicalNote: 'Rule out viral infections (EBV, CMV) which can mimic blasts.',
-                                                                reference: 'Clinical correlation essential.',
+                                                                action: `ALL lymphoblasts below classification threshold (< 10%).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% lymphoblasts detected. Well below 20% classification threshold.`,
+                                                                reference: `ALL threshold: ≥ 20% lymphoblasts required for classification.`,
                                                                 color: 'yellow'
                                                             };
-                                                        }
-                                                        if (type.includes('CML')) {
+                                                        };
+
+                                                        const getCMLInfo = () => {
                                                             if (pct >= 20) return {
-                                                                title: 'CML - Diagnostic Level',
+                                                                title: 'CML - Blast Phase Threshold',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'IMMEDIATE REFERRAL: Significant CML-marked granulocyte proliferation. BCR-ABL1 testing mandatory.',
-                                                                clinicalNote: 'Diagnostic threshold for CML reached. Immediate hematology referral required.',
-                                                                reference: 'Significant CML-marked cells strongly suggestive of Chronic Myeloid Leukemia.',
+                                                                action: `CML blast phase classification threshold met (≥ 20% blasts).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% blasts detected. Blast crisis classification threshold reached.`,
+                                                                reference: `CML thresholds: < 10% chronic, 10–19% accelerated, ≥ 20% blast phase.`,
                                                                 color: 'red'
                                                             };
                                                             if (pct >= 10) return {
-                                                                title: 'CML - Suspicious / Pre-leukemic',
+                                                                title: 'CML - Accelerated Phase',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'REFERRAL: Hematology appointment for BCR-ABL1 testing recommended.',
-                                                                clinicalNote: 'Suspicious for pre-leukemic conditions or early CML.',
-                                                                reference: 'Presence of CML-marked granulocytes warrants further investigation.',
+                                                                action: `CML accelerated phase classification threshold met (10–19% blasts).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% blasts detected. Within accelerated phase range.`,
+                                                                reference: `CML thresholds: < 10% chronic, 10–19% accelerated, ≥ 20% blast phase.`,
                                                                 color: 'amber'
                                                             };
                                                             return {
-                                                                title: 'CML Markers Detected',
+                                                                title: 'CML - Chronic Phase',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'Monitor. CML-marked cells below diagnostic threshold.',
-                                                                clinicalNote: 'Low-level CML markers may be reactive or artifactual.',
-                                                                reference: 'Below diagnostic threshold. Serial CBC monitoring recommended.',
+                                                                action: `CML blasts in chronic phase range (< 10%).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% blasts detected. Within chronic phase range.`,
+                                                                reference: `CML thresholds: < 10% chronic, 10–19% accelerated, ≥ 20% blast phase.`,
                                                                 color: 'yellow'
                                                             };
-                                                        }
-                                                        if (type.includes('CLL')) {
+                                                        };
+
+                                                        const getCLLInfo = () => {
+                                                            if (pct > 70) return {
+                                                                title: 'CLL - High Classification Threshold',
+                                                                interpretation: finding.interpretation,
+                                                                action: `High CLL classification threshold met (> 70% abnormal lymphocytes).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% abnormal lymphocytes. High classification threshold exceeded.`,
+                                                                reference: `CLL thresholds: < 40% below suspicious, 40–50% suspicious, 50–70% typical, > 70% advanced.`,
+                                                                color: 'red'
+                                                            };
                                                             if (pct >= 50) return {
-                                                                title: 'CLL - Progressive/Advanced',
+                                                                title: 'CLL - Typical CLL Range',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'REFERRAL: Hematology consultation for staging.',
-                                                                clinicalNote: 'Significant lymphocytosis. Assess for adenopathy/splenomegaly.',
-                                                                reference: 'Persistent ALC >5000/uL with characteristic immunophenotype confirms CLL.',
-                                                                color: 'red'
-                                                            };
-                                                            if (pct >= 20) return {
-                                                                title: 'CLL - Typical',
-                                                                interpretation: finding.interpretation,
-                                                                action: 'Non-Urgent Referral. Monitor total lymphocyte count.',
-                                                                clinicalNote: 'Common in elderly. "Smudge cells" often present (Albumin prep may reduce them).',
-                                                                reference: 'Common incidental finding in older adults.',
+                                                                action: `Moderate CLL classification threshold met (50–70% abnormal lymphocytes).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% abnormal lymphocytes. Within typical CLL classification range.`,
+                                                                reference: `CLL thresholds: < 40% below suspicious, 40–50% suspicious, 50–70% typical, > 70% advanced.`,
                                                                 color: 'amber'
                                                             };
-                                                            return {
-                                                                title: 'Lymphocytosis - Reactive vs Early CLL',
+                                                            if (pct >= 40) return {
+                                                                title: 'CLL - Suspicious Lymphocytosis',
                                                                 interpretation: finding.interpretation,
-                                                                action: 'Repeat CBC in 4 weeks. Monitor.',
-                                                                clinicalNote: 'Mild lymphocytosis is often viral.',
-                                                                reference: 'Persistent lymphocytosis >3 months warrants investigation.',
+                                                                action: `CLL above monitoring threshold (40–50%).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% abnormal lymphocytes. Above CLL monitoring threshold.`,
+                                                                reference: `CLL thresholds: < 40% below suspicious, 40–50% suspicious, 50–70% typical, > 70% advanced.`,
                                                                 color: 'yellow'
                                                             };
-                                                        }
+                                                            return {
+                                                                title: 'CLL - Below Suspicious Threshold',
+                                                                interpretation: finding.interpretation,
+                                                                action: `CLL below suspicious threshold (< 40%).`,
+                                                                clinicalNote: `${pct.toFixed(1)}% abnormal lymphocytes detected. Below CLL suspicious threshold.`,
+                                                                reference: `CLL thresholds: < 40% below suspicious, 40–50% suspicious, 50–70% typical, > 70% advanced.`,
+                                                                color: 'yellow'
+                                                            };
+                                                        };
+
+                                                        if (type.includes('AML')) return getAMLInfo();
+                                                        if (type.includes('ALL')) return getALLInfo();
+                                                        if (type.includes('CML')) return getCMLInfo();
+                                                        if (type.includes('CLL')) return getCLLInfo();
+
                                                         return {
                                                             title: finding.condition || finding.type,
                                                             interpretation: finding.interpretation,
-                                                            action: 'Clinical correlation required.',
-                                                            clinicalNote: 'Uncommon finding.',
-                                                            reference: 'Consult hematology references.',
+                                                            action: 'Classification recorded.',
+                                                            clinicalNote: 'Uncommon classification type.',
+                                                            reference: 'See standard hematology classification references.',
                                                             color: 'slate'
                                                         };
                                                     };
@@ -959,7 +1162,7 @@ export const FinalResults = ({
                                                                             <svg className={`w - 3 h - 3 transition - transform duration - 300 ${isExpanded ? 'rotate-180' : ''} `} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                                                             </svg>
-                                                                            {isExpanded ? 'Collapse Details' : 'View Clinical Details'}
+                                                                            {isExpanded ? 'Collapse Details' : 'View Classification Details'}
                                                                         </div>
                                                                     </div>
 
@@ -1000,7 +1203,7 @@ export const FinalResults = ({
                                                                             </div>
 
                                                                             <div>
-                                                                                <h6 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Clinical Note</h6>
+                                                                                <h6 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Classification Note</h6>
                                                                                 <p className="text-sm text-slate-700 leading-relaxed">{medicalInfo.clinicalNote}</p>
                                                                             </div>
                                                                         </div>
@@ -1039,7 +1242,7 @@ export const FinalResults = ({
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                                                         </svg>
                                                                         <p className="text-[10px] text-slate-500 leading-tight">
-                                                                            <strong>AI Disclaimer:</strong> This analysis is computer-generated. All findings, especially those marked High/Critical,
+                                                                            <strong>AI Disclaimer:</strong> This analysis is computer-generated. All results, especially those marked High/Critical,
                                                                             must be verified by manual microscopic review by a qualified professional.
                                                                         </p>
                                                                     </div>
@@ -1058,35 +1261,35 @@ export const FinalResults = ({
 
                                             const getSickleInfo = () => {
                                                 if (pct >= 30) return {
-                                                    title: 'Severe Sickling (HbSS)',
-                                                    interpretation: `High confidence Sickle Cell Disease pattern(${pct.toFixed(1)} %).`,
-                                                    action: 'URGENT: Hematology evaluation. Assess for acute chest syndrome/vaso-occlusion.',
-                                                    clinicalNote: 'Microscopy shows irreversible sickled cells, targets, and polychromasia.',
-                                                    reference: 'Diagnostic for major sickle beta-globinopathy (HbSS).',
+                                                    title: 'Severe Sickling Threshold Met',
+                                                    interpretation: `High sickle cell classification rate (${pct.toFixed(1)}%).`,
+                                                    action: 'Above severe sickling threshold (> 30%). HbSS classification threshold met.',
+                                                    clinicalNote: 'Classification consistent with significant sickle cell morphology.',
+                                                    reference: 'Sickle cell thresholds: < 3% normal, 3–10% mild, 10–30% moderate, > 30% severe.',
                                                     severity: 'SEVERE'
                                                 };
                                                 if (pct >= 10) return {
-                                                    title: 'Moderate Sickling',
-                                                    interpretation: `Significant sickling present(${pct.toFixed(1)} %).`,
-                                                    action: 'Hematology referral for hemoglobin electrophoresis.',
-                                                    clinicalNote: 'Differential includes HbSC, HbS-Thal, or HbSS with high fetal hemoglobin.',
-                                                    reference: 'Further testing required to distinguish genotype.',
+                                                    title: 'Moderate Sickling Threshold',
+                                                    interpretation: `Moderate sickle cell classification rate (${pct.toFixed(1)}%).`,
+                                                    action: 'Moderate sickling threshold met (10–30%).',
+                                                    clinicalNote: 'Classification suggests moderate sickling morphology.',
+                                                    reference: 'Sickle cell thresholds: < 3% normal, 3–10% mild, 10–30% moderate, > 30% severe.',
                                                     severity: 'MODERATE'
                                                 };
                                                 if (pct >= 3) return {
-                                                    title: 'Mild Sickling / Trait',
-                                                    interpretation: `Occasional sickle forms detected(${pct.toFixed(1)} %).`,
-                                                    action: 'Routine follow-up. Genetic counseling if family planning.',
-                                                    clinicalNote: 'Likely Sickle Cell Trait (HbAS) or compound heterozygote.',
-                                                    reference: 'Usually asymptomatic under normal physiological conditions.',
+                                                    title: 'Mild Sickling Detected',
+                                                    interpretation: `Low sickle cell classification rate (${pct.toFixed(1)}%).`,
+                                                    action: 'Mild sickling threshold met (3–10%).',
+                                                    clinicalNote: 'Classification suggests low-level sickle cell morphology.',
+                                                    reference: 'Sickle cell thresholds: < 3% normal, 3–10% mild, 10–30% moderate, > 30% severe.',
                                                     severity: 'MILD'
                                                 };
                                                 return {
                                                     title: 'Normal RBC Morphology',
                                                     interpretation: 'No sickling detected.',
-                                                    action: 'No action required regarding sickle cell.',
+                                                    action: 'Below sickling classification threshold (< 3%).',
                                                     clinicalNote: 'Normal red cell morphology observed.',
-                                                    reference: 'Normal.',
+                                                    reference: 'Sickle cell thresholds: < 3% normal, 3–10% mild, 10–30% moderate, > 30% severe.',
                                                     severity: 'NORMAL'
                                                 };
                                             };
@@ -1142,7 +1345,7 @@ export const FinalResults = ({
                                                                     <svg className={`w - 3 h - 3 transition - transform duration - 300 ${isExpanded ? 'rotate-180' : ''} `} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                                                                     </svg>
-                                                                    {isExpanded ? 'Collapse Details' : 'View Clinical Details'}
+                                                                    {isExpanded ? 'Collapse Details' : 'View Classification Details'}
                                                                 </div>
                                                             </div>
                                                             <div className="text-right">
@@ -1181,7 +1384,7 @@ export const FinalResults = ({
                                                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                                         </svg>
-                                                                        Clinical Recommendation
+                                                                        Classification Note
                                                                     </p>
                                                                     <p className="text-sm text-blue-800">{sickleInfo.clinicalNote}</p>
                                                                 </div>
@@ -1265,34 +1468,40 @@ export const FinalResults = ({
                         </div>
 
                         {/* ConvNeXt Classification Breakdown */}
-                        {aggregatedResults.classificationCounts && Object.keys(aggregatedResults.classificationCounts).length > 0 && (
-                            <div className="px-6 py-4 border-b border-slate-200">
-                                <h3 className="text-lg font-semibold text-slate-700 mb-3">Classification Breakdown</h3>
-                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                                    {Object.entries(aggregatedResults.classificationCounts)
-                                        .sort((a, b) => b[1] - a[1]) // Sort by count descending
-                                        .map(([className, count]) => {
-                                            const catInfo = getClassificationCategory(className);
-                                            const percentage = totalWBC > 0 ? ((count / totalWBC) * 100).toFixed(1) : 0;
-                                            return (
-                                                <div
-                                                    key={className}
-                                                    className={`p-2 rounded-lg border ${catInfo.color}`}
-                                                >
-                                                    <p className="text-xs font-semibold truncate" title={catInfo.label}>
-                                                        {catInfo.label}
-                                                    </p>
-                                                    <div className="flex justify-between items-baseline mt-1">
-                                                        <span className="text-lg font-bold">{count}</span>
-                                                        <span className="text-xs opacity-75">{percentage}%</span>
-                                                    </div>
+                        <div className="px-6 py-4 border-b border-slate-200">
+                            <h3 className="text-lg font-semibold text-slate-700 mb-3">Classification Breakdown</h3>
+                            {(() => {
+                                const ALL_CLASSES = [
+                                    { key: 'Normal WBC', label: 'Normal', color: 'bg-green-100 text-green-800 border-green-300', barColor: 'bg-green-500' },
+                                    { key: 'Acute Lymphoblastic Leukemia', label: 'ALL', color: 'bg-purple-100 text-purple-800 border-purple-300', barColor: 'bg-purple-500' },
+                                    { key: 'Acute Myeloid Leukemia', label: 'AML', color: 'bg-red-100 text-red-800 border-red-300', barColor: 'bg-red-500' },
+                                    { key: 'Chronic Lymphocytic Leukemia', label: 'CLL', color: 'bg-orange-100 text-orange-800 border-orange-300', barColor: 'bg-orange-500' },
+                                    { key: 'Chronic Myeloid Leukemia', label: 'CML', color: 'bg-amber-100 text-amber-800 border-amber-300', barColor: 'bg-amber-500' },
+                                    { key: 'Sickle Cell Anemia', label: 'SCA', color: 'bg-rose-100 text-rose-800 border-rose-300', barColor: 'bg-rose-500' },
+                                ];
+                                const cc = aggregatedResults.classificationCounts || {};
+                                const items = ALL_CLASSES.map(c => ({
+                                    ...c,
+                                    count: cc[c.key] || 0,
+                                    pct: totalWBC > 0 ? ((cc[c.key] || 0) / totalWBC) * 100 : 0
+                                })).sort((a, b) => b.pct - a.pct);
+                                return (
+                                    <div className="space-y-2">
+                                        {items.map(cls => (
+                                            <div key={cls.key} className="flex items-center gap-2">
+                                                <span className={`text-xs w-14 font-semibold ${cls.color.split(' ')[1]}`}>{cls.label}</span>
+                                                <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                                                    <div className={`h-full ${cls.barColor} transition-all duration-500 rounded-full`} style={{ width: `${cls.pct}%` }} />
                                                 </div>
-                                            );
-                                        })
-                                    }
-                                </div>
-                            </div>
-                        )}
+                                                <span className="text-slate-700 text-xs font-medium w-20 text-right">
+                                                    {cls.count > 0 ? `${cls.count} (${cls.pct.toFixed(1)}%)` : '0'}
+                                                </span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                );
+                            })()}
+                        </div>
 
                     </div>
                 )
@@ -1479,12 +1688,10 @@ export const FinalResults = ({
 
                         {/* Classification Legend */}
                         <div className="px-6 py-3 bg-red-50 border-t border-red-200">
-                            <p className="text-xs text-red-700 font-medium mb-2">Classification Legend (Based on About Page Thresholds):</p>
+                            <p className="text-xs text-red-700 font-medium mb-2">Classification Legend (7-Class ConvNeXt Model):</p>
                             <div className="flex flex-wrap gap-2 text-xs">
-                                <span className="px-2 py-1 bg-red-100 text-red-800 rounded">AML/ALL: Blast cells (20% or more = Acute Leukemia)</span>
-                                <span className="px-2 py-1 bg-red-100 text-red-800 rounded">CML: Granulocytes (60% or more = CML indicators)</span>
-                                <span className="px-2 py-1 bg-red-100 text-red-800 rounded">CLL: Lymphocytes (40% or more = CLL indicators)</span>
-                                <span className="px-2 py-1 bg-green-100 text-green-800 rounded">Normal: Healthy WBC types</span>
+                                <span className="px-2 py-1 bg-green-100 text-green-800 rounded">Normal WBC: Healthy white blood cells</span>
+                                <span className="px-2 py-1 bg-red-100 text-red-800 rounded">All Leukemia Types (AML, ALL, CML, CLL): Unified thresholds - &lt;5% Normal, 5-10% Low, 10-20% Moderate, ≥20% High</span>
                             </div>
                         </div>
                     </div>
@@ -1508,7 +1715,7 @@ export const FinalResults = ({
                                 </p>
                             </div>
                             <p className="text-xs text-amber-700 mb-3">
-                                These WBCs have been classified with disease markers (CML, CLL, ALL, AML) and require further review.
+                                These WBCs have been classified with abnormal markers (CML, CLL, ALL, AML) and require further review.
                             </p>
                         </div>
 
@@ -1548,7 +1755,7 @@ export const FinalResults = ({
 
                         {/* Abnormal WBCs Legend */}
                         <div className="px-6 py-3 bg-amber-50 border-t border-amber-200">
-                            <p className="text-xs text-amber-700 font-medium mb-2">Disease Markers Detected:</p>
+                            <p className="text-xs text-amber-700 font-medium mb-2">Abnormal Classification Markers:</p>
                             <div className="flex flex-wrap gap-2 text-xs">
                                 <span className="px-2 py-1 bg-red-100 text-red-800 rounded">AML: Acute Myeloid Leukemia</span>
                                 <span className="px-2 py-1 bg-red-100 text-red-800 rounded">ALL: Acute Lymphoblastic Leukemia</span>
@@ -1643,11 +1850,11 @@ export const FinalResults = ({
             {/* Highlighted Disclaimer - Footer */}
             <div className="px-6 py-4 bg-red-50 border-t border-red-100">
                 <div className="flex items-start gap-3 justify-center">
-                    <span className="font-bold bg-red-200 text-red-800 px-2 py-0.5 rounded text-xs shrink-0 mt-0.5">CLINICAL DISCLAIMER:</span>
+                    <span className="font-bold bg-red-200 text-red-800 px-2 py-0.5 rounded text-xs shrink-0 mt-0.5">DISCLAIMER:</span>
                     <p className="text-xs text-red-800 leading-relaxed max-w-3xl">
-                        This analysis is for research and educational purposes only. It is not a definitive medical diagnosis.
-                        All findings must be verified by a board-certified pathologist or hematologist.
-                        Additional diagnostic tests (e.g., Flow Cytometry, Bone Marrow Biopsy, Hb Electrophoresis) may be required for confirmation.
+                        This analysis is for research and educational purposes only. It is not a medical diagnosis.
+                        All classification results are based on automated cell morphology analysis and established threshold comparisons.
+                        Results should be verified by a qualified professional before any clinical interpretation.
                     </p>
                 </div>
             </div>

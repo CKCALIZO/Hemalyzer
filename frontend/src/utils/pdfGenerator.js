@@ -5,7 +5,7 @@ export const generatePDF = (report) => {
     if (!report) return;
     const doc = new jsPDF();
 
-    // --- Helper for Disease-Based Clinical Recommendations ---
+    // --- Helper for Threshold-Based Classification Interpretation ---
     const getDiseaseRecommendations = (diseaseFindings, sickleCell) => {
         const abnormalLines = [];
         const normalDiseases = [];
@@ -16,42 +16,47 @@ export const generatePDF = (report) => {
                 const severity = finding.severity || 'NORMAL';
                 const label = finding.condition || finding.type || 'Unknown';
 
-                if (severity === 'NORMAL') {
-                    // Collect normal diseases for a single grouped line
+                if (severity === 'NORMAL' || severity === 'BELOW_THRESHOLD') {
+                    // Collect below-threshold diseases for a single grouped line
                     normalDiseases.push(label);
                     return;
                 }
 
-                // Abnormal: show detailed recommendation
+                // Above threshold: show which threshold was met
                 if (finding.recommendation) {
-                    const icon = '-';
-                    abnormalLines.push(`${icon} ${label}: ${finding.recommendation}`);
+                    abnormalLines.push(`- ${label}: ${finding.recommendation}`);
                 } else {
-                    // Fallback: Generate recommendation based on disease type and severity
+                    // Fallback: Generate interpretation based on disease type and threshold met
                     const type = finding.type || '';
                     const pct = finding.percentage ? finding.percentage.toFixed(1) : '0';
 
-                    if (type.includes('AML') || type.includes('ALL')) {
+                    if (type.includes('AML')) {
                         if (severity === 'HIGH') {
-                            abnormalLines.push(`- ${label} (${pct}% blasts): Immediate hematologist referral. Bone marrow biopsy and cytogenetic testing recommended.`);
-                        } else if (severity === 'MODERATE') {
-                            abnormalLines.push(`- ${label} (${pct}%): Close monitoring advised. Repeat CBC in 1-2 weeks.`);
-                        } else if (severity === 'LOW') {
-                            abnormalLines.push(`- ${label} (${pct}%): Reactive lymphocytosis possible. Repeat CBC in 2-4 weeks.`);
+                            abnormalLines.push(`- ${label} (${pct}%): Blast Phase threshold met (>= 20% blasts). AML blast phase classification threshold reached.`);
+                        } else {
+                            abnormalLines.push(`- ${label} (${pct}%): Blasts detected below blast phase classification threshold (< 20%).`);
+                        }
+                    } else if (type.includes('ALL')) {
+                        if (severity === 'HIGH') {
+                            abnormalLines.push(`- ${label} (${pct}%): Lymphoblast Phase threshold met (>= 20% lymphoblasts). ALL lymphoblast classification threshold reached.`);
+                        } else {
+                            abnormalLines.push(`- ${label} (${pct}%): Lymphoblasts detected below lymphoblast classification threshold (< 20%).`);
                         }
                     } else if (type.includes('CML')) {
                         if (severity === 'HIGH') {
-                            abnormalLines.push(`- ${label} (${pct}%): BCR-ABL testing required. Tyrosine kinase inhibitor therapy evaluation advised.`);
+                            abnormalLines.push(`- ${label} (${pct}%): Blast Crisis threshold met (>= 20% blasts). CML blast phase classification threshold reached.`);
                         } else if (severity === 'MODERATE') {
-                            abnormalLines.push(`- ${label} (${pct}%): Confirm with BCR-ABL testing. Monitor WBC trend. Follow-up in 2-4 weeks.`);
+                            abnormalLines.push(`- ${label} (${pct}%): Accelerated Phase threshold met (10-19% blasts). Accelerated phase classification threshold reached.`);
+                        } else if (severity === 'LOW') {
+                            abnormalLines.push(`- ${label} (${pct}%): Chronic Phase (< 10% blasts). Below accelerated phase threshold.`);
                         }
                     } else if (type.includes('CLL')) {
                         if (severity === 'HIGH') {
-                            abnormalLines.push(`- ${label} (${pct}%): Immunophenotyping recommended. Regular monitoring every 3-6 months.`);
+                            abnormalLines.push(`- ${label} (${pct}%): Advanced/Untreated CLL threshold met (> 70% abnormal lymphocytes). High CLL classification threshold reached.`);
                         } else if (severity === 'MODERATE') {
-                            abnormalLines.push(`- ${label} (${pct}%): Observe and monitor. Repeat CBC in 3 months.`);
+                            abnormalLines.push(`- ${label} (${pct}%): Typical CLL threshold met (50-70% abnormal lymphocytes). Moderate CLL classification threshold reached.`);
                         } else if (severity === 'LOW') {
-                            abnormalLines.push(`- ${label} (${pct}%): Reactive lymphocytosis possible. Repeat CBC in 2-4 weeks.`);
+                            abnormalLines.push(`- ${label} (${pct}%): Suspicious Lymphocytosis (40-50%). Above monitoring threshold.`);
                         }
                     }
                 }
@@ -65,11 +70,11 @@ export const generatePDF = (report) => {
             } else {
                 const sicklePct = sickleCell.percentage;
                 if (sicklePct > 30) {
-                    abnormalLines.push("- Severe Sickle Cell Disease (HbSS): Comprehensive management required. Hydroxyurea therapy evaluation. Pain management protocols advised.");
+                    abnormalLines.push(`- Severe Sickling (${sicklePct.toFixed(1)}%): HbSS classification threshold met (> 30% sickled cells).`);
                 } else if (sicklePct >= 10) {
-                    abnormalLines.push("- Moderate Sickling: Hemoglobin electrophoresis recommended. Avoid dehydration. Regular follow-up advised.");
+                    abnormalLines.push(`- Moderate Sickling (${sicklePct.toFixed(1)}%): Above moderate threshold (10-30% sickled cells).`);
                 } else if (sicklePct >= 3) {
-                    abnormalLines.push("- Sickle Cell Trait (HbAS): Genetic counseling recommended. Avoid extreme exertion and altitude.");
+                    abnormalLines.push(`- Sickle Cell Trait (${sicklePct.toFixed(1)}%): HbAS threshold met (3-10% sickled cells).`);
                 }
             }
         }
@@ -82,12 +87,12 @@ export const generatePDF = (report) => {
         }
 
         if (normalDiseases.length > 0) {
-            lines.push(`For Monitoring / Normal: ${normalDiseases.join(', ')}. No significant abnormalities detected.`);
+            lines.push(`Below Threshold: ${normalDiseases.join(', ')}. Within normal classification range.`);
         }
 
         // Default if no findings at all
         if (lines.length === 0) {
-            return "Blood parameters within normal limits. No significant hematological abnormalities detected. Continue routine health monitoring.";
+            return "All classification parameters within normal range. No classification thresholds met for any disease type.";
         }
 
         return lines.join("\n");
@@ -220,11 +225,11 @@ export const generatePDF = (report) => {
 
     y = doc.lastAutoTable.finalY + 15;
 
-    // --- Clinical Recommendations (Disease-Based) ---
+    // --- Threshold Interpretation ---
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
     doc.setTextColor(139, 0, 0); // Dark Red
-    doc.text("Clinical Recommendations:", 15, y);
+    doc.text("Classification Results & Threshold Interpretation:", 15, y);
     y += 6;
 
     doc.setFont("helvetica", "normal");
@@ -244,8 +249,8 @@ export const generatePDF = (report) => {
     doc.setDrawColor(200, 200, 200);
     doc.line(15, pageHeight - 20, 195, pageHeight - 20);
 
-    doc.text("Clinical Disclaimer: This report is generated by AI (Hemalyzer) for RESEARCH PURPOSES ONLY.", 105, pageHeight - 15, { align: 'center' });
-    doc.text("It is not a definitive medical diagnosis. Confirmatory testing is required.", 105, pageHeight - 11, { align: 'center' });
+    doc.text("Disclaimer: This report is generated by AI (Hemalyzer) for RESEARCH and EDUCATIONAL PURPOSES ONLY.", 105, pageHeight - 15, { align: 'center' });
+    doc.text("It is not a medical diagnosis. Confirmatory testing is required.", 105, pageHeight - 11, { align: 'center' });
     doc.text("**** End of Report ****", 105, pageHeight - 6, { align: 'center' });
 
     // Generate filename using patient MRN and name

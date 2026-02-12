@@ -26,39 +26,49 @@ const getClassInfo = (classification) => {
     return CLASS_LABELS[classification] || { short: classification, isDisease: false, isRBC: false };
 };
 
-// Sickle Cell Clinical Analysis Helper
+// Sickle Cell Classification Analysis Helper
 const getSickleCellAnalysis = (severity) => {
     if (severity === 'SEVERE') {
         return {
-            interpretation: 'Severe Sickle Cell Anemia (HbSS): High percentage of sickled cells detected, consistent with sickle cell disease crisis or homozygous state.',
-            recommendation: 'Clinical Recommendation: URGENT hematology consultation. Evaluate for vaso-occlusive crisis. Confirm with Hb Electrophoresis.'
+            interpretation: 'Severe Sickle Cell classification (HbSS): High percentage of sickled cells detected. Above severe threshold (> 30%).',
+            recommendation: 'Note: Classification consistent with severe sickling. HbSS threshold met.'
         };
     } else if (severity === 'MODERATE') {
         return {
-            interpretation: 'Moderate Sickling: Significant presence of sickled cells, suggestive of Sickle Cell Disease or related hemoglobinopathy.',
-            recommendation: 'Clinical Recommendation: Hematology referral recommended. Correlation with clinical symptoms and confirmatory testing required.'
+            interpretation: 'Moderate Sickling: Significant presence of sickled cells. Above moderate threshold (10-30%).',
+            recommendation: 'Note: Moderate sickling threshold met. Further evaluation may be warranted.'
         };
     } else if (severity === 'MILD') {
         return {
-            interpretation: 'Mild Sickling (HbAS): Lower percentage of sickled cells, often seen in Sickle Cell Trait or compound heterozygotes.',
-            recommendation: 'Clinical Recommendation: Genetic counseling and family screening suggested. Generally asymptomatic but requires awareness.'
+            interpretation: 'Mild Sickling (HbAS): Lower percentage of sickled cells. Above trait threshold (3-10%).',
+            recommendation: 'Note: Sickle Cell Trait threshold met (HbAS classification).'
         };
     } else {
         return {
-            interpretation: 'Normal / Trace Findings: Sickle cells absent or present in trace amounts (< 3%) below diagnostic significance.',
-            recommendation: 'Clinical Recommendation: Likely normal variant or artifact. No specific intervention required in absence of clinical symptoms.'
+            interpretation: 'Normal / Trace: Sickle cells absent or present in trace amounts (< 3%) below classification threshold.',
+            recommendation: 'Note: Below classification threshold. No sickling classification.'
         };
     }
 };
 
-// Disease Recommendations
+// Classification Recommendations
 const getDiseaseRecommendation = (type, severity) => {
     if (severity === 'HIGH') {
-        return `Diagnostic level for ${type}. Urgent Hematology Referral Required.`;
+        if (type === 'AML') return 'Blast Phase (>= 20% blasts). Classification threshold reached.';
+        if (type === 'ALL') return 'Lymphoblast Phase (>= 20% lymphoblasts). Classification threshold reached.';
+        if (type === 'CML') return 'Blast Phase / Blast Crisis (>= 20% blasts). Classification threshold reached.';
+        if (type === 'CLL') return 'Advanced/Untreated CLL (> 70% abnormal lymphocytes). High classification threshold reached.';
+        return `Classification threshold reached for ${type}.`;
     } else if (severity === 'MODERATE') {
-        return `Suspicious for ${type}. Bone Marrow Biopsy / Further testing recommended.`;
+        if (type === 'CML') return 'Accelerated Phase (10-19% blasts). Accelerated phase threshold reached.';
+        if (type === 'CLL') return 'Typical CLL pattern (50-70% abnormal lymphocytes). Moderate classification threshold reached.';
+        return `Moderate classification level for ${type}.`;
+    } else if (severity === 'LOW') {
+        if (type === 'CML') return 'Chronic Phase (< 10% blasts). Below accelerated phase threshold.';
+        if (type === 'CLL') return 'Suspicious Lymphocytosis (40-50%). Above monitoring threshold.';
+        return `Low classification level detected.`;
     } else {
-        return `Low/Normal levels. Clinical correlation recommended.`;
+        return `Below classification threshold. Within normal range.`;
     }
 };
 
@@ -161,61 +171,90 @@ export const AnalysisProvider = ({ children }) => {
 
         const diseaseFindings = [];
 
-        if (amlCount > 0) {
-            const amlPercentage = totalWBC > 0 ? (amlCount / totalWBC) * 100 : 0;
-            let interpretation = '', severity = 'NORMAL';
-            if (amlPercentage >= 20) { interpretation = 'Diagnostic level for AML'; severity = 'HIGH'; }
-            else if (amlPercentage >= 10) { interpretation = 'Suspicious / Pre-leukemic (AML)'; severity = 'MODERATE'; }
-            else { interpretation = 'AML cells detected'; severity = 'NORMAL'; }
-            diseaseFindings.push({
-                type: 'AML (Acute Myeloid Leukemia)', percentage: amlPercentage, interpretation, severity,
-                condition: 'Acute Myeloid Leukemia', breakdown: { "AML Cells": amlCount },
-                recommendation: getDiseaseRecommendation('AML', severity)
-            });
-        }
+        // AML: Standard criteria - ≥20% blasts = Blast Phase
+        const classifyAML = (count) => {
+            if (count === 0) return null;
+            const pct = totalWBC > 0 ? (count / totalWBC) * 100 : 0;
+            let interpretation, severity, condition;
+            if (pct >= 20) {
+                interpretation = 'Blast Phase - >= 20% blasts detected. AML blast phase classification threshold reached.';
+                severity = 'HIGH'; condition = 'Blast Phase (>= 20% blasts)';
+            } else {
+                interpretation = 'Blasts detected below classification threshold (< 20%).';
+                severity = 'BELOW_THRESHOLD'; condition = `Below classification threshold (${pct.toFixed(1)}% blasts)`;
+            }
+            return { type: 'AML (Acute Myeloid Leukemia)', percentage: pct, interpretation, severity,
+                condition, breakdown: { 'AML Cells': count }, recommendation: getDiseaseRecommendation('AML', severity) };
+        };
 
-        if (allCount > 0) {
-            const allPercentage = totalWBC > 0 ? (allCount / totalWBC) * 100 : 0;
-            let interpretation = '', severity = 'NORMAL', condition = 'Monitor for ALL';
-            if (allPercentage > 80) { interpretation = 'Advanced / Progressive ALL'; condition = 'ALL (Advanced)'; severity = 'HIGH'; }
-            else if (allPercentage >= 66) { interpretation = 'Typical ALL'; condition = 'ALL'; severity = 'HIGH'; }
-            else if (allPercentage >= 51) { interpretation = 'Suspicious for Early ALL'; condition = 'Suspicious for Early ALL'; severity = 'MODERATE'; }
-            else if (allPercentage >= 35) { interpretation = 'Reactive / Secondary Lymphocytosis'; condition = 'Reactive Lymphocytosis'; severity = 'LOW'; }
-            else { interpretation = 'ALL cells detected but below threshold'; }
-            diseaseFindings.push({
-                type: 'ALL (Acute Lymphoblastic Leukemia)', percentage: allPercentage, interpretation, severity,
-                condition, breakdown: { "ALL Cells": allCount },
-                recommendation: getDiseaseRecommendation('ALL', severity)
-            });
-        }
+        // ALL: Standard criteria - ≥20% lymphoblasts = diagnostic threshold
+        const classifyALL = (count) => {
+            if (count === 0) return null;
+            const pct = totalWBC > 0 ? (count / totalWBC) * 100 : 0;
+            let interpretation, severity, condition;
+            if (pct >= 20) {
+                interpretation = 'Lymphoblast Phase - >= 20% lymphoblasts detected. ALL lymphoblast classification threshold reached.';
+                severity = 'HIGH'; condition = 'Lymphoblast Phase (>= 20% lymphoblasts)';
+            } else {
+                interpretation = 'Lymphoblasts detected below classification threshold (< 20%).';
+                severity = 'BELOW_THRESHOLD'; condition = `Below classification threshold (${pct.toFixed(1)}% lymphoblasts)`;
+            }
+            return { type: 'ALL (Acute Lymphoblastic Leukemia)', percentage: pct, interpretation, severity,
+                condition, breakdown: { 'ALL Cells': count }, recommendation: getDiseaseRecommendation('ALL', severity) };
+        };
 
-        if (cmlCount > 0) {
-            const cmlPercentage = totalWBC > 0 ? (cmlCount / totalWBC) * 100 : 0;
-            let interpretation = '', severity = 'NORMAL', condition = 'Monitor for CML';
-            if (cmlPercentage >= 20) { interpretation = 'Diagnostic level for CML'; condition = 'Chronic Myeloid Leukemia'; severity = 'HIGH'; }
-            else if (cmlPercentage >= 10) { interpretation = 'Suspicious / Pre-leukemic (CML)'; condition = 'Suspicious for CML'; severity = 'MODERATE'; }
-            else { interpretation = 'CML cells detected but below threshold'; }
-            diseaseFindings.push({
-                type: 'CML (Chronic Myeloid Leukemia)', percentage: cmlPercentage, interpretation, severity,
-                condition, breakdown: { "CML Cells": cmlCount },
-                recommendation: getDiseaseRecommendation('CML', severity)
-            });
-        }
+        // CML: Phase-based - <10% Chronic, 10-19% Accelerated, ≥20% Blast
+        const classifyCML = (count) => {
+            if (count === 0) return null;
+            const pct = totalWBC > 0 ? (count / totalWBC) * 100 : 0;
+            let interpretation, severity, condition;
+            if (pct >= 20) {
+                interpretation = 'Blast Phase (Blast Crisis) - >= 20% blasts. CML advanced to blast crisis stage.';
+                severity = 'HIGH'; condition = 'Blast Phase / Blast Crisis (>= 20% blasts)';
+            } else if (pct >= 10) {
+                interpretation = 'Accelerated Phase - blasts 10-19%. Intermediate threshold met.';
+                severity = 'MODERATE'; condition = 'Accelerated Phase (10-19% blasts)';
+            } else {
+                interpretation = 'Chronic Phase - blasts < 10%. Below accelerated phase threshold.';
+                severity = 'LOW'; condition = 'Chronic Phase (< 10% blasts)';
+            }
+            return { type: 'CML (Chronic Myeloid Leukemia)', percentage: pct, interpretation, severity,
+                condition, breakdown: { 'CML Cells': count }, recommendation: getDiseaseRecommendation('CML', severity) };
+        };
 
-        if (cllCount > 0) {
-            const cllPercentage = totalWBC > 0 ? (cllCount / totalWBC) * 100 : 0;
-            let interpretation = '', severity = 'NORMAL', condition = 'Monitor for CLL';
-            if (cllPercentage > 80) { interpretation = 'Advanced / Progressive CLL'; condition = 'CLL (Advanced)'; severity = 'HIGH'; }
-            else if (cllPercentage >= 66) { interpretation = 'Typical CLL'; condition = 'CLL'; severity = 'HIGH'; }
-            else if (cllPercentage >= 51) { interpretation = 'Suspicious for Early CLL'; condition = 'Suspicious for Early CLL'; severity = 'MODERATE'; }
-            else if (cllPercentage >= 35) { interpretation = 'Reactive / Secondary Lymphocytosis'; condition = 'Reactive Lymphocytosis'; severity = 'LOW'; }
-            else { interpretation = 'CLL cells detected but below threshold'; }
-            diseaseFindings.push({
-                type: 'CLL (Chronic Lymphocytic Leukemia)', percentage: cllPercentage, interpretation, severity,
-                condition, breakdown: { "CLL Cells": cllCount },
-                recommendation: getDiseaseRecommendation('CLL', severity)
-            });
-        }
+        // CLL: Lymphocyte proportion - 40-50% Suspicious, 50-70% Typical, >70% Advanced
+        const classifyCLL = (count) => {
+            if (count === 0) return null;
+            const pct = totalWBC > 0 ? (count / totalWBC) * 100 : 0;
+            let interpretation, severity, condition;
+            if (pct > 70) {
+                interpretation = 'Advanced/Untreated CLL - > 70% abnormal lymphocytes. High CLL classification threshold reached.';
+                severity = 'HIGH'; condition = 'Advanced/Untreated CLL (> 70%)';
+            } else if (pct >= 50) {
+                interpretation = 'Typical CLL - 50-70% abnormal lymphocytes. Moderate CLL classification threshold reached.';
+                severity = 'MODERATE'; condition = 'Typical CLL (50-70%)';
+            } else if (pct >= 40) {
+                interpretation = 'Suspicious Lymphocytosis - 40-50% abnormal lymphocytes. Above monitoring threshold.';
+                severity = 'LOW'; condition = 'Suspicious Lymphocytosis (40-50%)';
+            } else {
+                interpretation = 'Abnormal lymphocytes below suspicious threshold (< 40%).';
+                severity = 'BELOW_THRESHOLD'; condition = `Below suspicious threshold (${pct.toFixed(1)}%)`;
+            }
+            return { type: 'CLL (Chronic Lymphocytic Leukemia)', percentage: pct, interpretation, severity,
+                condition, breakdown: { 'CLL Cells': count }, recommendation: getDiseaseRecommendation('CLL', severity) };
+        };
+
+        const amlFinding = classifyAML(amlCount);
+        if (amlFinding) diseaseFindings.push(amlFinding);
+
+        const allFinding = classifyALL(allCount);
+        if (allFinding) diseaseFindings.push(allFinding);
+
+        const cmlFinding = classifyCML(cmlCount);
+        if (cmlFinding) diseaseFindings.push(cmlFinding);
+
+        const cllFinding = classifyCLL(cllCount);
+        if (cllFinding) diseaseFindings.push(cllFinding);
 
         let sickleCount = 0;
         allProcessedImages.forEach(img => { if (img.sickleCount) sickleCount += img.sickleCount; });
@@ -225,6 +264,14 @@ export const AnalysisProvider = ({ children }) => {
         else if (sicklePercentage >= 10) { sickleInterpretation = 'Moderate Sickling'; sickleSeverity = 'MODERATE'; }
         else if (sicklePercentage >= 3) { sickleInterpretation = 'Mild Sickling (HbAS)'; sickleSeverity = 'MILD'; }
         else if (sicklePercentage > 0) { sickleInterpretation = 'Normal blood (< 3%)'; }
+
+        // Overall Normal vs Disease ratio interpretation
+        const normalPct = totalWBC > 0 ? (normalWBCCount / totalWBC) * 100 : 100;
+        let overallClassification = 'normal', overallInterpretation = 'Predominantly Normal WBCs';
+        if (normalPct >= 95) { overallClassification = 'normal'; overallInterpretation = 'Predominantly Normal WBCs - no significant abnormalities classified'; }
+        else if (normalPct >= 85) { overallClassification = 'low'; overallInterpretation = 'Mostly Normal - low proportion of abnormal WBC classifications detected'; }
+        else if (normalPct >= 70) { overallClassification = 'moderate'; overallInterpretation = 'Notable Abnormal Classification - significant proportion of WBCs classified as abnormal'; }
+        else { overallClassification = 'high'; overallInterpretation = 'High Abnormal Classification - majority of WBCs classified as abnormal'; }
 
         let patientStatus = 'Normal';
         const hasCritical = diseaseFindings.some(f => f.severity === 'HIGH');
@@ -238,6 +285,12 @@ export const AnalysisProvider = ({ children }) => {
             wbcClassifications: allClassifications, rbcClassifications: allRBCClassifications,
             abnormalWBCs, diseaseFindings, classificationCounts: wbcTypeCounts,
             normalWBCCount, diseaseWBCCount,
+            overallClassification: {
+                level: overallClassification,
+                interpretation: overallInterpretation,
+                normalPercentage: normalPct,
+                diseasePercentage: totalWBC > 0 ? (diseaseWBCCount / totalWBC) * 100 : 0
+            },
             sickleCell: {
                 count: sickleCount, totalRBC: counts.rbc, percentage: sicklePercentage, interpretation: sickleInterpretation, severity: sickleSeverity,
                 recommendation: getSickleCellAnalysis(sickleSeverity).recommendation

@@ -164,24 +164,25 @@ export const Instructions = () => {
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div className="space-y-3">
-                                    <h3 className="font-semibold text-slate-800">WBC Differential Count</h3>
-                                    <p className="text-sm text-slate-600">The system calculates percentages of different white blood cell types:</p>
+                                    <h3 className="font-semibold text-slate-800">WBC Classification</h3>
+                                    <p className="text-sm text-slate-600">The system classifies each white blood cell as Normal or Abnormal:</p>
                                     <ul className="text-sm text-slate-600 space-y-1 ml-4">
-                                        <li>• <strong>Neutrophils:</strong> 40-70% (normal range)</li>
-                                        <li>• <strong>Lymphocytes:</strong> 20-35% (normal range)</li>
-                                        <li>• <strong>Monocytes:</strong> 2-8% (normal range)</li>
-                                        <li>• <strong>Eosinophils:</strong> 1-4% (normal range)</li>
-                                        <li>• <strong>Basophils:</strong> 0-1% (normal range)</li>
+                                        <li>• <strong>Normal WBC:</strong> Healthy white blood cells</li>
+                                        <li>• <strong>ALL:</strong> Acute Lymphoblastic Leukemia cells</li>
+                                        <li>• <strong>AML:</strong> Acute Myeloid Leukemia cells</li>
+                                        <li>• <strong>CLL:</strong> Chronic Lymphocytic Leukemia cells</li>
+                                        <li>• <strong>CML:</strong> Chronic Myeloid Leukemia cells</li>
                                     </ul>
                                 </div>
                                 <div className="space-y-3">
-                                    <h3 className="font-semibold text-slate-800">Disease Indicators</h3>
-                                    <p className="text-sm text-slate-600">The system screens for indicators of:</p>
+                                    <h3 className="font-semibold text-slate-800">Classification Thresholds</h3>
+                                    <p className="text-sm text-slate-600">The system screens using clinically accurate diagnostic criteria:</p>
                                     <ul className="text-sm text-slate-600 space-y-1 ml-4">
-                                        <li>• <strong>AML/ALL:</strong> Acute leukemias based on blast cells</li>
-                                        <li>• <strong>CML:</strong> Chronic Myeloid Leukemia markers</li>
-                                        <li>• <strong>CLL:</strong> Chronic Lymphocytic Leukemia markers</li>
-                                        <li>• <strong>Sickle Cell:</strong> Abnormal RBC morphology</li>
+                                        <li>• <strong>AML:</strong> Acute Myeloid Leukemia (≥20% blasts = Blast Phase, standard criteria)</li>
+                                        <li>• <strong>ALL:</strong> Acute Lymphoblastic Leukemia (≥20% lymphoblasts = diagnostic threshold)</li>
+                                        <li>• <strong>CML:</strong> Chronic Myeloid Leukemia (&lt;10% Chronic / 10-19% Accelerated / ≥20% Blast Phase)</li>
+                                        <li>• <strong>CLL:</strong> Chronic Lymphocytic Leukemia (40-50% Suspicious / 50-70% Typical / &gt;70% Advanced)</li>
+                                        <li>• <strong>Sickle Cell:</strong> Abnormal RBC morphology (≥10% = moderate)</li>
                                     </ul>
                                 </div>
                             </div>
@@ -217,7 +218,7 @@ export const Instructions = () => {
                         <div className="mt-6 p-4 bg-slate-100 rounded-lg border border-slate-200">
                             <p className="text-xs text-slate-500 text-center">
                                 <strong>Disclaimer:</strong> Hemalyzer is a thesis project designed to assist in the classification of hematological conditions.
-                                Results should be validated by qualified medical professionals. This system is not intended for clinical diagnosis without expert verification.
+                                Results should be validated by qualified medical professionals. This system is not intended as a clinical diagnosis and requires expert verification.
                             </p>
                         </div>
                     </div>

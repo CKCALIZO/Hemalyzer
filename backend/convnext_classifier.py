@@ -268,11 +268,13 @@ class ConvNeXtClassifier:
         self.model = None
         self.class_names = None
         self.sickle_cell_class_idx = None
+        self.all_class_idx = None  # ALL class index for confidence threshold
         self.device = None
         self.pre_transform = None  # Pre-preprocessor transforms
         self.transform = None  # Post-preprocessor transforms
         self.preprocessor = None
         self.sickle_cell_confidence_threshold = 0.875  # 87% confidence threshold for sickle cell detection
+        self.all_confidence_threshold = 0.70  # 70% confidence threshold for ALL detection (prevent black bg overfitting)
     
     def load_model(self, model_path='convnext.pth', use_mixed_precision=False, compile_model=False):
         """
@@ -428,13 +430,21 @@ class ConvNeXtClassifier:
             
             # Note: Mixed precision (use_mixed_precision) is ignored on CPU as it's not beneficial
             
-            # Find Sickle Cell class index if it exists
+            # Find Sickle Cell and ALL class indices if they exist
             self.sickle_cell_class_idx = None
             if self.class_names:
                 for idx, cls_name in enumerate(self.class_names):
                     if 'sickle' in cls_name.lower():
                         self.sickle_cell_class_idx = idx
                         print(f"   Sickle Cell class found at index {idx}: {cls_name}")
+                        break
+            
+            self.all_class_idx = None
+            if self.class_names:
+                for idx, cls_name in enumerate(self.class_names):
+                    if 'acute lymphoblastic' in cls_name.lower():
+                        self.all_class_idx = idx
+                        print(f"   ALL class found at index {idx}: {cls_name}")
                         break
             
             # Pre-preprocessor transforms (resize to 384x384 before preprocessing)
@@ -533,12 +543,29 @@ class ConvNeXtClassifier:
                     sickle_cell_confidence >= self.sickle_cell_confidence_threshold
                 )
             
+            # For WBC: Check specifically for ALL with confidence threshold to prevent black bg overfitting
+            is_valid_all = True
+            if (cell_type == 'WBC' and self.all_class_idx is not None and 
+                predicted_idx.item() == self.all_class_idx):
+                all_confidence = float(probabilities[0][self.all_class_idx].cpu().numpy())
+                if all_confidence < self.all_confidence_threshold:
+                    # Confidence too low, fall back to second highest WBC class
+                    wbc_classes = ['Normal WBC', 'Acute Myeloid Leukemia', 'Chronic Myeloid Leukemia', 'Chronic Lymphocytic Leukemia']
+                    wbc_probs = {cls: float(probabilities[0][self.class_names.index(cls)].cpu().numpy()) 
+                                for cls in wbc_classes if cls in self.class_names}
+                    if wbc_probs:
+                        best_wbc = max(wbc_probs.items(), key=lambda x: x[1])
+                        predicted_class = best_wbc[0]
+                        confidence_score = best_wbc[1]
+                        is_valid_all = False
+            
             return {
                 'class': predicted_class,
                 'confidence': confidence_score,
                 'probabilities': probs_dict,
                 'is_sickle_cell': is_sickle_cell,
-                'sickle_cell_confidence': sickle_cell_confidence
+                'sickle_cell_confidence': sickle_cell_confidence,
+                'is_valid_all': is_valid_all  # Track if ALL prediction passed confidence check
             }
             
         except Exception as e:
@@ -693,12 +720,30 @@ class ConvNeXtClassifier:
                         sickle_cell_confidence >= self.sickle_cell_confidence_threshold
                     )
                 
+                # ALL Confidence Logic (prevent black bg overfitting)
+                is_valid_all = True
+                if (cell_type == 'WBC' and self.all_class_idx is not None and 
+                    predicted_idx == self.all_class_idx):
+                    all_confidence = float(probs_numpy[self.all_class_idx])
+                    if all_confidence < self.all_confidence_threshold:
+                        # Confidence too low, fall back to second highest WBC class
+                        wbc_classes = ['Normal WBC', 'Acute Myeloid Leukemia', 'Chronic Myeloid Leukemia', 'Chronic Lymphocytic Leukemia']
+                        wbc_indices = [self.class_names.index(cls) for cls in wbc_classes if cls in self.class_names]
+                        if wbc_indices:
+                            wbc_probs = [(idx, probs_numpy[idx]) for idx in wbc_indices]
+                            best_idx, best_conf = max(wbc_probs, key=lambda x: x[1])
+                            predicted_class = self.class_names[best_idx]
+                            confidence_score = float(best_conf)
+                            predicted_idx = best_idx
+                            is_valid_all = False
+                
                 results[result_idx] = {
                     'class': predicted_class,
                     'confidence': confidence_score,
                     'probabilities': probs_dict,
                     'is_sickle_cell': is_sickle_cell,
-                    'sickle_cell_confidence': sickle_cell_confidence
+                    'sickle_cell_confidence': sickle_cell_confidence,
+                    'is_valid_all': is_valid_all
                 }
             
             total_time = time.time() - start_time

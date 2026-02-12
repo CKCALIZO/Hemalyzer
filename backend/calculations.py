@@ -56,7 +56,7 @@ def calculate_confidence_interval(positive_cells, total_cells, confidence_level=
 
 def assess_sample_adequacy(cell_counts, analysis_type='general', fields_analyzed=1):
     """
-    Assess if sample size is adequate for reliable diagnosis.
+    Assess if sample size is adequate for reliable classification.
     
     Args:
         cell_counts: Dictionary with 'WBC', 'RBC', 'Platelets' counts
@@ -78,7 +78,7 @@ def assess_sample_adequacy(cell_counts, analysis_type='general', fields_analyzed
     wbc_count = cell_counts.get('WBC', 0)
     rbc_count = cell_counts.get('RBC', 0)
     
-    # Check if single field (need 5 fields for reliable diagnosis)
+    # Check if single field (need 5 fields for reliable classification)
     if fields_analyzed < RECOMMENDED_FIELDS:
         remaining_fields = RECOMMENDED_FIELDS - fields_analyzed
         adequacy['warnings'].append(
