@@ -10,83 +10,15 @@ const formatCellTypeForDisplay = (name) => {
     return name.replace(/B_[Ll]ymphoblast/g, 'Lymphoblast');
 };
 
-export const getClinicalAnalysis = (type, status) => {
-    const analyses = {
-        'Neutrophil': {
-            high: {
-                interpretation: 'Neutrophilia: Increased neutrophils often indicate acute bacterial infection, severe stress, burns, or tissue necrosis.',
-                recommendation: 'Clinical Recommendation: Evaluate for signs of infection (fever, localized pain). Consider CBC with differential repeats and inflammatory markers (CRP, ESR).'
-            },
-            low: {
-                interpretation: 'Neutropenia: Decreased neutrophils significantly increase infection risk. May be caused by viral infections, chemotherapy, aplastic anemia, or severe overwhelming infection (sepsis).',
-                recommendation: 'Clinical Recommendation: Urgent clinical assessment for infection. Review medication history (look for marrow-suppressive drugs). Hematology consultation recommended if persistent or severe (<1000/µL).'
-            },
-            normal: {
-                interpretation: 'Neutrophil count is within the healthy reference range, suggesting adequate innate immune function against bacteria.',
-                recommendation: 'Clinical Recommendation: Routine monitoring as part of standard wellness checks.'
-            }
-        },
-        'Lymphocyte': {
-            high: {
-                interpretation: 'Lymphocytosis: Elevated lymphocytes are common in viral infections (Epstein-Barr, Cytomegalovirus), chronic lymphocytic leukemia (CLL), or pertussis.',
-                recommendation: 'Clinical Recommendation: Assess for viral symptoms (sore throat, lymphadenopathy). If elderly or asymptomatic, rule out lymphoproliferative disorders (CLL).'
-            },
-            low: {
-                interpretation: 'Lymphocytopenia: Decreased lymphocytes may be seen in HIV/AIDS, high-dose steroid therapy, autoimmune diseases (Lupus), or acute stress response.',
-                recommendation: 'Clinical Recommendation: detailed history taking for autoimmune symptoms or immunodeficiency risk factors. Consider HIV screening if clinically indicated.'
-            },
-            normal: {
-                interpretation: 'Lymphocyte count is within the healthy reference range, indicating normal adaptive immune capacity.',
-                recommendation: 'Clinical Recommendation: Routine monitoring.'
-            }
-        },
-        'Monocyte': {
-            high: {
-                interpretation: 'Monocytosis: Often associated with chronic infections (Tuberculosis, fungal), bacterial endocarditis, recovery phase of acute infections, or autoimmune disorders.',
-                recommendation: 'Clinical Recommendation: Evaluate for chronic inflammatory conditions. If persistent, consider screening for chronic infections or myelomonocytic leukemia in elderly patients.'
-            },
-            low: {
-                interpretation: 'Monocytopenia: Rare. Can be associated with hairy cell leukemia, severe aplastic anemia, or acute stress.',
-                recommendation: 'Clinical Recommendation: Usually not clinically significant in isolation. Monitor trend. Review peripheral smear for hairy cells.'
-            },
-            normal: {
-                interpretation: 'Monocyte count is within the healthy reference range.',
-                recommendation: 'Clinical Recommendation: Routine monitoring.'
-            }
-        },
-        'Eosinophil': {
-            high: {
-                interpretation: 'Eosinophilia: Strongly suggestive of allergic conditions (asthma, eczema), parasitic infections (worms), or drug hypersensitivity.',
-                recommendation: 'Clinical Recommendation: Review allergy history and medications. Consider stool ova/parasite exam if travel history is relevant. Screen for asthma.'
-            },
-            low: {
-                interpretation: 'Eosinopenia: Often occurs during acute adrenal stress (Cushing’s syndrome), severe acute infection, or corticosteroid use.',
-                recommendation: 'Clinical Recommendation: Usually transient and responsive to stress/infection resolution. No specific intervention typically needed unless Cushing’s suspected.'
-            },
-            normal: {
-                interpretation: 'Eosinophil count is within the healthy reference range.',
-                recommendation: 'Clinical Recommendation: Routine monitoring.'
-            }
-        },
-        'Basophil': {
-            high: {
-                interpretation: 'Basophilia: Uncommon. Can be a marker for Chronic Myeloid Leukemia (CML) or other myeloproliferative neoplasms. Also seen in hypersensitivity reactions.',
-                recommendation: 'Clinical Recommendation: IMPORTANT: Rule out myeloproliferative disorders (CML). Check for splenomegaly. Hematology referral suggested if persistent.'
-            },
-            low: {
-                interpretation: 'Basopenia: Difficult to demonstrate as normal count is low. May be seen in acute phase of infection, hyperthyroidism, or stress.',
-                recommendation: 'Clinical Recommendation: Generally not clinically significant.'
-            },
-            normal: {
-                interpretation: 'Basophil count is within the healthy reference range.',
-                recommendation: 'Clinical Recommendation: Routine monitoring.'
-            }
-        }
-    };
-    return analyses[type]?.[status] || {
-        interpretation: 'Clinical correlation recommended.',
-        recommendation: 'Clinical Recommendation: Correlate with clinical findings.'
-    };
+// Classification category helper for new 7-class model
+const CLASS_LABELS = {
+    'Normal WBC': { short: 'Normal', isDisease: false },
+    'Normal RBC': { short: 'Normal RBC', isDisease: false },
+    'Acute Lymphoblastic Leukemia': { short: 'ALL', isDisease: true },
+    'Acute Myeloid Leukemia': { short: 'AML', isDisease: true },
+    'Chronic Lymphocytic Leukemia': { short: 'CLL', isDisease: true },
+    'Chronic Myeloid Leukemia': { short: 'CML', isDisease: true },
+    'Sickle Cell Anemia': { short: 'SCA', isDisease: true },
 };
 
 export const FinalResults = ({
@@ -108,6 +40,7 @@ export const FinalResults = ({
     const [expandedDiseaseCard, setExpandedDiseaseCard] = useState(null); // Track which disease card is expanded
     const [expandedSickleCell, setExpandedSickleCell] = useState(false); // Track sickle cell expansion
     const [activeTab, setActiveTab] = useState('overview'); // Tabs: overview, analysis, counts
+    const [showDetailedMetrics, setShowDetailedMetrics] = useState(false); // Detailed Metrics panel
 
     if (!aggregatedResults || !aggregatedResults.thresholdMet) {
 
@@ -124,60 +57,43 @@ export const FinalResults = ({
         wbcClassifications,
         abnormalWBCs,
         diseaseFindings,
-        wbcDifferential,
+        normalWBCCount,
+        diseaseWBCCount,
         sickleCell,
         patientStatus
     } = aggregatedResults;
 
-    // Get classification category based on ConvNeXt class
-    // Model classes are in format: "CellType: Condition" (e.g., "Basophil: Normal", "Basophil: CML")
+    // Get classification category based on new 7-class ConvNeXt model
     const getClassificationCategory = (classification) => {
         if (!classification) {
             return { category: 'Other', label: 'Unknown', color: 'bg-slate-100 text-slate-800 border-slate-300' };
         }
 
-        const lowerClass = classification.toLowerCase();
-
-        // Check for disease markers in the classification string
-        // ALL (Acute Lymphoblastic Leukemia)
-        if (lowerClass.includes(': all') || lowerClass.includes('lymphoblast: all') || lowerClass.includes('b_lymphoblast: all')) {
-            const cellType = formatCellTypeForDisplay(classification.split(':')[0]) || 'Lymphoblast';
-            return { category: 'ALL', label: `ALL: ${cellType}`, color: 'bg-red-100 text-red-800 border-red-300' };
+        const info = CLASS_LABELS[classification];
+        if (!info) {
+            return { category: 'Other', label: classification, color: 'bg-slate-100 text-slate-800 border-slate-300' };
         }
 
-        // AML (Acute Myeloid Leukemia)
-        if (lowerClass.includes(': aml') || lowerClass.includes('myeloblast: aml')) {
-            const cellType = classification.split(':')[0] || 'Myeloblast';
-            return { category: 'AML', label: `AML: ${cellType} `, color: 'bg-red-100 text-red-800 border-red-300' };
+        if (classification === 'Normal WBC') {
+            return { category: 'Normal', label: 'Normal WBC', color: 'bg-green-100 text-green-800 border-green-300' };
         }
-
-        // CML (Chronic Myeloid Leukemia)
-        if (lowerClass.includes(': cml')) {
-            const cellType = classification.split(':')[0] || 'Granulocyte';
-            return { category: 'CML', label: `CML: ${cellType} `, color: 'bg-amber-100 text-amber-800 border-amber-300' };
+        if (classification === 'Normal RBC') {
+            return { category: 'Normal', label: 'Normal RBC', color: 'bg-green-100 text-green-800 border-green-300' };
         }
-
-        // CLL (Chronic Lymphocytic Leukemia)
-        if (lowerClass.includes(': cll')) {
-            const cellType = classification.split(':')[0] || 'Lymphocyte';
-            return { category: 'CLL', label: `CLL: ${cellType} `, color: 'bg-amber-100 text-amber-800 border-amber-300' };
+        if (classification === 'Acute Lymphoblastic Leukemia') {
+            return { category: 'ALL', label: 'ALL', color: 'bg-red-100 text-red-800 border-red-300' };
         }
-
-        // Sickle Cell (RBC condition)
-        if (lowerClass.includes('sickle')) {
+        if (classification === 'Acute Myeloid Leukemia') {
+            return { category: 'AML', label: 'AML', color: 'bg-red-100 text-red-800 border-red-300' };
+        }
+        if (classification === 'Chronic Myeloid Leukemia') {
+            return { category: 'CML', label: 'CML', color: 'bg-amber-100 text-amber-800 border-amber-300' };
+        }
+        if (classification === 'Chronic Lymphocytic Leukemia') {
+            return { category: 'CLL', label: 'CLL', color: 'bg-amber-100 text-amber-800 border-amber-300' };
+        }
+        if (classification === 'Sickle Cell Anemia') {
             return { category: 'Sickle', label: 'Sickle Cell', color: 'bg-red-100 text-red-800 border-red-300' };
-        }
-
-        // Normal cells - check for ": normal" pattern or just Normal WBC types
-        if (lowerClass.includes(': normal') || lowerClass === 'normal') {
-            const cellType = classification.split(':')[0] || 'WBC';
-            return { category: 'Normal', label: cellType.trim(), color: 'bg-green-100 text-green-800 border-green-300' };
-        }
-
-        // Handle legacy class names (without ":" format)
-        const normalCellTypes = ['basophil', 'eosinophil', 'neutrophil', 'lymphocyte', 'monocyte', 'erythroblast', 'metamyelocyte', 'myelocyte', 'promyelocyte', 'platelet'];
-        if (normalCellTypes.some(type => lowerClass === type)) {
-            return { category: 'Normal', label: classification, color: 'bg-green-100 text-green-800 border-green-300' };
         }
 
         return { category: 'Other', label: classification, color: 'bg-slate-100 text-slate-800 border-slate-300' };
@@ -293,9 +209,10 @@ export const FinalResults = ({
                 imagesAnalyzed: processedImages.length
             },
             data: {
-                wbcDifferential: wbcDifferential,
                 diseaseFindings: diseaseFindings,
                 classificationCounts: wbcClassifications,
+                normalWBCCount: normalWBCCount,
+                diseaseWBCCount: diseaseWBCCount,
                 sickleCell: sickleCell
             }
         };
@@ -423,9 +340,186 @@ export const FinalResults = ({
                         </div>
                     </div>
 
+                        {/* Detailed Metrics Button */}
+                        <div className="mt-4">
+                            <button
+                                onClick={() => setShowDetailedMetrics(!showDetailedMetrics)}
+                                className="w-full flex items-center justify-between px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors border border-slate-200"
+                            >
+                                <span className="font-medium flex items-center gap-2">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                                    </svg>
+                                    Detailed Metrics
+                                </span>
+                                <svg className={`w-5 h-5 transition-transform ${showDetailedMetrics ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                            </button>
 
+                            {showDetailedMetrics && (
+                                <div className="mt-3 bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-5">
+                                    {/* Estimated Cell Counts */}
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                                            </svg>
+                                            Estimated Cell Counts
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {/* WBC Estimation */}
+                                            <div className={`rounded-lg p-4 border ${
+                                                estimatedWBCCount > 0 && estimatedWBCCount < 5000 ? 'bg-amber-50 border-amber-300' :
+                                                estimatedWBCCount > 10000 ? 'bg-red-50 border-red-300' : 'bg-blue-50 border-blue-200'
+                                            }`}>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Estimated WBC Count</p>
+                                                    {estimatedWBCCount > 0 && estimatedWBCCount < 5000 && (
+                                                        <span className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                                                            LOW
+                                                        </span>
+                                                    )}
+                                                    {estimatedWBCCount > 10000 && (
+                                                        <span className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                                                            HIGH
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-2xl font-bold text-blue-900">
+                                                    {estimatedWBCCount ? estimatedWBCCount.toLocaleString() : '—'} <span className="text-sm font-normal text-blue-600">cells/mm³</span>
+                                                </p>
+                                                <p className="text-xs text-blue-600 mt-1">
+                                                    {estimatedWBCCount ? `${(estimatedWBCCount / 1000).toFixed(1)} × 10⁹/L` : '—'}
+                                                </p>
+                                                <p className="text-xs text-slate-500 mt-2">Formula: Ave. WBC/HPF × 2,000</p>
+                                                <div className="mt-2 pt-2 border-t border-blue-200 space-y-1">
+                                                    <p className="text-xs text-slate-600">
+                                                        <span className="font-medium">Normal Range:</span> 5,000 – 10,000 /mm³ (5–10 × 10⁹/L)
+                                                    </p>
+                                                    {estimatedWBCCount > 0 && (
+                                                        <p className={`text-xs font-semibold mt-1 ${
+                                                            estimatedWBCCount < 5000 ? 'text-amber-600' :
+                                                            estimatedWBCCount > 10000 ? 'text-red-600' : 'text-green-600'
+                                                        }`}>
+                                                            {estimatedWBCCount < 5000 ? '↓ Below normal range (Leukopenia)' :
+                                                             estimatedWBCCount > 10000 ? '↑ Above normal range (Leukocytosis)' :
+                                                             '✓ Within normal range'}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* RBC Estimation */}
+                                            {(() => {
+                                                const rbcM = estimatedRBCCount ? estimatedRBCCount / 1e6 : 0;
+                                                const isMale = patientGender?.toLowerCase() === 'male';
+                                                const isFemale = patientGender?.toLowerCase() === 'female';
+                                                const low = isFemale ? 4.0 : 4.5;
+                                                const high = isFemale ? 5.5 : 6.0;
+                                                const genderLabel = isMale ? 'Male' : isFemale ? 'Female' : 'General';
+                                                const isLow = rbcM > 0 && rbcM < low;
+                                                const isHigh = rbcM > high;
+                                                return (
+                                                    <div className={`rounded-lg p-4 border ${
+                                                        isLow ? 'bg-amber-50 border-amber-300' :
+                                                        isHigh ? 'bg-red-50 border-red-300' : 'bg-red-50 border-red-200'
+                                                    }`}>
+                                                        <div className="flex items-center justify-between mb-1">
+                                                            <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">Estimated RBC Count</p>
+                                                            {isLow && (
+                                                                <span className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
+                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
+                                                                    LOW
+                                                                </span>
+                                                            )}
+                                                            {isHigh && (
+                                                                <span className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
+                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
+                                                                    HIGH
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                        <p className="text-2xl font-bold text-red-900">
+                                                            {rbcM > 0 ? rbcM.toFixed(2) : '—'} <span className="text-sm font-normal text-red-600">M/mm³</span>
+                                                        </p>
+                                                        <p className="text-xs text-red-600 mt-1">
+                                                            {rbcM > 0 ? `${rbcM.toFixed(2)} × 10¹²/L` : '—'}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 mt-2">Formula: Ave. RBC/field × 200,000</p>
+                                                        <p className="text-xs text-slate-500">Avg RBC/field: {avgRBCPerField ? avgRBCPerField.toFixed(1) : '—'}</p>
+                                                        <div className="mt-2 pt-2 border-t border-red-200 space-y-1">
+                                                            <p className="text-xs text-slate-600">
+                                                                <span className="font-medium">♂ Male Normal:</span> 4.5 – 6.0 M/mm³ (4.5–6.0 × 10¹²/L)
+                                                            </p>
+                                                            <p className="text-xs text-slate-600">
+                                                                <span className="font-medium">♀ Female Normal:</span> 4.0 – 5.5 M/mm³ (4.0–5.5 × 10¹²/L)
+                                                            </p>
+                                                            {rbcM > 0 && (
+                                                                <p className={`text-xs font-semibold mt-1 ${
+                                                                    isLow ? 'text-amber-600' :
+                                                                    isHigh ? 'text-red-600' : 'text-green-600'
+                                                                }`}>
+                                                                    {isLow ? `↓ Below normal (${genderLabel} range: ${low}–${high} M/mm³)` :
+                                                                     isHigh ? `↑ Above normal (${genderLabel} range: ${low}–${high} M/mm³)` :
+                                                                     `✓ Within normal (${genderLabel} range: ${low}–${high} M/mm³)`}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    </div>
+
+                                    {/* Raw Detection Counts */}
+                                    <div>
+                                        <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                            <svg className="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                                            </svg>
+                                            Raw Detection Counts
+                                        </h4>
+                                        <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+                                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
+                                                <p className="text-lg font-bold text-slate-800">{totalWBC}</p>
+                                                <p className="text-xs text-slate-500">WBCs Detected</p>
+                                            </div>
+                                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
+                                                <p className="text-lg font-bold text-slate-800">{totalRBC}</p>
+                                                <p className="text-xs text-slate-500">RBCs Detected</p>
+                                            </div>
+                                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
+                                                <p className="text-lg font-bold text-slate-800">{totalPlatelets}</p>
+                                                <p className="text-xs text-slate-500">Platelets</p>
+                                            </div>
+                                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
+                                                <p className="text-lg font-bold text-green-700">{normalWBCCount}</p>
+                                                <p className="text-xs text-slate-500">Normal WBCs</p>
+                                            </div>
+                                            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
+                                                <p className="text-lg font-bold text-red-700">{diseaseWBCCount}</p>
+                                                <p className="text-xs text-slate-500">Disease WBCs</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Analysis Info */}
+                                    <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 text-xs text-slate-500">
+                                        <p>
+                                            <strong>Note:</strong> Estimated counts are calculated from {processedImages.length} fields of view 
+                                            (100× oil immersion). WBC formula: Average WBC per HPF × 2,000. RBC formula: Average RBC per field × 200,000.
+                                            Reference ranges based on WHO/CLSI standards.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                 </div>
             )}
+
 
             {/* TAB CONTENT: DETAILED ANALYSIS */}
             {activeTab === 'analysis' && (
@@ -1200,111 +1294,10 @@ export const FinalResults = ({
                             </div>
                         )}
 
-                        {/* WBC Differential - 5 Main Categories */}
-                        {wbcDifferential && Object.keys(wbcDifferential).length > 0 && (
-                            <div className="px-6 py-4 border-b border-slate-200">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg font-semibold text-slate-700">WBC Differential</h3>
-
-                                    {/* Legend */}
-                                    <div className="flex items-center gap-3 text-xs">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
-                                            <span className="text-slate-600 font-medium">Low</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-green-500"></span>
-                                            <span className="text-slate-600 font-medium">Normal</span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-                                            <span className="text-slate-600 font-medium">High</span>
-                                        </div>
-                                        <span className="ml-2 text-slate-400 border-l border-slate-200 pl-3">
-                                            Hover rows for detail
-                                        </span>
-                                    </div>
-                                </div>
-
-                                {/* Header Row */}
-                                <div className="flex items-center gap-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 px-2">
-                                    <div className="w-28">Cell Type</div>
-                                    <div className="flex-1">Distribution</div>
-                                    <div className="w-12 text-right">Count</div>
-                                    <div className="w-16 text-right">%</div>
-                                    <div className="w-24 text-right">Normal Range</div>
-                                    <div className="w-20 text-center">Status</div>
-                                </div>
-
-                                <div className="space-y-3">
-                                    {Object.entries(wbcDifferential).map(([name, data]) => {
-                                        const analysis = getClinicalAnalysis(name, data.status);
-
-                                        return (
-                                            <div key={name} className="group relative">
-                                                {/* Enhanced Hover Tooltip */}
-                                                <div className="absolute z-10 bottom-full left-1/2 transform -translate-x-1/2 mb-2 w-80 bg-slate-800 text-white text-xs rounded-lg p-4 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 pointer-events-none">
-                                                    <p className="font-bold text-sm mb-2 border-b border-slate-600 pb-2 flex justify-between">
-                                                        <span>{name}</span>
-                                                        <span className={`${data.status === 'high' ? 'text-red-400' : data.status === 'low' ? 'text-blue-400' : 'text-green-400'} `}>
-                                                            {data.status.toUpperCase()}
-                                                        </span>
-                                                    </p>
-                                                    <div className="space-y-3">
-                                                        <div>
-                                                            <p className="font-semibold text-slate-400 text-[10px] uppercase mb-1">Interpretation</p>
-                                                            <p className="leading-relaxed text-slate-200">{analysis.interpretation}</p>
-                                                        </div>
-                                                        <div className="bg-slate-700/50 p-2 rounded border-l-2 border-blue-400">
-                                                            <p className="font-semibold text-blue-300 text-[10px] uppercase mb-1">Clinical Action</p>
-                                                            <p className="leading-relaxed text-blue-100 italic">{analysis.recommendation}</p>
-                                                        </div>
-                                                        <div className="flex justify-between items-center text-[10px] text-slate-400 pt-1 border-t border-slate-700">
-                                                            <span>Measurement: {data.count} cells ({data.percentage.toFixed(1)}%)</span>
-                                                            <span>Ref: {data.normalRange}</span>
-                                                        </div>
-                                                    </div>
-
-                                                    {/* Chevron/Arrow */}
-                                                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-4 border-transparent border-t-slate-800"></div>
-                                                </div>
-
-                                                <div className="flex items-center gap-4 p-2 rounded-lg hover:bg-slate-50 transition-colors border border-transparent hover:border-slate-200">
-                                                    <div className="w-28 text-sm font-medium text-slate-700">{name}</div>
-                                                    <div className="flex-1">
-                                                        <div className="h-4 bg-slate-100 rounded-full overflow-hidden border border-slate-100">
-                                                            <div
-                                                                className={`h-full transition-all duration-500 ${data.status === 'high' ? 'bg-red-500' :
-                                                                    data.status === 'low' ? 'bg-blue-500' :
-                                                                        'bg-green-500'
-                                                                    }`}
-                                                                style={{ width: `${Math.min(100, data.percentage)}%` }}
-                                                            />
-                                                        </div>
-                                                    </div>
-                                                    <div className="w-12 text-right font-mono text-sm font-bold">{data.count}</div>
-                                                    <div className="w-16 text-right font-mono text-sm">{data.percentage.toFixed(1)}%</div>
-                                                    <div className="w-24 text-right text-xs font-mono text-slate-500 bg-slate-50 px-2 py-1 rounded border border-slate-100">
-                                                        {data.normalRange}
-                                                    </div>
-                                                    <div className={`w-20 text-center text-xs px-2 py-1 rounded font-medium border ${data.status === 'high' ? 'bg-red-50 text-red-700 border-red-100' :
-                                                        data.status === 'low' ? 'bg-blue-50 text-blue-700 border-blue-100' :
-                                                            'bg-green-50 text-green-700 border-green-100'
-                                                        }`}>
-                                                        {data.status === 'normal' ? 'Normal' : data.status === 'high' ? 'High' : 'Low'}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        )}
-
-
                     </div>
                 )
             }
+
             {/* Actions */}
             <div className="px-6 py-4 bg-rose-50 flex gap-4 flex-wrap">
                 <button

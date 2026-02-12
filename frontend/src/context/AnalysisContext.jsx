@@ -5,97 +5,25 @@ import { API_URL, getApiHeaders } from '../config/api';
 
 const AnalysisContext = createContext();
 const TARGET_IMAGE_COUNT = 10;
-const WBC_NORMAL_RANGES = {
-    'Neutrophil': { min: 45, max: 65 },
-    'Lymphocyte': { min: 20, max: 35 },
-    'Monocyte': { min: 2, max: 6 },
-    'Eosinophil': { min: 2, max: 4 },
-    'Basophil': { min: 0, max: 1 }
-};
 const RBC_MULTIPLIER = 200000;
 const WBC_MULTIPLIER = 2000;
 const NUM_FIELDS = 10;
 
-// --- Clinical Analysis Helper Functions (Module Scope) ---
+// // --- Classification Helper ---
+// Map new 7-class model names to short labels
+const CLASS_LABELS = {
+    'Normal WBC': { short: 'Normal', isDisease: false, isRBC: false },
+    'Normal RBC': { short: 'Normal RBC', isDisease: false, isRBC: true },
+    'Acute Lymphoblastic Leukemia': { short: 'ALL', isDisease: true, isRBC: false },
+    'Acute Myeloid Leukemia': { short: 'AML', isDisease: true, isRBC: false },
+    'Chronic Lymphocytic Leukemia': { short: 'CLL', isDisease: true, isRBC: false },
+    'Chronic Myeloid Leukemia': { short: 'CML', isDisease: true, isRBC: false },
+    'Sickle Cell Anemia': { short: 'SCA', isDisease: true, isRBC: true },
+};
 
-// Robust Clinical Analysis Helper
-const getClinicalAnalysis = (type, status) => {
-    const analyses = {
-        'Neutrophil': {
-            high: {
-                interpretation: 'Neutrophilia: Increased neutrophils often indicate acute bacterial infection, severe stress, burns, or tissue necrosis.',
-                recommendation: 'Clinical Recommendation: Evaluate for signs of infection (fever, localized pain). Consider CBC with differential repeats and inflammatory markers (CRP, ESR).'
-            },
-            low: {
-                interpretation: 'Neutropenia: Decreased neutrophils significantly increase infection risk. May be caused by viral infections, chemotherapy, aplastic anemia, or severe overwhelming infection (sepsis).',
-                recommendation: 'Clinical Recommendation: Urgent clinical assessment for infection. Review medication history (look for marrow-suppressive drugs). Hematology consultation recommended if persistent or severe (<1000/µL).'
-            },
-            normal: {
-                interpretation: 'Neutrophil count is within the healthy reference range, suggesting adequate innate immune function against bacteria.',
-                recommendation: 'Clinical Recommendation: Routine monitoring as part of standard wellness checks.'
-            }
-        },
-        'Lymphocyte': {
-            high: {
-                interpretation: 'Lymphocytosis: Elevated lymphocytes are common in viral infections (Epstein-Barr, Cytomegalovirus), chronic lymphocytic leukemia (CLL), or pertussis.',
-                recommendation: 'Clinical Recommendation: Assess for viral symptoms (sore throat, lymphadenopathy). If elderly or asymptomatic, rule out lymphoproliferative disorders (CLL).'
-            },
-            low: {
-                interpretation: 'Lymphocytopenia: Decreased lymphocytes may be seen in HIV/AIDS, high-dose steroid therapy, autoimmune diseases (Lupus), or acute stress response.',
-                recommendation: 'Clinical Recommendation: detailed history taking for autoimmune symptoms or immunodeficiency risk factors. Consider HIV screening if clinically indicated.'
-            },
-            normal: {
-                interpretation: 'Lymphocyte count is within the healthy reference range, indicating normal adaptive immune capacity.',
-                recommendation: 'Clinical Recommendation: Routine monitoring.'
-            }
-        },
-        'Monocyte': {
-            high: {
-                interpretation: 'Monocytosis: Often associated with chronic infections (Tuberculosis, fungal), bacterial endocarditis, recovery phase of acute infections, or autoimmune disorders.',
-                recommendation: 'Clinical Recommendation: Evaluate for chronic inflammatory conditions. If persistent, consider screening for chronic infections or myelomonocytic leukemia in elderly patients.'
-            },
-            low: {
-                interpretation: 'Monocytopenia: Rare. Can be associated with hairy cell leukemia, severe aplastic anemia, or acute stress.',
-                recommendation: 'Clinical Recommendation: Usually not clinically significant in isolation. Monitor trend. Review peripheral smear for hairy cells.'
-            },
-            normal: {
-                interpretation: 'Monocyte count is within the healthy reference range.',
-                recommendation: 'Clinical Recommendation: Routine monitoring.'
-            }
-        },
-        'Eosinophil': {
-            high: {
-                interpretation: 'Eosinophilia: Strongly suggestive of allergic conditions (asthma, eczema), parasitic infections (worms), or drug hypersensitivity.',
-                recommendation: 'Clinical Recommendation: Review allergy history and medications. Consider stool ova/parasite exam if travel history is relevant. Screen for asthma.'
-            },
-            low: {
-                interpretation: 'Eosinopenia: Often occurs during acute adrenal stress (Cushing’s syndrome), severe acute infection, or corticosteroid use.',
-                recommendation: 'Clinical Recommendation: Usually transient and responsive to stress/infection resolution. No specific intervention typically needed unless Cushing’s suspected.'
-            },
-            normal: {
-                interpretation: 'Eosinophil count is within the healthy reference range.',
-                recommendation: 'Clinical Recommendation: Routine monitoring.'
-            }
-        },
-        'Basophil': {
-            high: {
-                interpretation: 'Basophilia: Uncommon. Can be a marker for Chronic Myeloid Leukemia (CML) or other myeloproliferative neoplasms. Also seen in hypersensitivity reactions.',
-                recommendation: 'Clinical Recommendation: IMPORTANT: Rule out myeloproliferative disorders (CML). Check for splenomegaly. Hematology referral suggested if persistent.'
-            },
-            low: {
-                interpretation: 'Basopenia: Difficult to demonstrate as normal count is low. May be seen in acute phase of infection, hyperthyroidism, or stress.',
-                recommendation: 'Clinical Recommendation: Generally not clinically significant.'
-            },
-            normal: {
-                interpretation: 'Basophil count is within the healthy reference range.',
-                recommendation: 'Clinical Recommendation: Routine monitoring.'
-            }
-        }
-    };
-    return analyses[type]?.[status] || {
-        interpretation: 'Clinical correlation recommended.',
-        recommendation: 'Clinical Recommendation: Correlate with clinical findings.'
-    };
+const getClassInfo = (classification) => {
+    if (!classification) return { short: 'Unknown', isDisease: false, isRBC: false };
+    return CLASS_LABELS[classification] || { short: classification, isDisease: false, isRBC: false };
 };
 
 // Sickle Cell Clinical Analysis Helper
@@ -200,91 +128,28 @@ export const AnalysisProvider = ({ children }) => {
         setPreviewUrl(null);
     }, []);
 
-    // Calculate aggregated results
+    // Calculate aggregated results - Simplified for 7-class model
     const calculateFinalResults = useCallback((allClassifications, allProcessedImages, counts, allRBCClassifications = []) => {
         const wbcTypeCounts = {};
-        const mainWBCCategories = ['Neutrophil', 'Lymphocyte', 'Monocyte', 'Eosinophil', 'Basophil'];
-        const differentialCounts = { 'Neutrophil': 0, 'Lymphocyte': 0, 'Monocyte': 0, 'Eosinophil': 0, 'Basophil': 0 };
-
-        let cmlCount = 0, cllCount = 0, allCount = 0, amlCount = 0;
-        let lymphoblastNormalCount = 0, lymphocyteNormalCount = 0;  // For monitoring
-        const cmlGranulocyteBreakdown = { basophil: 0, eosinophil: 0, myeloblast: 0, promyelocyte: 0, myelocyte: 0, metamyelocyte: 0, neutrophil: 0 };
-        const blastBreakdown = { lymphoblast: 0, myeloblast: 0 };
+        let normalWBCCount = 0;
+        let amlCount = 0, allCount = 0, cmlCount = 0, cllCount = 0;
         const abnormalWBCs = [];
 
         allClassifications.forEach(cls => {
             const classification = cls.classification || '';
             wbcTypeCounts[classification] = (wbcTypeCounts[classification] || 0) + 1;
-            const classificationStr = (cls.classification || '').toLowerCase();
+            const info = getClassInfo(classification);
 
-            const hasCML = classificationStr.includes(': cml');
-            const hasCLL = classificationStr.includes(': cll');
-            const hasAML = classificationStr.includes(': aml');
-            const hasALL = classificationStr.includes(': all');
-
-            const isNeutrophil = classificationStr.includes('neutrophil');
-            const isLymphocyte = classificationStr.includes('lymphocyte');
-            const isMonocyte = classificationStr.includes('monocyte');
-            const isEosinophil = classificationStr.includes('eosinophil') || classificationStr.includes('eosonophil');
-            const isBasophil = classificationStr.includes('basophil');
-            const isMyeloblast = classificationStr.includes('myeloblast');
-            const isLymphoblast = classificationStr.includes('lymphoblast') || classificationStr.includes('b_lymphoblast');
-            const isPromyelocyte = classificationStr.includes('promyelocyte');
-            const isMetamyelocyte = classificationStr.includes('metamyelocyte');
-            const isMyelocyte = classificationStr.includes('myelocyte') && !isPromyelocyte && !isMetamyelocyte;
-
-            // Only count mature main WBC types in the differential
-            // Immature cells (Promyelocyte, Myelocyte, Metamyelocyte, Myeloblast, Lymphoblast) 
-            // are tracked separately as disease indicators, not in the main differential
-            if (isNeutrophil) {
-                differentialCounts['Neutrophil']++;
-            } else if (isLymphocyte) {
-                differentialCounts['Lymphocyte']++;
-            } else if (isMonocyte) {
-                differentialCounts['Monocyte']++;
-            } else if (isEosinophil) {
-                differentialCounts['Eosinophil']++;
-            } else if (isBasophil) {
-                differentialCounts['Basophil']++;
-            }
-            // Note: Promyelocyte, Myelocyte, Metamyelocyte, Myeloblast, Lymphoblast 
-            // are NOT counted in the main 5-part differential
-
-            if (!classificationStr.includes('normal') && cls.classification) {
+            if (info.isDisease && !info.isRBC) {
                 abnormalWBCs.push(cls);
             }
 
-            if (hasCML) {
-                cmlCount++;
-                if (isBasophil) cmlGranulocyteBreakdown.basophil++;
-                else if (isEosinophil) cmlGranulocyteBreakdown.eosinophil++;
-                else if (isMyeloblast) cmlGranulocyteBreakdown.myeloblast++;
-                else if (isNeutrophil) cmlGranulocyteBreakdown.neutrophil++;
-                else if (isPromyelocyte) cmlGranulocyteBreakdown.promyelocyte++;
-                else if (isMyelocyte) cmlGranulocyteBreakdown.myelocyte++;
-                else if (isMetamyelocyte) cmlGranulocyteBreakdown.metamyelocyte++;
-            }
-
-            if (hasCLL) cllCount++;
-
-            if (hasALL) {
-                allCount++;
-                blastBreakdown.lymphoblast++;
-            }
-
-            if (hasAML) {
-                amlCount++;
-                blastBreakdown.myeloblast++;
-            }
-
-            // Track Lymphoblast:Normal and Lymphocyte:Normal for monitoring
-            const isNormalVariant = classificationStr.includes(': normal');
-            if (isLymphoblast && isNormalVariant) {
-                lymphoblastNormalCount++;
-            }
-            if (isLymphocyte && isNormalVariant) {
-                lymphocyteNormalCount++;
-            }
+            // Count by disease type using direct class names
+            if (classification === 'Normal WBC') normalWBCCount++;
+            else if (classification === 'Acute Myeloid Leukemia') amlCount++;
+            else if (classification === 'Acute Lymphoblastic Leukemia') allCount++;
+            else if (classification === 'Chronic Myeloid Leukemia') cmlCount++;
+            else if (classification === 'Chronic Lymphocytic Leukemia') cllCount++;
         });
 
         const totalImagesProcessed = allProcessedImages.length;
@@ -292,27 +157,8 @@ export const AnalysisProvider = ({ children }) => {
         const estimatedRBCCount = Math.round((averageRBCPerImage / 10) * RBC_MULTIPLIER);
         const estimatedWBCCount = Math.round((counts.wbc / NUM_FIELDS) * WBC_MULTIPLIER);
         const totalWBC = counts.wbc;
-        const wbcDifferential = {};
+        const diseaseWBCCount = amlCount + allCount + cmlCount + cllCount;
 
-        mainWBCCategories.forEach(category => {
-            const count = differentialCounts[category];
-            const percentage = totalWBC > 0 ? (count / totalWBC) * 100 : 0;
-            const normalRange = WBC_NORMAL_RANGES[category];
-            let status = 'normal';
-            if (normalRange) {
-                if (percentage > normalRange.max) status = 'high';
-                else if (percentage < normalRange.min) status = 'low';
-            }
-            wbcDifferential[category] = {
-                count, percentage, normalRange: normalRange ? `${normalRange.min}-${normalRange.max}%` : '-', status,
-                clinInterpretation: getClinicalAnalysis(category, status).interpretation,
-                clinRecommendation: getClinicalAnalysis(category, status).recommendation
-            };
-        });
-
-        const blastCount = amlCount + allCount;
-        const cmlPercentage = totalWBC > 0 ? (cmlCount / totalWBC) * 100 : 0;
-        const cllPercentage = totalWBC > 0 ? (cllCount / totalWBC) * 100 : 0;
         const diseaseFindings = [];
 
         if (amlCount > 0) {
@@ -320,10 +166,10 @@ export const AnalysisProvider = ({ children }) => {
             let interpretation = '', severity = 'NORMAL';
             if (amlPercentage >= 20) { interpretation = 'Diagnostic level for AML'; severity = 'HIGH'; }
             else if (amlPercentage >= 10) { interpretation = 'Suspicious / Pre-leukemic (AML)'; severity = 'MODERATE'; }
-            else { interpretation = 'Myeloblasts detected'; severity = 'NORMAL'; }
+            else { interpretation = 'AML cells detected'; severity = 'NORMAL'; }
             diseaseFindings.push({
-                type: 'AML (Acute Myeloblastic Leukemia)', percentage: amlPercentage, interpretation, severity,
-                condition: 'Acute Myeloid Leukemia', breakdown: { "AML:Myeloblast": blastBreakdown.myeloblast },
+                type: 'AML (Acute Myeloid Leukemia)', percentage: amlPercentage, interpretation, severity,
+                condition: 'Acute Myeloid Leukemia', breakdown: { "AML Cells": amlCount },
                 recommendation: getDiseaseRecommendation('AML', severity)
             });
         }
@@ -335,73 +181,39 @@ export const AnalysisProvider = ({ children }) => {
             else if (allPercentage >= 66) { interpretation = 'Typical ALL'; condition = 'ALL'; severity = 'HIGH'; }
             else if (allPercentage >= 51) { interpretation = 'Suspicious for Early ALL'; condition = 'Suspicious for Early ALL'; severity = 'MODERATE'; }
             else if (allPercentage >= 35) { interpretation = 'Reactive / Secondary Lymphocytosis'; condition = 'Reactive Lymphocytosis'; severity = 'LOW'; }
-            else { interpretation = 'ALL-marked cells detected but below threshold'; }
+            else { interpretation = 'ALL cells detected but below threshold'; }
             diseaseFindings.push({
                 type: 'ALL (Acute Lymphoblastic Leukemia)', percentage: allPercentage, interpretation, severity,
-                condition, breakdown: { "ALL:B_Lymphoblast": blastBreakdown.lymphoblast },
+                condition, breakdown: { "ALL Cells": allCount },
                 recommendation: getDiseaseRecommendation('ALL', severity)
             });
         }
 
         if (cmlCount > 0) {
+            const cmlPercentage = totalWBC > 0 ? (cmlCount / totalWBC) * 100 : 0;
             let interpretation = '', severity = 'NORMAL', condition = 'Monitor for CML';
             if (cmlPercentage >= 20) { interpretation = 'Diagnostic level for CML'; condition = 'Chronic Myeloid Leukemia'; severity = 'HIGH'; }
             else if (cmlPercentage >= 10) { interpretation = 'Suspicious / Pre-leukemic (CML)'; condition = 'Suspicious for CML'; severity = 'MODERATE'; }
-            else { interpretation = 'CML-marked cells detected but below threshold'; }
-
-            const cmlBreakdown = {};
-            if (cmlGranulocyteBreakdown.basophil > 0) cmlBreakdown["CML:Basophil"] = cmlGranulocyteBreakdown.basophil;
-            if (cmlGranulocyteBreakdown.eosinophil > 0) cmlBreakdown["CML:Eosinophil"] = cmlGranulocyteBreakdown.eosinophil;
-            if (cmlGranulocyteBreakdown.myeloblast > 0) cmlBreakdown["CML:Myeloblast"] = cmlGranulocyteBreakdown.myeloblast;
-            if (cmlGranulocyteBreakdown.promyelocyte > 0) cmlBreakdown["CML:Promyelocyte"] = cmlGranulocyteBreakdown.promyelocyte;
-            if (cmlGranulocyteBreakdown.myelocyte > 0) cmlBreakdown["CML:Myelocyte"] = cmlGranulocyteBreakdown.myelocyte;
-            if (cmlGranulocyteBreakdown.metamyelocyte > 0) cmlBreakdown["CML:Metamyelocyte"] = cmlGranulocyteBreakdown.metamyelocyte;
-            if (cmlGranulocyteBreakdown.neutrophil > 0) cmlBreakdown["CML:Neutrophil"] = cmlGranulocyteBreakdown.neutrophil;
-
+            else { interpretation = 'CML cells detected but below threshold'; }
             diseaseFindings.push({
-                type: 'CML (Chronic Myeloid Leukemia)', percentage: cmlPercentage, interpretation, severity, condition, breakdown: cmlBreakdown,
+                type: 'CML (Chronic Myeloid Leukemia)', percentage: cmlPercentage, interpretation, severity,
+                condition, breakdown: { "CML Cells": cmlCount },
                 recommendation: getDiseaseRecommendation('CML', severity)
             });
         }
 
         if (cllCount > 0) {
+            const cllPercentage = totalWBC > 0 ? (cllCount / totalWBC) * 100 : 0;
             let interpretation = '', severity = 'NORMAL', condition = 'Monitor for CLL';
             if (cllPercentage > 80) { interpretation = 'Advanced / Progressive CLL'; condition = 'CLL (Advanced)'; severity = 'HIGH'; }
             else if (cllPercentage >= 66) { interpretation = 'Typical CLL'; condition = 'CLL'; severity = 'HIGH'; }
-            else if (cllPercentage >= 51) { interpretation = 'Suspicious for Early CLL'; condition = 'Suspicious for Early CML'; severity = 'MODERATE'; }
+            else if (cllPercentage >= 51) { interpretation = 'Suspicious for Early CLL'; condition = 'Suspicious for Early CLL'; severity = 'MODERATE'; }
             else if (cllPercentage >= 35) { interpretation = 'Reactive / Secondary Lymphocytosis'; condition = 'Reactive Lymphocytosis'; severity = 'LOW'; }
-            else { interpretation = 'CLL-marked cells detected but below threshold'; }
+            else { interpretation = 'CLL cells detected but below threshold'; }
             diseaseFindings.push({
-                type: 'CLL (Chronic Lymphocytic Leukemia)', percentage: cllPercentage, interpretation, severity, condition, breakdown: { "CLL:Lymphocytes": cllCount },
+                type: 'CLL (Chronic Lymphocytic Leukemia)', percentage: cllPercentage, interpretation, severity,
+                condition, breakdown: { "CLL Cells": cllCount },
                 recommendation: getDiseaseRecommendation('CLL', severity)
-            });
-        }
-
-        // Monitor for ALL: High Lymphoblast:Normal count (>= 20% of WBCs)
-        const lymphoblastNormalPercentage = totalWBC > 0 ? (lymphoblastNormalCount / totalWBC) * 100 : 0;
-        if (lymphoblastNormalCount > 0 && lymphoblastNormalPercentage >= 20) {
-            diseaseFindings.push({
-                type: 'Monitor for ALL',
-                percentage: lymphoblastNormalPercentage,
-                interpretation: 'Elevated normal lymphoblasts detected. Recommend monitoring for potential ALL development.',
-                severity: 'LOW',
-                condition: 'Monitor for ALL',
-                breakdown: { "Lymphoblast:Normal": lymphoblastNormalCount },
-                recommendation: 'Clinical Recommendation: Serial CBC monitoring. Repeat in 2-4 weeks. Consider flow cytometry if persistent.'
-            });
-        }
-
-        // Monitor for CLL: High Lymphocyte:Normal count (>= 40% of WBCs)
-        const lymphocyteNormalPercentage = totalWBC > 0 ? (lymphocyteNormalCount / totalWBC) * 100 : 0;
-        if (lymphocyteNormalCount > 0 && lymphocyteNormalPercentage >= 40) {
-            diseaseFindings.push({
-                type: 'Monitor for CLL',
-                percentage: lymphocyteNormalPercentage,
-                interpretation: 'Elevated normal lymphocytes detected. Recommend monitoring for potential CLL development.',
-                severity: 'LOW',
-                condition: 'Monitor for CLL',
-                breakdown: { "Lymphocyte:Normal": lymphocyteNormalCount },
-                recommendation: 'Clinical Recommendation: Serial CBC monitoring. Repeat in 3 months. Consider immunophenotyping if lymphocyte count persists above normal.'
             });
         }
 
@@ -417,16 +229,15 @@ export const AnalysisProvider = ({ children }) => {
         let patientStatus = 'Normal';
         const hasCritical = diseaseFindings.some(f => f.severity === 'HIGH');
         const hasAbnormal = diseaseFindings.some(f => f.severity === 'MODERATE' || f.severity === 'LOW');
-        // Also mark as Abnormal if high Lymphoblast:Normal or Lymphocyte:Normal counts
-        const hasMonitoringConcern = (lymphoblastNormalPercentage >= 20) || (lymphocyteNormalPercentage >= 40);
         if (hasCritical || sicklePercentage > 30) patientStatus = 'Critical';
-        else if (hasAbnormal || sicklePercentage >= 3 || hasMonitoringConcern) patientStatus = 'Abnormal';
+        else if (hasAbnormal || sicklePercentage >= 3) patientStatus = 'Abnormal';
 
         return {
             thresholdMet: true, totalWBC: counts.wbc, totalRBC: counts.rbc, totalPlatelets: counts.platelets,
             estimatedWBCCount, estimatedRBCCount, avgRBCPerField: averageRBCPerImage,
             wbcClassifications: allClassifications, rbcClassifications: allRBCClassifications,
-            abnormalWBCs, wbcDifferential, diseaseFindings, classificationCounts: wbcTypeCounts,
+            abnormalWBCs, diseaseFindings, classificationCounts: wbcTypeCounts,
+            normalWBCCount, diseaseWBCCount,
             sickleCell: {
                 count: sickleCount, totalRBC: counts.rbc, percentage: sicklePercentage, interpretation: sickleInterpretation, severity: sickleSeverity,
                 recommendation: getSickleCellAnalysis(sickleSeverity).recommendation
@@ -522,10 +333,11 @@ export const AnalysisProvider = ({ children }) => {
                     imagesAnalyzed: processedImages.length
                 },
                 data: {
-                    wbcDifferential: finalResults.wbcDifferential,
                     diseaseFindings: finalResults.diseaseFindings,
                     abnormalWBCs: finalResults.abnormalWBCs ? finalResults.abnormalWBCs.length : 0,
                     classificationCounts: finalResults.classificationCounts,
+                    normalWBCCount: finalResults.normalWBCCount,
+                    diseaseWBCCount: finalResults.diseaseWBCCount,
                     sickleCount: finalResults.sickleCell?.count || 0,
                     sickleCell: finalResults.sickleCell
                 },

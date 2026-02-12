@@ -11,7 +11,7 @@ export const ThresholdResults = ({ diseaseInterpretation, clinicalThresholds }) 
 
   const sc = diseaseInterpretation.sickle_cell_analysis;
   const la = diseaseInterpretation.leukemia_analysis;
-  const wbc = diseaseInterpretation.wbc_differential || {};
+  const summary = diseaseInterpretation.classification_summary || {};
   const adequacy = diseaseInterpretation.sample_adequacy;
 
   const percentBar = (value) => `${Math.max(0, Math.min(100, value || 0))}%`;
@@ -72,51 +72,61 @@ export const ThresholdResults = ({ diseaseInterpretation, clinicalThresholds }) 
               <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
                 <div className="h-full bg-red-500" style={{ width: percentBar(sc.percentage) }} />
               </div>
-              <div className="text-xs text-slate-600 mt-1">95% CI: {sc.confidence_interval}</div>
+              <div className="text-xs text-slate-600 mt-1">Severity: {sc.severity} ({sc.condition})</div>
               <div className="text-xs text-slate-600">Sickle cells: {sc.sickle_cell_count} / {sc.total_rbc_analyzed} RBCs</div>
             </div>
             <div className="flex flex-col justify-center">
               <div className="text-sm text-slate-700">Interpretation</div>
               <div className="text-base font-semibold text-slate-800">{sc.interpretation}</div>
-              {sc.note && <div className="text-xs text-slate-600 mt-1">{sc.note}</div>}
+              {sc.calculation_method && <div className="text-xs text-slate-600 mt-1">{sc.calculation_method}</div>}
             </div>
           </div>
         </div>
       )}
 
-      {/* WBC Differential vs Normal Ranges */}
-      {Object.keys(wbc).length > 0 && (
+      {/* Classification Summary - Normal vs Disease */}
+      {summary.total_wbc_analyzed > 0 && (
         <div className="bg-white p-4 rounded-lg border border-slate-200 shadow-sm">
-          <h4 className="font-semibold mb-3 text-slate-800">WBC Differential (Observed vs Normal)</h4>
-          <div className="space-y-3">
-            {Object.entries(wbc).map(([name, info]) => (
-              <div key={name}>
-                <div className="flex justify-between text-sm">
-                  <div className="font-medium text-slate-700">{name}</div>
-                  <div className="font-mono text-slate-700">{info.percentage}%</div>
-                </div>
-                <div className="relative w-full h-3 bg-slate-200 rounded-full overflow-hidden">
-                  {/* Observed percentage */}
-                  <div className={`absolute left-0 top-0 h-3 ${
-                    info.normal_status === 'normal' ? 'bg-green-500' : 'bg-amber-500'
-                  }`} style={{ width: percentBar(info.percentage) }} />
-                  {/* Normal range overlay */}
-                  {info.normal_range && (() => {
-                    const [minStr, maxStr] = info.normal_range.split('%')[0].split('-');
-                    const min = parseFloat(minStr);
-                    const max = parseFloat(maxStr);
-                    return (
-                      <div className="absolute top-0 h-3 bg-green-300/40" style={{ left: percentBar(min), width: percentBar(max - min) }} />
-                    );
-                  })()}
-                </div>
-                <div className="text-xs text-slate-600 flex justify-between">
-                  <span>95% CI: {info.confidence_interval}</span>
-                  {info.normal_range && <span>Normal: {info.normal_range}</span>}
-                </div>
-              </div>
-            ))}
+          <h4 className="font-semibold mb-3 text-slate-800">WBC Classification Summary</h4>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="bg-green-50 rounded-lg p-3 border border-green-200 text-center">
+              <p className="text-green-700 text-xs font-medium mb-1">Normal WBC</p>
+              <p className="text-green-800 text-2xl font-bold">{summary.normal_wbc?.count || 0}</p>
+              <p className="text-green-600 text-sm">{summary.normal_wbc?.percentage || 0}%</p>
+            </div>
+            <div className={`rounded-lg p-3 border text-center ${
+              summary.disease_wbc?.count > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'
+            }`}>
+              <p className={`text-xs font-medium mb-1 ${
+                summary.disease_wbc?.count > 0 ? 'text-red-700' : 'text-slate-600'
+              }`}>Disease Cells</p>
+              <p className={`text-2xl font-bold ${
+                summary.disease_wbc?.count > 0 ? 'text-red-800' : 'text-slate-700'
+              }`}>{summary.disease_wbc?.count || 0}</p>
+              <p className={`text-sm ${
+                summary.disease_wbc?.count > 0 ? 'text-red-600' : 'text-slate-500'
+              }`}>{summary.disease_wbc?.percentage || 0}%</p>
+            </div>
           </div>
+          {/* Disease breakdown bars */}
+          {summary.breakdown && Object.entries(summary.breakdown).some(([, v]) => v.count > 0) && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-slate-700">Disease Breakdown</p>
+              {Object.entries(summary.breakdown).map(([name, info]) => (
+                info.count > 0 && (
+                  <div key={name}>
+                    <div className="flex justify-between text-sm">
+                      <div className="font-medium text-slate-700">{name}</div>
+                      <div className="font-mono text-slate-700">{info.count} ({info.percentage}%)</div>
+                    </div>
+                    <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+                      <div className="h-full bg-red-500" style={{ width: percentBar(info.percentage) }} />
+                    </div>
+                  </div>
+                )
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -127,22 +137,30 @@ export const ThresholdResults = ({ diseaseInterpretation, clinicalThresholds }) 
           <div className="grid md:grid-cols-2 gap-4">
             <div>
               <div className="flex justify-between text-sm text-slate-700 mb-1">
-                <span>Abnormal WBCs</span>
-                <span className="font-mono">{la.abnormal_wbc_percentage}%</span>
+                <span>Disease WBCs</span>
+                <span className="font-mono">{la.disease_wbc_percentage}%</span>
               </div>
               <div className="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
-                <div className="h-full bg-amber-500" style={{ width: percentBar(la.abnormal_wbc_percentage) }} />
+                <div className="h-full bg-amber-500" style={{ width: percentBar(la.disease_wbc_percentage) }} />
               </div>
-              <div className="text-xs text-slate-600 mt-1">95% CI: {la.confidence_interval}</div>
+              <div className="text-xs text-slate-600 mt-1">
+                Normal: {la.normal_wbc_percentage}% | Disease: {la.disease_wbc_percentage}% | Total analyzed: {la.total_wbc_analyzed}
+              </div>
             </div>
             <div className="space-y-1">
               <div className="text-sm text-slate-700">Findings</div>
               {(la.findings || []).length === 0 && (
-                <div className="text-sm text-slate-600">No acute leukemia findings based on thresholds.</div>
+                <div className="text-sm text-slate-600">No leukemia findings based on thresholds.</div>
               )}
               {(la.findings || []).map((f, i) => (
                 <div key={i} className="text-sm text-slate-700">
+                  <span className={`inline-block w-2 h-2 rounded-full mr-2 ${
+                    f.severity === 'HIGH' ? 'bg-red-500' :
+                    f.severity === 'MODERATE' ? 'bg-amber-500' :
+                    f.severity === 'LOW' ? 'bg-yellow-500' : 'bg-green-500'
+                  }`}></span>
                   <span className="font-medium">{f.type}:</span> {f.interpretation}
+                  <span className="text-xs text-slate-500 ml-1">({f.count} cells, {f.percentage}%)</span>
                 </div>
               ))}
             </div>

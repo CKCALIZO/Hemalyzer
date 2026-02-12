@@ -274,7 +274,7 @@ class ConvNeXtClassifier:
         self.preprocessor = None
         self.sickle_cell_confidence_threshold = 0.875  # 87% confidence threshold for sickle cell detection
     
-    def load_model(self, model_path='best_leukemia_model.pth', use_mixed_precision=False, compile_model=False):
+    def load_model(self, model_path='convnext.pth', use_mixed_precision=False, compile_model=False):
         """
         Load ConvNeXt classification model for WBC and RBC classification
         OPTIMIZED for CPU inference
@@ -720,15 +720,14 @@ class ConvNeXtClassifier:
         return self.class_names if self.class_names else []
     
     def get_wbc_class_names(self):
-        """Get only WBC class names (exclude RBC and Platelet classes)"""
+        """Get only WBC class names (exclude RBC classes)"""
         if not self.class_names:
             return []
         
         # Define non-WBC classes that should be excluded when classifying WBCs
         NON_WBC_CLASSES = {
-            'rbc: normal',
-            'platelet: normal', 
-            'rbc: sickle cell anemia'
+            'normal rbc',
+            'sickle cell anemia'
         }
         
         return [cls for cls in self.class_names if cls.lower() not in NON_WBC_CLASSES]
@@ -748,7 +747,7 @@ classifier = ConvNeXtClassifier()
 # ============================================================
 # CONVENIENCE FUNCTIONS (for backward compatibility)
 # ============================================================
-def load_convnext_model(model_path='best_leukemia_model.pth', use_mixed_precision=False, compile_model=False):
+def load_convnext_model(model_path='convnext.pth', use_mixed_precision=False, compile_model=False):
     """
     Load ConvNeXt model (convenience wrapper)
     

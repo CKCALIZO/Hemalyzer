@@ -137,15 +137,15 @@ export const Reports = () => {
 
         // Sort for better visualization
         const sortedData = Object.entries(data).sort((a, b) => b[1] - a[1]);
-        // Colors palette - WBC type specific colors
+        // Colors palette - classification specific colors
         const colorMap = {
-            'neutrophil': '#3B82F6', // blue
-            'lymphocyte': '#F59E0B', // amber  
-            'monocyte': '#FBBF24',   // yellow
-            'eosinophil': '#F97316', // orange
-            'basophil': '#8B5CF6',   // purple
-            'b_lymphoblast': '#10B981', // green
-            'myeloblast': '#EF4444', // red
+            'Normal WBC': '#10B981',  // green
+            'Normal RBC': '#06B6D4',  // cyan
+            'Acute Lymphoblastic Leukemia': '#EF4444', // red
+            'Acute Myeloid Leukemia': '#F97316', // orange
+            'Chronic Lymphocytic Leukemia': '#8B5CF6', // purple
+            'Chronic Myeloid Leukemia': '#F59E0B', // amber
+            'Sickle Cell Anemia': '#EC4899', // pink
         };
         const defaultColors = ['#EF4444', '#F59E0B', '#10B981', '#3B82F6', '#6366F1', '#EC4899', '#8B5CF6', '#64748B'];
 
@@ -461,35 +461,34 @@ export const Reports = () => {
                                             )}
                                         </div>
 
-                                        {/* WBC Differential Counts */}
-                                        {selectedReport.data?.wbcDifferential && Object.keys(selectedReport.data.wbcDifferential).length > 0 && (
+                                        {/* WBC Classification Summary */}
+                                        {selectedReport.data?.classificationCounts && Object.keys(selectedReport.data.classificationCounts).length > 0 && (
                                             <div className="bg-blue-50 p-4 rounded-lg mb-6 border border-blue-200">
-                                                <h3 className="font-semibold text-lg mb-3 text-blue-800">WBC Differential Count</h3>
-                                                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                                                    {Object.entries(selectedReport.data.wbcDifferential).map(([cellType, data]) => (
-                                                        <div key={cellType} className="bg-white p-3 rounded border border-blue-100">
-                                                            <p className="text-xs text-blue-600 font-medium">{cellType}</p>
-                                                            <p className="text-lg font-bold text-blue-800">{data.percentage?.toFixed(1) || 0}%</p>
-                                                            <p className="text-xs text-slate-500">({data.count || 0} cells)</p>
+                                                <h3 className="font-semibold text-lg mb-3 text-blue-800">WBC Classification</h3>
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                                    {Object.entries(selectedReport.data.classificationCounts).map(([className, count]) => (
+                                                        <div key={className} className={`bg-white p-3 rounded border ${count > 0 && className !== 'Normal WBC' ? 'border-red-200' : 'border-blue-100'}`}>
+                                                            <p className={`text-xs font-medium ${count > 0 && className !== 'Normal WBC' ? 'text-red-600' : 'text-blue-600'}`}>{className}</p>
+                                                            <p className={`text-lg font-bold ${count > 0 && className !== 'Normal WBC' ? 'text-red-800' : 'text-blue-800'}`}>{count}</p>
                                                         </div>
                                                     ))}
                                                 </div>
                                             </div>
                                         )}
 
-                                        {/* Abnormal Cells Summary & Pie Chart */}
+                                        {/* Cell Classification Summary & Pie Chart */}
                                         <div className="bg-amber-50 p-4 rounded-lg mb-6 border border-amber-200">
                                             <div className="flex flex-col md:flex-row gap-6">
                                                 <div className="flex-1">
                                                     <h3 className="font-semibold text-lg mb-3 text-amber-800">Cell Classification Summary</h3>
                                                     <div className="grid grid-cols-2 gap-4">
-                                                        <div className="bg-white p-3 rounded border border-amber-200">
-                                                            <p className="text-sm text-amber-600">Abnormal WBCs</p>
-                                                            <p className="text-2xl font-bold text-amber-700">{selectedReport.data?.abnormalWBCs || 0}</p>
+                                                        <div className="bg-white p-3 rounded border border-red-200">
+                                                            <p className="text-sm text-red-600">Disease WBCs</p>
+                                                            <p className="text-2xl font-bold text-red-700">{selectedReport.data?.diseaseWBCCount || selectedReport.data?.abnormalWBCs || 0}</p>
                                                         </div>
                                                         <div className="bg-white p-3 rounded border border-green-200">
                                                             <p className="text-sm text-green-600">Normal WBCs</p>
-                                                            <p className="text-2xl font-bold text-green-700">{(selectedReport.summary?.wbcCount || 0) - (selectedReport.data?.abnormalWBCs || 0)}</p>
+                                                            <p className="text-2xl font-bold text-green-700">{selectedReport.data?.normalWBCCount || ((selectedReport.summary?.wbcCount || 0) - (selectedReport.data?.diseaseWBCCount || selectedReport.data?.abnormalWBCs || 0))}</p>
                                                         </div>
                                                         <div className="bg-white p-3 rounded border border-red-200">
                                                             <p className="text-sm text-red-600">Sickle Cells</p>
@@ -503,7 +502,7 @@ export const Reports = () => {
                                                 </div>
                                                 <div className="md:w-2/5 md:border-l border-amber-200 md:pl-6">
                                                     <h4 className="font-semibold text-sm mb-3 text-amber-900">Classification Breakdown</h4>
-                                                    <PieChart data={selectedReport.data?.classificationCounts || (selectedReport.data?.wbcDifferential && Object.fromEntries(Object.entries(selectedReport.data.wbcDifferential).map(([k, v]) => [k, v.count])))} />
+                                                    <PieChart data={selectedReport.data?.classificationCounts} />
                                                 </div>
                                             </div>
                                         </div>

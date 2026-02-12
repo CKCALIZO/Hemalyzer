@@ -170,23 +170,18 @@ export const generatePDF = (report) => {
     // I will show the value, and leave Reference column EMPTY for Platelets.
     tableData.push(["Platelet Count", pltVal, "", "cumm"]);
 
-    // 4. Differential Header Row (Manual push to act as section header)
-    tableData.push([{ content: "DIFFERENTIAL WBC COUNT", colSpan: 4, styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }]);
+    // 4. Classification Header Row
+    tableData.push([{ content: "WBC CLASSIFICATION", colSpan: 4, styles: { fontStyle: 'bold', fillColor: [240, 240, 240] } }]);
 
-    // 5. Differential Rows
-    if (report.data && report.data.wbcDifferential) {
-        Object.entries(report.data.wbcDifferential).forEach(([cell, data]) => {
-            let refRange = "";
-            if (cell === "Neutrophil") refRange = "40 - 75";
-            if (cell === "Lymphocyte") refRange = "20 - 45";
-            if (cell === "Monocyte") refRange = "2 - 10";
-            if (cell === "Eosinophil") refRange = "1 - 6";
-            if (cell === "Basophil") refRange = "0 - 1";
-
+    // 5. Classification Rows (Normal vs Disease)
+    if (report.data && report.data.classificationCounts) {
+        Object.entries(report.data.classificationCounts).forEach(([className, count]) => {
+            const totalWBC = report.summary?.wbcCount || 1;
+            const pct = ((count / totalWBC) * 100).toFixed(1);
             tableData.push([
-                cell + "s",
-                data.percentage ? data.percentage.toFixed(1) : "0",
-                refRange,
+                className,
+                pct,
+                className === 'Normal WBC' ? '> 80' : '< 5',
                 "%"
             ]);
         });

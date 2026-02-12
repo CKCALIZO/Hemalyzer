@@ -8,11 +8,13 @@ const MIN_IMAGES_FOR_AVERAGE = 10;
 // WBC Normal Range (updated)
 const WBC_NORMAL_RANGE = { min: 4000, max: 6000 }; // cells/μL
 
-// Helper to transform cell type names for display (UI only - backend unchanged)
-const formatCellTypeForDisplay = (name) => {
-    if (!name) return name;
-    // Transform B_Lymphoblast or B_lymphoblast to just Lymphoblast
-    return name.replace(/B_[Ll]ymphoblast/g, 'Lymphoblast');
+// Short label map for disease class names
+const SHORT_LABELS = {
+    'Acute Lymphoblastic Leukemia': 'ALL',
+    'Acute Myeloid Leukemia': 'AML',
+    'Chronic Lymphocytic Leukemia': 'CLL',
+    'Chronic Myeloid Leukemia': 'CML',
+    'Sickle Cell Anemia': 'SCA'
 };
 
 /**
@@ -28,9 +30,7 @@ export const ProcessedImagesThumbnails = ({
 }) => {
     const [isExpanded, setIsExpanded] = useState(false);
     const [selectedImage, setSelectedImage] = useState(null);
-    const [showOtherWBCs, setShowOtherWBCs] = useState(false);
-    const [showNormalWBCs, setShowNormalWBCs] = useState(false);
-    const [showAbnormalWBCs, setShowAbnormalWBCs] = useState(false);
+    const [showDiseaseWBCs, setShowDiseaseWBCs] = useState(false);
 
     // Return null if no images - parent component controls visibility
     if (!processedImages || processedImages.length === 0) {
@@ -42,159 +42,37 @@ export const ProcessedImagesThumbnails = ({
     // Calculate total WBC count from all processed images
     const currentWBCCount = processedImages.reduce((sum, img) => sum + (img.wbcCount || 0), 0);
 
-    // Calculate WBC breakdown for a single image
+    // Calculate WBC breakdown for a single image - simplified for 7-class model
     const getWBCBreakdown = (classifications) => {
         if (!classifications || classifications.length === 0) return null;
 
         const breakdown = {
-            // Main WBC types (aggregated normal + abnormal)
-            neutrophil: 0,
-            lymphocyte: 0,
-            monocyte: 0,
-            eosinophil: 0,
-            basophil: 0,
-            // Normal WBCs (specific normal variants)
-            normalWBCs: [],
-            // Abnormal WBCs (abnormal variants of the 5 main types)
-            abnormalWBCs: [],
-            // Other/Disease WBCs (blast cells, leukemia types not in main categories)
-            otherWBCs: [],
+            normalWBC: 0,
+            diseaseWBCs: [],
             totalWBC: 0
         };
 
-        // Main WBC types to track (only mature cells count in the 5-part differential)
-        const mainWBCTypes = ['Neutrophil', 'Basophil', 'Monocyte', 'Eosinophil', 'Lymphocyte'];
-
-        // Immature/precursor cells - these go to "Other WBCs", not the main differential
-        const immatureCells = ['Promyelocyte', 'Myelocyte', 'Metamyelocyte', 'Myeloblast', 'Lymphoblast', 'B_Lymphoblast'];
-
-        // Disease/blast types for "Other WBCs" (these don't fall into normal/abnormal of main types)
-        const diseaseTypes = [
-            'Myeloblast',
-            'Acute Myeloid Leukemia',
-            'Acute Lymphoblastic Leukemia',
-            'Chronic Myeloid Leukemia',
-            'Chronic Lymphocytic Leukemia',
-            'AML',
-            'ALL',
-            'CML',
-            'CLL'
-        ];
+        const diseaseCounts = {};
 
         classifications.forEach(cls => {
             const type = cls.classification;
+            if (!type) return;
             breakdown.totalWBC++;
 
-            // Check if it's a "detailed" classification (e.g., "Basophil: Normal" or "Lymphocyte: CLL")
-            const hasColon = type.includes(':');
-
-            if (hasColon) {
-                // Parse "CellType: Status" format
-                const [cellType, status] = type.split(':').map(s => s.trim());
-                const cellTypeLower = cellType.toLowerCase();
-                const statusLower = status.toLowerCase();
-
-                // Check if it's one of the main 5 WBC types (mature cells only)
-                const isMainType = mainWBCTypes.some(t => cellTypeLower.includes(t.toLowerCase()));
-
-                // Check if it's an immature/precursor cell (goes to Other WBCs)
-                const isImmatureCell = immatureCells.some(t => cellTypeLower.includes(t.toLowerCase()));
-
-                // Check for disease markers in status
-                const hasDisease = statusLower.includes('cml') || statusLower.includes('cll') ||
-                    statusLower.includes('aml') || statusLower.includes('all');
-
-                if (isMainType && !isImmatureCell) {
-                    // Increment main type counter
-                    if (cellTypeLower.includes('neutrophil')) breakdown.neutrophil++;
-                    else if (cellTypeLower.includes('lymphocyte')) breakdown.lymphocyte++;
-                    else if (cellTypeLower.includes('monocyte')) breakdown.monocyte++;
-                    else if (cellTypeLower.includes('eosinophil')) breakdown.eosinophil++;
-                    else if (cellTypeLower.includes('basophil')) breakdown.basophil++;
-
-                    // Categorize into Normal or Abnormal WBCs
-                    const isNormal = statusLower.includes('normal');
-                    const targetArray = isNormal ? breakdown.normalWBCs : breakdown.abnormalWBCs;
-
-                    const existing = targetArray.find(o => o.type === type);
-                    if (existing) {
-                        existing.count++;
-                    } else {
-                        targetArray.push({ type, count: 1, cellType, status });
-                    }
-                } else {
-                    // Not a main type (immature cells like Promyelocyte, Myeloblast, Lymphoblast, etc.)
-                    // OR main type with disease marker - put in Other WBCs
-                    const existing = breakdown.otherWBCs.find(o => o.type === type);
-                    if (existing) {
-                        existing.count++;
-                    } else {
-                        breakdown.otherWBCs.push({
-                            type,
-                            count: 1,
-                            isDisease: hasDisease || isImmatureCell,
-                            isImmatureCell: isImmatureCell
-                        });
-                    }
-                }
+            if (type === 'Normal WBC') {
+                breakdown.normalWBC++;
             } else {
-                // Simple classification without colon (legacy or basic mode)
-                // Treat "Normal" as Neutrophil: Normal
-                if (type === 'Normal' || type === 'Neutrophil') {
-                    breakdown.neutrophil++;
-                    const existing = breakdown.normalWBCs.find(o => o.type === 'Neutrophil: Normal');
-                    if (existing) {
-                        existing.count++;
-                    } else {
-                        breakdown.normalWBCs.push({ type: 'Neutrophil: Normal', count: 1, cellType: 'Neutrophil', status: 'Normal' });
-                    }
-                } else if (type === 'Lymphocyte') {
-                    breakdown.lymphocyte++;
-                    const existing = breakdown.normalWBCs.find(o => o.type === 'Lymphocyte: Normal');
-                    if (existing) {
-                        existing.count++;
-                    } else {
-                        breakdown.normalWBCs.push({ type: 'Lymphocyte: Normal', count: 1, cellType: 'Lymphocyte', status: 'Normal' });
-                    }
-                } else if (type === 'Monocyte') {
-                    breakdown.monocyte++;
-                    const existing = breakdown.normalWBCs.find(o => o.type === 'Monocyte: Normal');
-                    if (existing) {
-                        existing.count++;
-                    } else {
-                        breakdown.normalWBCs.push({ type: 'Monocyte: Normal', count: 1, cellType: 'Monocyte', status: 'Normal' });
-                    }
-                } else if (type === 'Eosinophil') {
-                    breakdown.eosinophil++;
-                    const existing = breakdown.normalWBCs.find(o => o.type === 'Eosinophil: Normal');
-                    if (existing) {
-                        existing.count++;
-                    } else {
-                        breakdown.normalWBCs.push({ type: 'Eosinophil: Normal', count: 1, cellType: 'Eosinophil', status: 'Normal' });
-                    }
-                } else if (type === 'Basophil') {
-                    breakdown.basophil++;
-                    const existing = breakdown.normalWBCs.find(o => o.type === 'Basophil: Normal');
-                    if (existing) {
-                        existing.count++;
-                    } else {
-                        breakdown.normalWBCs.push({ type: 'Basophil: Normal', count: 1, cellType: 'Basophil', status: 'Normal' });
-                    }
-                } else {
-                    // Other disease types
-                    const existing = breakdown.otherWBCs.find(o => o.type === type);
-                    if (existing) {
-                        existing.count++;
-                    } else {
-                        breakdown.otherWBCs.push({
-                            type,
-                            count: 1,
-                            isDisease: diseaseTypes.includes(type)
-                        });
-                    }
-                }
+                // Disease cell (ALL, AML, CML, CLL, or unknown)
+                diseaseCounts[type] = (diseaseCounts[type] || 0) + 1;
             }
         });
+
+        // Convert disease counts to array
+        breakdown.diseaseWBCs = Object.entries(diseaseCounts).map(([type, count]) => ({
+            type,
+            count,
+            isDisease: true
+        }));
 
         return breakdown;
     };
@@ -236,9 +114,7 @@ export const ProcessedImagesThumbnails = ({
 
     const handleImageClick = (image, index) => {
         setSelectedImage({ ...image, index });
-        setShowOtherWBCs(false);
-        setShowNormalWBCs(false);
-        setShowAbnormalWBCs(false);
+        setShowDiseaseWBCs(false);
         if (onImageClick) {
             onImageClick(image, index);
         }
@@ -246,9 +122,7 @@ export const ProcessedImagesThumbnails = ({
 
     const closeModal = () => {
         setSelectedImage(null);
-        setShowOtherWBCs(false);
-        setShowNormalWBCs(false);
-        setShowAbnormalWBCs(false);
+        setShowDiseaseWBCs(false);
     };
 
     const estimates = calculateEstimates();
@@ -367,43 +241,55 @@ export const ProcessedImagesThumbnails = ({
                                             </div>
                                         </div>
 
-                                        {/* 5 WBC Categories - Show if we have breakdown OR wbcCount */}
+                                        {/* WBC Classification - Normal vs Disease */}
                                         {(breakdown && breakdown.totalWBC > 0) ? (
                                             <div className="bg-slate-50 rounded-lg p-2 border border-slate-200">
-                                                <p className="text-slate-600 text-xs mb-2 font-medium">WBC Distribution</p>
+                                                <p className="text-slate-600 text-xs mb-2 font-medium">WBC Classification</p>
                                                 <div className="space-y-1">
-                                                    {[
-                                                        { name: 'Neu', count: breakdown.neutrophil, color: 'bg-blue-500' },
-                                                        { name: 'Lym', count: breakdown.lymphocyte, color: 'bg-green-500' },
-                                                        { name: 'Mon', count: breakdown.monocyte, color: 'bg-yellow-500' },
-                                                        { name: 'Eos', count: breakdown.eosinophil, color: 'bg-orange-500' },
-                                                        { name: 'Bas', count: breakdown.basophil, color: 'bg-purple-500' }
-                                                    ].map((wbc, i) => {
-                                                        const pct = breakdown.totalWBC > 0 ? (wbc.count / breakdown.totalWBC) * 100 : 0;
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-green-600 text-xs w-14 font-medium">Normal</span>
+                                                        <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-green-500 transition-all duration-500"
+                                                                style={{ width: `${breakdown.totalWBC > 0 ? (breakdown.normalWBC / breakdown.totalWBC) * 100 : 0}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-slate-700 text-xs font-medium w-6 text-right">
+                                                            {breakdown.normalWBC}
+                                                        </span>
+                                                    </div>
+                                                    {breakdown.diseaseWBCs.map((d, i) => {
+                                                        const pct = breakdown.totalWBC > 0 ? (d.count / breakdown.totalWBC) * 100 : 0;
                                                         return (
                                                             <div key={i} className="flex items-center gap-2">
-                                                                <span className="text-slate-600 text-xs w-8">{wbc.name}</span>
+                                                                <span className="text-red-600 text-xs w-14 font-medium truncate" title={d.type}>
+                                                                    {d.type.replace('Acute Lymphoblastic Leukemia', 'ALL')
+                                                                        .replace('Acute Myeloid Leukemia', 'AML')
+                                                                        .replace('Chronic Lymphocytic Leukemia', 'CLL')
+                                                                        .replace('Chronic Myeloid Leukemia', 'CML')
+                                                                        .replace('Sickle Cell Anemia', 'SCA')}
+                                                                </span>
                                                                 <div className="flex-1 h-2 bg-slate-200 rounded-full overflow-hidden">
                                                                     <div
-                                                                        className={`h-full ${wbc.color} transition-all duration-500`}
+                                                                        className="h-full bg-red-500 transition-all duration-500"
                                                                         style={{ width: `${pct}%` }}
                                                                     />
                                                                 </div>
-                                                                <span className="text-slate-700 text-xs font-medium w-12 text-right">
-                                                                    {wbc.count} <span className="text-slate-500">({pct.toFixed(0)}%)</span>
+                                                                <span className="text-slate-700 text-xs font-medium w-6 text-right">
+                                                                    {d.count}
                                                                 </span>
                                                             </div>
                                                         );
                                                     })}
                                                 </div>
-                                                {/* Abnormal indicator */}
-                                                {breakdown.abnormalWBCs && breakdown.abnormalWBCs.length > 0 && (
+                                                {/* Disease indicator */}
+                                                {breakdown.diseaseWBCs.length > 0 && (
                                                     <div className="mt-2 pt-2 border-t border-slate-200">
-                                                        <div className="flex items-center gap-1 text-amber-400 text-xs">
+                                                        <div className="flex items-center gap-1 text-red-500 text-xs">
                                                             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
                                                                 <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                                                             </svg>
-                                                            <span>{breakdown.abnormalWBCs.reduce((s, a) => s + a.count, 0)} Abnormal WBC(s)</span>
+                                                            <span>{breakdown.diseaseWBCs.reduce((s, d) => s + d.count, 0)} Disease Cell(s)</span>
                                                         </div>
                                                     </div>
                                                 )}
@@ -521,24 +407,16 @@ export const ProcessedImagesThumbnails = ({
                         {/* Cell Type Legend */}
                         <div className="mt-4 pt-3 border-t border-rose-200 flex flex-wrap justify-center gap-6 text-xs font-medium text-slate-600">
                             <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-blue-500 shadow-sm"></span>
-                                <span>Neutrophil</span>
-                            </div>
-                            <div className="flex items-center gap-2">
                                 <span className="w-3 h-3 rounded-full bg-green-500 shadow-sm"></span>
-                                <span>Lymphocyte</span>
+                                <span>Normal WBC</span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-yellow-500 shadow-sm"></span>
-                                <span>Monocyte</span>
+                                <span className="w-3 h-3 rounded-full bg-red-500 shadow-sm"></span>
+                                <span>Disease</span>
                             </div>
                             <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-orange-500 shadow-sm"></span>
-                                <span>Eosinophil</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <span className="w-3 h-3 rounded-full bg-purple-500 shadow-sm"></span>
-                                <span>Basophil</span>
+                                <span className="w-3 h-3 rounded-full bg-cyan-500 shadow-sm"></span>
+                                <span>Normal RBC</span>
                             </div>
                         </div>
                     </div>
@@ -626,197 +504,72 @@ export const ProcessedImagesThumbnails = ({
 
                                         return (
                                             <div className="bg-blue-50 rounded-lg p-4 mb-4">
-                                                <h5 className="font-semibold text-blue-800 mb-3">WBC Classification Breakdown</h5>
-                                                <table className="w-full text-sm">
-                                                    <thead>
-                                                        <tr className="border-b border-blue-200">
-                                                            <th className="text-left py-2 text-blue-700">Type</th>
-                                                            <th className="text-right py-2 text-blue-700">Count</th>
-                                                            <th className="text-right py-2 text-blue-700">%</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <tr className="border-b border-blue-100">
-                                                            <td className="py-2 text-slate-700">Neutrophil</td>
-                                                            <td className="text-right font-medium">{breakdown.neutrophil}</td>
-                                                            <td className="text-right text-slate-500">
-                                                                {breakdown.totalWBC > 0 ? ((breakdown.neutrophil / breakdown.totalWBC) * 100).toFixed(1) : 0}%
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="border-b border-blue-100">
-                                                            <td className="py-2 text-slate-700">
-                                                                Lymphocyte <span className="text-xs text-amber-600">(CLL/ALL indicator)</span>
-                                                            </td>
-                                                            <td className="text-right font-medium">{breakdown.lymphocyte}</td>
-                                                            <td className="text-right text-slate-500">
-                                                                {breakdown.totalWBC > 0 ? ((breakdown.lymphocyte / breakdown.totalWBC) * 100).toFixed(1) : 0}%
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="border-b border-blue-100">
-                                                            <td className="py-2 text-slate-700">Monocyte</td>
-                                                            <td className="text-right font-medium">{breakdown.monocyte}</td>
-                                                            <td className="text-right text-slate-500">
-                                                                {breakdown.totalWBC > 0 ? ((breakdown.monocyte / breakdown.totalWBC) * 100).toFixed(1) : 0}%
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="border-b border-blue-100">
-                                                            <td className="py-2 text-slate-700">Eosinophil</td>
-                                                            <td className="text-right font-medium">{breakdown.eosinophil}</td>
-                                                            <td className="text-right text-slate-500">
-                                                                {breakdown.totalWBC > 0 ? ((breakdown.eosinophil / breakdown.totalWBC) * 100).toFixed(1) : 0}%
-                                                            </td>
-                                                        </tr>
-                                                        <tr className="border-b border-blue-100">
-                                                            <td className="py-2 text-slate-700">Basophil</td>
-                                                            <td className="text-right font-medium">{breakdown.basophil}</td>
-                                                            <td className="text-right text-slate-500">
-                                                                {breakdown.totalWBC > 0 ? ((breakdown.basophil / breakdown.totalWBC) * 100).toFixed(1) : 0}%
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-
-                                                {/* Normal WBCs Button */}
-                                                {breakdown.normalWBCs.length > 0 && (
-                                                    <div className="mt-3 pt-3 border-t border-blue-200">
-                                                        <button
-                                                            onClick={() => setShowNormalWBCs(!showNormalWBCs)}
-                                                            className="w-full flex items-center justify-between px-3 py-2 bg-green-100 hover:bg-green-200 text-green-800 rounded-lg transition-colors"
-                                                        >
-                                                            <span className="font-medium flex items-center gap-2">
-                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                </svg>
-                                                                Normal WBCs (Detailed)
-                                                            </span>
-                                                            <span className="bg-green-600 text-white px-2 py-1 rounded text-xs font-bold">
-                                                                {breakdown.normalWBCs.reduce((sum, o) => sum + o.count, 0)}
-                                                            </span>
-                                                        </button>
-
-                                                        {showNormalWBCs && (
-                                                            <div className="mt-2 bg-green-50 rounded-lg p-3 border border-green-200">
-                                                                <p className="text-xs text-green-700 mb-2">
-                                                                    ✓ These are normal variants of the main WBC types.
-                                                                </p>
-                                                                <table className="w-full text-sm">
-                                                                    <thead>
-                                                                        <tr className="border-b border-green-200">
-                                                                            <th className="text-left py-1 text-green-700">Type</th>
-                                                                            <th className="text-right py-1 text-green-700">Count</th>
-                                                                            <th className="text-right py-1 text-green-700">%</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {breakdown.normalWBCs.map((normal, idx) => (
-                                                                            <tr key={idx} className="border-b border-green-100">
-                                                                                <td className="py-1 text-slate-700">
-                                                                                    {formatCellTypeForDisplay(normal.type)}
-                                                                                </td>
-                                                                                <td className="text-right font-medium">{normal.count}</td>
-                                                                                <td className="text-right text-slate-500">
-                                                                                    {breakdown.totalWBC > 0 ? ((normal.count / breakdown.totalWBC) * 100).toFixed(1) : 0}%
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        )}
+                                                <h5 className="font-semibold text-blue-800 mb-3">WBC Classification Summary</h5>
+                                                
+                                                {/* Normal vs Disease Summary */}
+                                                <div className="grid grid-cols-2 gap-3 mb-3">
+                                                    <div className="bg-green-50 rounded-lg p-3 border border-green-200 text-center">
+                                                        <p className="text-green-700 text-xs font-medium mb-1">Normal WBC</p>
+                                                        <p className="text-green-800 text-xl font-bold">{breakdown.normalWBC}</p>
+                                                        <p className="text-green-600 text-xs">
+                                                            {breakdown.totalWBC > 0 ? ((breakdown.normalWBC / breakdown.totalWBC) * 100).toFixed(1) : 0}%
+                                                        </p>
                                                     </div>
-                                                )}
-
-                                                {/* Abnormal WBCs Button */}
-                                                {breakdown.abnormalWBCs.length > 0 && (
-                                                    <div className="mt-3 pt-3 border-t border-blue-200">
-                                                        <button
-                                                            onClick={() => setShowAbnormalWBCs(!showAbnormalWBCs)}
-                                                            className="w-full flex items-center justify-between px-3 py-2 bg-orange-100 hover:bg-orange-200 text-orange-800 rounded-lg transition-colors"
-                                                        >
-                                                            <span className="font-medium flex items-center gap-2">
-                                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                                                </svg>
-                                                                Abnormal WBCs (Detailed)
-                                                            </span>
-                                                            <span className="bg-orange-600 text-white px-2 py-1 rounded text-xs font-bold">
-                                                                {breakdown.abnormalWBCs.reduce((sum, o) => sum + o.count, 0)}
-                                                            </span>
-                                                        </button>
-
-                                                        {showAbnormalWBCs && (
-                                                            <div className="mt-2 bg-orange-50 rounded-lg p-3 border border-orange-200">
-                                                                <p className="text-xs text-orange-700 mb-2">
-                                                                    ⚠️ These are abnormal variants of the main WBC types, may indicate disease.
-                                                                </p>
-                                                                <table className="w-full text-sm">
-                                                                    <thead>
-                                                                        <tr className="border-b border-orange-200">
-                                                                            <th className="text-left py-1 text-orange-700">Type</th>
-                                                                            <th className="text-right py-1 text-orange-700">Count</th>
-                                                                            <th className="text-right py-1 text-orange-700">%</th>
-                                                                        </tr>
-                                                                    </thead>
-                                                                    <tbody>
-                                                                        {breakdown.abnormalWBCs.map((abnormal, idx) => (
-                                                                            <tr key={idx} className="border-b border-orange-100 bg-orange-50">
-                                                                                <td className="py-1 text-orange-700 font-medium">
-                                                                                    {formatCellTypeForDisplay(abnormal.type)}
-                                                                                </td>
-                                                                                <td className="text-right font-medium">{abnormal.count}</td>
-                                                                                <td className="text-right text-slate-500">
-                                                                                    {breakdown.totalWBC > 0 ? ((abnormal.count / breakdown.totalWBC) * 100).toFixed(1) : 0}%
-                                                                                </td>
-                                                                            </tr>
-                                                                        ))}
-                                                                    </tbody>
-                                                                </table>
-                                                            </div>
-                                                        )}
+                                                    <div className={`rounded-lg p-3 border text-center ${
+                                                        breakdown.diseaseWBCs.length > 0 ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'
+                                                    }`}>
+                                                        <p className={`text-xs font-medium mb-1 ${
+                                                            breakdown.diseaseWBCs.length > 0 ? 'text-red-700' : 'text-slate-600'
+                                                        }`}>Disease Cells</p>
+                                                        <p className={`text-xl font-bold ${
+                                                            breakdown.diseaseWBCs.length > 0 ? 'text-red-800' : 'text-slate-700'
+                                                        }`}>{breakdown.diseaseWBCs.reduce((s, d) => s + d.count, 0)}</p>
+                                                        <p className={`text-xs ${
+                                                            breakdown.diseaseWBCs.length > 0 ? 'text-red-600' : 'text-slate-500'
+                                                        }`}>
+                                                            {breakdown.totalWBC > 0 ? ((breakdown.diseaseWBCs.reduce((s, d) => s + d.count, 0) / breakdown.totalWBC) * 100).toFixed(1) : 0}%
+                                                        </p>
                                                     </div>
-                                                )}
+                                                </div>
 
-                                                {/* Other WBCs Button */}
-                                                {breakdown.otherWBCs.length > 0 && (
+                                                {/* Disease WBCs Expandable */}
+                                                {breakdown.diseaseWBCs.length > 0 && (
                                                     <div className="mt-3 pt-3 border-t border-blue-200">
                                                         <button
-                                                            onClick={() => setShowOtherWBCs(!showOtherWBCs)}
-                                                            className="w-full flex items-center justify-between px-3 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg transition-colors"
+                                                            onClick={() => setShowDiseaseWBCs(!showDiseaseWBCs)}
+                                                            className="w-full flex items-center justify-between px-3 py-2 bg-red-100 hover:bg-red-200 text-red-800 rounded-lg transition-colors"
                                                         >
                                                             <span className="font-medium flex items-center gap-2">
                                                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                                                 </svg>
-                                                                Other WBCs (Blast cells, Disease types)
+                                                                Disease Cells (Detailed)
                                                             </span>
-                                                            <span className="bg-amber-600 text-white px-2 py-1 rounded text-xs font-bold">
-                                                                {breakdown.otherWBCs.reduce((sum, o) => sum + o.count, 0)}
+                                                            <span className="bg-red-600 text-white px-2 py-1 rounded text-xs font-bold">
+                                                                {breakdown.diseaseWBCs.reduce((sum, d) => sum + d.count, 0)}
                                                             </span>
                                                         </button>
 
-                                                        {showOtherWBCs && (
-                                                            <div className="mt-2 bg-amber-50 rounded-lg p-3 border border-amber-200">
-                                                                <p className="text-xs text-amber-700 mb-2">
-                                                                    ⚠️ These cell types may indicate AML, ALL, CML, or CLL. Review thresholds.
-                                                                </p>
+                                                        {showDiseaseWBCs && (
+                                                            <div className="mt-2 bg-red-50 rounded-lg p-3 border border-red-200">
                                                                 <table className="w-full text-sm">
                                                                     <thead>
-                                                                        <tr className="border-b border-amber-200">
-                                                                            <th className="text-left py-1 text-amber-700">Type</th>
-                                                                            <th className="text-right py-1 text-amber-700">Count</th>
-                                                                            <th className="text-right py-1 text-amber-700">%</th>
+                                                                        <tr className="border-b border-red-200">
+                                                                            <th className="text-left py-1 text-red-700">Disease Type</th>
+                                                                            <th className="text-right py-1 text-red-700">Count</th>
+                                                                            <th className="text-right py-1 text-red-700">%</th>
                                                                         </tr>
                                                                     </thead>
                                                                     <tbody>
-                                                                        {breakdown.otherWBCs.map((other, idx) => (
-                                                                            <tr key={idx} className={`border-b border-amber-100 ${other.isDisease ? 'bg-red-50' : ''}`}>
-                                                                                <td className={`py-1 ${other.isDisease ? 'text-red-700 font-medium' : 'text-slate-700'}`}>
-                                                                                    {formatCellTypeForDisplay(other.type)}
-                                                                                    {other.isDisease && <span className="ml-1 text-xs">🔴</span>}
+                                                                        {breakdown.diseaseWBCs.map((disease, idx) => (
+                                                                            <tr key={idx} className="border-b border-red-100">
+                                                                                <td className="py-1 text-red-700 font-medium">
+                                                                                    {SHORT_LABELS[disease.type] || disease.type}
+                                                                                    <span className="ml-1 text-xs text-red-500">({disease.type})</span>
                                                                                 </td>
-                                                                                <td className="text-right font-medium">{other.count}</td>
+                                                                                <td className="text-right font-medium">{disease.count}</td>
                                                                                 <td className="text-right text-slate-500">
-                                                                                    {breakdown.totalWBC > 0 ? ((other.count / breakdown.totalWBC) * 100).toFixed(1) : 0}%
+                                                                                    {breakdown.totalWBC > 0 ? ((disease.count / breakdown.totalWBC) * 100).toFixed(1) : 0}%
                                                                                 </td>
                                                                             </tr>
                                                                         ))}

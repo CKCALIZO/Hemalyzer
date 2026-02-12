@@ -3,9 +3,10 @@ import React from "react";
 /**
  * DiseaseInterpretation Component
  * Displays disease analysis results based on clinical thresholds
- * - AML/ALL (Acute Leukemia): Based on blast cell percentage
- * - CML: Based on granulocyte percentage (Basophil, Eosinophil, Neutrophil)
- * - CLL: Based on lymphocyte percentage
+ * - AML (Acute Myeloid Leukemia): Direct classification
+ * - ALL (Acute Lymphoblastic Leukemia): Direct classification
+ * - CML (Chronic Myeloid Leukemia): Direct classification
+ * - CLL (Chronic Lymphocytic Leukemia): Direct classification
  * - Sickle Cell Anemia: Based on sickled RBC percentage
  */
 export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThresholds }) => {
@@ -134,55 +135,33 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                                 </div>
 
                                 {/* Breakdown for CML */}
-                                {finding.type === 'CML Analysis' && finding.breakdown && (
+                                {finding.type && finding.type.includes('CML') && finding.count > 0 && (
                                     <div className="mt-3 pt-3 border-t border-current/20">
-                                        <p className="text-xs font-semibold mb-1">Granulocyte Breakdown:</p>
-                                        <div className="grid grid-cols-4 gap-2 text-xs">
-                                            {Object.entries(finding.breakdown).map(([cell, count]) => (
-                                                <div key={cell} className="text-center">
-                                                    <div className="font-mono font-semibold">{count}</div>
-                                                    <div className="opacity-70">{cell.replace('_', ' ')}</div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Breakdown for AML/ALL */}
-                                {(finding.all_count !== undefined || finding.aml_count !== undefined) && (
-                                    <div className="mt-3 pt-3 border-t border-current/20">
-                                        <p className="text-xs font-semibold mb-1">Blast Cell Breakdown:</p>
-                                        <div className="grid grid-cols-2 gap-2 text-xs">
-                                            <div className="text-center">
-                                                <div className="font-mono font-semibold">{finding.all_count || 0}</div>
-                                                <div className="opacity-70">ALL Blasts</div>
-                                            </div>
-                                            <div className="text-center">
-                                                <div className="font-mono font-semibold">{finding.aml_count || 0}</div>
-                                                <div className="opacity-70">AML Blasts</div>
-                                            </div>
+                                        <p className="text-xs font-semibold mb-1">Details:</p>
+                                        <div className="text-xs">
+                                            <span className="font-mono font-semibold">{finding.count}</span> CML cells detected ({finding.percentage}% of WBCs)
                                         </div>
                                     </div>
                                 )}
                             </div>
                         ))}
 
-                        {/* Disease Percentages Summary */}
-                        {leukemia.disease_percentages && (
+                        {/* Classification Counts Summary */}
+                        {leukemia.classification_counts && (
                             <div className="bg-slate-50 rounded-lg p-3">
-                                <p className="text-sm font-semibold text-slate-700 mb-2">Cell Type Distribution</p>
-                                <div className="space-y-2">
+                                <p className="text-sm font-semibold text-slate-700 mb-2">Classification Counts</p>
+                                <div className="grid grid-cols-5 gap-2 text-center">
+                                    {Object.entries(leukemia.classification_counts).map(([name, count]) => (
+                                        <div key={name} className={`p-2 rounded ${count > 0 && name !== 'Normal WBC' ? 'bg-red-50' : 'bg-green-50'}`}>
+                                            <div className="font-mono font-bold text-lg">{count}</div>
+                                            <div className="text-xs text-slate-600">{name}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-2">
                                     <PercentageBar
-                                        percentage={leukemia.disease_percentages.blast_cells?.percentage || 0}
-                                        label={`Blast Cells (AML/ALL): ${leukemia.disease_percentages.blast_cells?.count || 0} cells`}
-                                    />
-                                    <PercentageBar
-                                        percentage={leukemia.disease_percentages.granulocytes?.percentage || 0}
-                                        label={`Granulocytes (CML): ${leukemia.disease_percentages.granulocytes?.count || 0} cells`}
-                                    />
-                                    <PercentageBar
-                                        percentage={leukemia.disease_percentages.lymphocytes?.percentage || 0}
-                                        label={`Lymphocytes (CLL): ${leukemia.disease_percentages.lymphocytes?.count || 0} cells`}
+                                        percentage={leukemia.disease_wbc_percentage || 0}
+                                        label={`Disease WBCs: ${leukemia.disease_wbc_percentage || 0}% (Normal: ${leukemia.normal_wbc_percentage || 0}%)`}
                                     />
                                 </div>
                             </div>
@@ -233,14 +212,13 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                                             <span className="text-slate-600">Threshold Range:</span>{' '}
                                             <span className="font-mono">{sickleCell.condition}</span>
                                         </p>
-                                        <p>
-                                            <span className="text-slate-600">95% CI:</span>{' '}
-                                            <span className="font-mono">{sickleCell.confidence_interval}</span>
-                                        </p>
+                                        {sickleCell.calculation_method && (
+                                            <p>
+                                                <span className="text-slate-600">Calculation:</span>{' '}
+                                                <span className="font-mono text-xs">{sickleCell.calculation_method}</span>
+                                            </p>
+                                        )}
                                     </div>
-                                    {sickleCell.note && (
-                                        <p className="text-xs text-slate-500 mt-2 italic">{sickleCell.note}</p>
-                                    )}
                                 </div>
                                 <div className="text-right">
                                     <span className="text-2xl font-bold">{sickleCell.percentage}%</span>
@@ -258,14 +236,14 @@ export const DiseaseInterpretation = ({ diseaseInterpretation, clinicalThreshold
                                                     'bg-green-500'
                                             }`}
 
-                                        style={{ width: `${Math.min(100, sickleCell.percentage * 50)}%` }}
+                                        style={{ width: `${Math.min(100, sickleCell.percentage)}%` }}
                                     />
                                 </div>
                                 <div className="flex justify-between text-xs text-slate-500 mt-1">
                                     <span>0%</span>
-                                    <span>0.3% (Normal)</span>
-                                    <span>1.0% (Trait)</span>
-                                    <span>1.6%+ (Severe)</span>
+                                    <span>3% (Normal)</span>
+                                    <span>10% (Mild)</span>
+                                    <span>30%+ (Severe)</span>
                                 </div>
                             </div>
                         </div>
