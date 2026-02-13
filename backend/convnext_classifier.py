@@ -269,6 +269,7 @@ class ConvNeXtClassifier:
         self.class_names = None
         self.sickle_cell_class_idx = None
         self.all_class_idx = None  # ALL class index for confidence threshold
+        self.cll_class_idx = None  # CLL class index for CLL->ALL redirect
         self.device = None
         self.pre_transform = None  # Pre-preprocessor transforms
         self.transform = None  # Post-preprocessor transforms
@@ -447,6 +448,14 @@ class ConvNeXtClassifier:
                         print(f"   ALL class found at index {idx}: {cls_name}")
                         break
             
+            self.cll_class_idx = None
+            if self.class_names:
+                for idx, cls_name in enumerate(self.class_names):
+                    if 'chronic lymphocytic' in cls_name.lower():
+                        self.cll_class_idx = idx
+                        print(f"   CLL class found at index {idx}: {cls_name}")
+                        break
+            
             # Pre-preprocessor transforms (resize to 384x384 before preprocessing)
             self.pre_transform = transforms.Compose([
                 transforms.Resize((384, 384)),  # Match training: Resize to img_size
@@ -550,7 +559,8 @@ class ConvNeXtClassifier:
                 all_confidence = float(probabilities[0][self.all_class_idx].cpu().numpy())
                 if all_confidence < self.all_confidence_threshold:
                     # Confidence too low, fall back to second highest WBC class
-                    wbc_classes = ['Normal WBC', 'Acute Myeloid Leukemia', 'Chronic Myeloid Leukemia', 'Chronic Lymphocytic Leukemia']
+                    # CRITICAL: CLL excluded - both are lymphocyte disorders and confuse each other
+                    wbc_classes = ['Normal WBC', 'Acute Myeloid Leukemia', 'Chronic Myeloid Leukemia']
                     wbc_probs = {cls: float(probabilities[0][self.class_names.index(cls)].cpu().numpy()) 
                                 for cls in wbc_classes if cls in self.class_names}
                     if wbc_probs:
@@ -558,6 +568,10 @@ class ConvNeXtClassifier:
                         predicted_class = best_wbc[0]
                         confidence_score = best_wbc[1]
                         is_valid_all = False
+            
+            # NOTE: CLL/ALL disambiguation is now handled in app.py post-processing
+            # using Pass 1 black bg ALL probability as a signal (like app_old.py technique).
+            # The classifier reports raw predictions; app.py decides CLL vs ALL.
             
             return {
                 'class': predicted_class,
@@ -741,6 +755,9 @@ class ConvNeXtClassifier:
                             predicted_idx = best_idx
                             is_valid_all = False
                 
+                # NOTE: CLL/ALL disambiguation is now handled in app.py post-processing
+                # using Pass 1 black bg ALL probability as a signal (like app_old.py technique).
+
                 results[result_idx] = {
                     'class': predicted_class,
                     'confidence': confidence_score,

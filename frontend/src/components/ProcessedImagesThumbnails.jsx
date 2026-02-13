@@ -32,8 +32,7 @@ const getImageSeverity = (breakdown) => {
     if (!breakdown || breakdown.totalWBC === 0) return { level: 'Normal', color: 'bg-green-100 text-green-700 border-green-300', icon: '✓' };
     const diseaseCount = breakdown.diseaseWBCs.reduce((s, d) => s + d.count, 0);
     const diseasePercent = (diseaseCount / breakdown.totalWBC) * 100;
-    if (diseasePercent >= 20) return { level: 'Critical', color: 'bg-red-100 text-red-700 border-red-300', icon: '❗' };
-    if (diseasePercent > 0) return { level: 'Abnormal', color: 'bg-amber-100 text-amber-700 border-amber-300', icon: '⚠' };
+    if (diseasePercent >=20 ) return { level: 'Abnormal', color: 'bg-amber-100 text-amber-700 border-amber-300', icon: '⚠' };
     return { level: 'Normal', color: 'bg-green-100 text-green-700 border-green-300', icon: '✓' };
 };
 

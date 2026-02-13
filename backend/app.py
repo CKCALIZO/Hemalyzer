@@ -916,14 +916,15 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 print(f"   > RBC sampling: {original_rbc_count} -> {len(rbc_crops)} (statistically representative)")
 
             # ============================================================
-            # 2. TWO-PASS WBC CLASSIFICATION (Black BG First Approach)
-            # Adapted from old 20-class model technique to 7-class model:
-            # Pass 1: Classify with BLACK BACKGROUND first
-            #         - If ALL is dominant (top WBC class + raw prob >= threshold) → keep as ALL
-            #         - Otherwise → mark for reclassification with original crop
-            # Pass 2: Reclassify ONLY fallback cells with ORIGINAL crops
-            # Post: Apply disease confidence thresholds - low confidence disease → Normal WBC
-            # This matches the old 20-class approach from app_old.py
+            # 2. REVERSED TWO-PASS WBC CLASSIFICATION
+            # The key insight from app_old.py: classify with ORIGINAL crops FIRST,
+            # then use black bg ONLY as a second opinion for potential ALL rescue.
+            # This prevents black bg from stealing CML/AML/SCA into ALL.
+            #
+            # Pass 1: ORIGINAL crops → primary classification (CML, AML, Normal etc)
+            # Pass 2: BLACK BG → ONLY for Normal WBC and CLL cells (rescue missed ALL)
+            # Post:   Disease confidence thresholds → low confidence disease → Normal WBC
+            #         CLL/ALL disambiguation using Pass 2 black bg ALL probability
             # ============================================================
             if wbc_crops:
                 if not classifier.is_loaded():
@@ -931,132 +932,186 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 
                 ALL_CLASS = 'Acute Lymphoblastic Leukemia'
                 CLL_CLASS = 'Chronic Lymphocytic Leukemia'
-                ALL_BLACKBG_THRESHOLD = 0.50  
+                AML_CLASS = 'Acute Myeloid Leukemia'
+                CML_CLASS = 'Chronic Myeloid Leukemia'
                 NON_WBC_CLASSES = {'normal rbc', 'sickle cell anemia'}
                 
-                # Disease confidence thresholds (from app_old.py DISEASE_THRESHOLDS_CONF)
-                # If a disease class has confidence below this threshold, fall back to Normal WBC
-                # This prevents low-confidence disease predictions from polluting results
+                # Disease confidence thresholds — tuned per disease
+                # CML gives 38-70% on CML smears, CLL gives 3-6% on CLL smears
                 DISEASE_CONFIDENCE_THRESHOLDS = {
-                    'acute myeloid leukemia': 0.75,       # AML: 85% (Increased from 75%)
-                    'acute lymphoblastic leukemia': 0.80,  # ALL: 80% (Increased from 70%, unless validated by black bg)
-                    'chronic myeloid leukemia': 0.93,      # CML: 93% (Increased from 88%)
-                    'chronic lymphocytic leukemia': 0.95,   # CLL: 95% (Increased from 88% to reduce false positives)
+                    'acute lymphoblastic leukemia': 0.80,  
+                    'chronic myeloid leukemia': 0.35,      # CML model gives 38-70%, keep anything above 35%
+                    'chronic lymphocytic leukemia': 0.70,   # Only used for non-top-class CLL (top-class always kept)
+                    'sickle cell anemia': 0.75 
                 }
-                DEFAULT_DISEASE_THRESHOLD = 0.80  # Default increased to 80%
+                DEFAULT_DISEASE_THRESHOLD = 0.40
                 
-                print(f"   > Two-pass WBC classification (black bg first, sequential)...")
-                print(f"   > Creating black background crops for {len(wbc_crops)} WBCs...")
+                # Pass 2 thresholds for ALL rescue via black bg (Normal WBC only)
+                ALL_BLACKBG_RESCUE_THRESHOLD = 0.50   # Black bg ALL prob must be >= 50%
+                ALL_RESCUE_DOMINANCE_MARGIN = 0.15    # ALL must beat 2nd place by 15%
                 
-                # --- PASS 1: Black background crops (matches ALL training data) ---
-                black_bg_crops = []
-                for crop_pil in wbc_crops:
-                    try:
-                        bb_crop = create_black_background_crop(crop_pil, focus_center=True, center_focus_ratio=0.6)
-                        black_bg_crops.append(bb_crop)
-                    except Exception as e:
-                        print(f"      Warning: Black bg crop failed, using original: {e}")
-                        black_bg_crops.append(crop_pil)
+                print(f"   > Reversed two-pass WBC classification (original first, black bg rescue)...")
                 
-                print(f"   > Pass 1: Classifying {len(black_bg_crops)} WBCs with black background...")
-                black_bg_results = classifier.classify_batch(black_bg_crops, ['WBC']*len(black_bg_crops), batch_size=16)
+                # --- PASS 1: ORIGINAL crops (primary classification) ---
+                print(f"   > Pass 1: Classifying {len(wbc_crops)} WBCs with ORIGINAL crops...")
+                original_results = classifier.classify_batch(wbc_crops, ['WBC']*len(wbc_crops), batch_size=16)
                 
-                # Track which crops need reclassification (sequential approach like old model)
-                needs_reclassify = []  # List of (index, original_crop) tuples
+                # Process Pass 1 results and identify candidates for ALL rescue
                 final_results = [None] * len(wbc_crops)
+                needs_blackbg_check = []  # (index, original_crop) for cells that might be missed ALL
                 
-                for i, bbg_result in enumerate(black_bg_results):
-                    if not bbg_result:
-                        print(f"      WBC {i+1}: Black bg classification FAILED - will reclassify")
-                        needs_reclassify.append((i, wbc_crops[i]))
+                for i, result in enumerate(original_results):
+                    if not result:
+                        final_results[i] = {
+                            'class': 'Normal WBC', 'confidence': 0.5,
+                            'probabilities': {}, 'used_black_bg': False
+                        }
                         continue
                     
-                    probs = bbg_result['probabilities']
+                    result_class = result['class']
+                    result_conf = result['confidence']
+                    result_probs = result['probabilities']
                     
-                    # Get raw ALL probability from black bg (before classify_batch fallback)
-                    all_prob = probs.get(ALL_CLASS, 0)
+                    # Filter out non-WBC classes
+                    if result_class.lower() in NON_WBC_CLASSES:
+                        wbc_only = {k: v for k, v in result_probs.items() if k.lower() not in NON_WBC_CLASSES}
+                        if wbc_only:
+                            best = max(wbc_only.items(), key=lambda x: x[1])
+                            result_class, result_conf = best[0], best[1]
+                        else:
+                            result_class, result_conf = 'Normal WBC', 0.5
                     
-                    # Get top WBC class from raw probabilities (excluding non-WBC)
-                    wbc_probs = {k: v for k, v in probs.items() if k.lower() not in NON_WBC_CLASSES}
-                    if not wbc_probs:
-                        needs_reclassify.append((i, wbc_crops[i]))
-                        continue
+                    final_results[i] = {
+                        'class': result_class,
+                        'confidence': result_conf,
+                        'probabilities': result_probs,
+                        'used_black_bg': False
+                    }
                     
-                    top_wbc = max(wbc_probs.items(), key=lambda x: x[1])
-                    top_wbc_class, top_wbc_prob = top_wbc
+                    print(f"      WBC {i+1} (original): '{result_class}' ({result_conf:.2%})")
                     
-                    print(f"      WBC {i+1} (black bg): Top='{top_wbc_class}' ({top_wbc_prob:.2%}), ALL={all_prob:.2%}")
-                    
-                    # === ALL DETECTION PRIORITY ===
-                    # If ALL is the top or second-top WBC class and prob >= threshold → keep as ALL
-                    sorted_wbc = sorted(wbc_probs.items(), key=lambda x: x[1], reverse=True)
-                    all_in_top2 = any(cls == ALL_CLASS for cls, _ in sorted_wbc[:2])
-                    
-                    if top_wbc_class == ALL_CLASS and all_prob >= ALL_BLACKBG_THRESHOLD:
-                        # ALL is top class with sufficient probability
-                        final_results[i] = {
-                            'class': ALL_CLASS,
-                            'confidence': all_prob,
-                            'probabilities': probs,
-                            'used_black_bg': True
-                        }
-                        print(f"                 => ALL KEPT (top class, prob {all_prob:.2%} >= {ALL_BLACKBG_THRESHOLD:.0%})")
-                    elif all_in_top2 and all_prob >= ALL_BLACKBG_THRESHOLD:
-                        # ALL is second-top but prob is decent - keep as ALL
-                        final_results[i] = {
-                            'class': ALL_CLASS,
-                            'confidence': all_prob,
-                            'probabilities': probs,
-                            'used_black_bg': True
-                        }
-                        print(f"                 => ALL KEPT (top-2, prob {all_prob:.2%} >= {ALL_BLACKBG_THRESHOLD:.0%})")
-                    else:
-                        # Not ALL - reclassify with original crop for better non-ALL classification
-                        print(f"                 => Not ALL (prob {all_prob:.2%}), will reclassify with original crop")
-                        needs_reclassify.append((i, wbc_crops[i]))
+                    # Identify candidates for black bg check:
+                    # Only Normal WBC → potential missed ALL
+                    if result_class == 'Normal WBC':
+                        needs_blackbg_check.append((i, wbc_crops[i]))
                 
-                # --- PASS 2: Reclassify ONLY fallback cells with original crops ---
-                if needs_reclassify:
-                    print(f"   > Pass 2: Reclassifying {len(needs_reclassify)} WBCs with ORIGINAL crops...")
-                    reclassify_crops = [crop for _, crop in needs_reclassify]
-                    reclassify_results = classifier.classify_batch(reclassify_crops, ['WBC']*len(reclassify_crops), batch_size=16)
+                # --- SMEAR-LEVEL CLL/ALL DISAMBIGUATION ---
+                # Key insight: Real CLL = 3-6% confidence; ALL misidentified as CLL = 74-92%
+                # If >=2 high-confidence CLL cells exist, this is almost certainly an ALL smear.
+                # Convert ALL CLL cells to ALL in that case.
+                SMEAR_CLL_HIGH_CONF = 0.50  # Threshold for "high-confidence CLL"
+                SMEAR_CLL_MIN_COUNT = 2     # Minimum high-conf CLL cells to trigger
+                
+                high_conf_cll_cells = [(i, r) for i, r in enumerate(final_results) 
+                                       if r and r['class'] == CLL_CLASS and r['confidence'] >= SMEAR_CLL_HIGH_CONF]
+                
+                if len(high_conf_cll_cells) >= SMEAR_CLL_MIN_COUNT:
+                    # This is almost certainly an ALL smear — convert ALL CLL to ALL
+                    total_cll = sum(1 for r in final_results if r and r['class'] == CLL_CLASS)
+                    print(f"   > SMEAR-LEVEL: {len(high_conf_cll_cells)} high-conf CLL detected (>={SMEAR_CLL_HIGH_CONF:.0%})")
+                    print(f"   > Converting ALL {total_cll} CLL cells → ALL (real CLL never exceeds ~22% confidence)")
+                    for i, result in enumerate(final_results):
+                        if result and result['class'] == CLL_CLASS:
+                            result['class'] = ALL_CLASS
+                            result['smear_level_all_conversion'] = True
+                            result['original_cll_confidence'] = result['confidence']
+                            print(f"      WBC {i+1}: CLL ({result['confidence']:.2%}) → ALL [smear-level]")
+                else:
+                    if high_conf_cll_cells:
+                        print(f"   > Smear-level CLL/ALL check: only {len(high_conf_cll_cells)} high-conf CLL (need >={SMEAR_CLL_MIN_COUNT}) — keeping CLL")
+                
+                # --- CONTEXT-AWARE ALL RESCUE ---
+                # Before Pass 2, analyze Pass 1 results to determine smear context.
+                # If many cells are already a non-ALL disease (CML, AML), suppress ALL rescue
+                # because black bg always biases toward ALL regardless of actual disease.
+                pass1_disease_counts = {}
+                for r in final_results:
+                    if r and r['class'] != 'Normal WBC' and r['class'].lower() not in NON_WBC_CLASSES:
+                        pass1_disease_counts[r['class']] = pass1_disease_counts.get(r['class'], 0) + 1
+                
+                total_pass1_wbc = sum(1 for r in final_results if r is not None)
+                total_pass1_disease = sum(pass1_disease_counts.values())
+                pass1_dominant_disease = max(pass1_disease_counts.items(), key=lambda x: x[1])[0] if pass1_disease_counts else None
+                pass1_dominant_count = pass1_disease_counts.get(pass1_dominant_disease, 0) if pass1_dominant_disease else 0
+                
+                # If a non-ALL, non-CLL disease dominates Pass 1 (>= 30% of WBCs), 
+                # it's likely not an ALL smear → raise ALL rescue requirements.
+                # IMPORTANT: CLL is EXCLUDED from dampening because CLL and ALL are confusable
+                # — a CLL-dominant Pass 1 might actually be an ALL smear with misidentified cells.
+                is_non_all_disease_smear = (
+                    pass1_dominant_disease is not None and 
+                    pass1_dominant_disease != ALL_CLASS and
+                    pass1_dominant_disease != CLL_CLASS and  # CLL excluded - might be ALL
+                    pass1_dominant_count >= total_pass1_wbc * 0.30
+                )
+                
+                if is_non_all_disease_smear:
+                    effective_all_threshold = 0.80      # Require 80% ALL prob on black bg
+                    effective_all_margin = 0.30         # Require 30% dominance margin
+                    print(f"   > Smear context: {pass1_dominant_disease} dominant ({pass1_dominant_count}/{total_pass1_wbc})")
+                    print(f"   > ALL rescue DAMPENED (threshold={effective_all_threshold:.0%}, margin={effective_all_margin:.0%})")
+                else:
+                    effective_all_threshold = ALL_BLACKBG_RESCUE_THRESHOLD
+                    effective_all_margin = ALL_RESCUE_DOMINANCE_MARGIN
+                
+                # --- PASS 2: BLACK BG for Normal WBC + high-confidence CLL (ALL verification) ---
+                if needs_blackbg_check:
+                    print(f"   > Pass 2: Black bg ALL check for {len(needs_blackbg_check)} Normal WBC cells...")
                     
-                    for j, (original_idx, _) in enumerate(needs_reclassify):
-                        if not reclassify_results[j]:
-                            print(f"      WBC {original_idx+1}: Reclassification FAILED")
+                    # Create black bg versions
+                    blackbg_rescue_crops = []
+                    for _, crop in needs_blackbg_check:
+                        try:
+                            bb = create_black_background_crop(crop, focus_center=True, center_focus_ratio=0.6)
+                            blackbg_rescue_crops.append(bb)
+                        except Exception as e:
+                            blackbg_rescue_crops.append(crop)
+                    
+                    bb_results = classifier.classify_batch(blackbg_rescue_crops, ['WBC']*len(blackbg_rescue_crops), batch_size=16)
+                    
+                    for j, (original_idx, _) in enumerate(needs_blackbg_check):
+                        if not bb_results[j]:
+                            continue  # Keep original classification
+                        
+                        bb_probs = bb_results[j]['probabilities']
+                        all_prob = bb_probs.get(ALL_CLASS, 0)
+                        
+                        # Get sorted WBC probs from black bg
+                        bb_wbc_probs = {k: v for k, v in bb_probs.items() if k.lower() not in NON_WBC_CLASSES}
+                        bb_sorted = sorted(bb_wbc_probs.items(), key=lambda x: x[1], reverse=True)
+                        bb_top_class = bb_sorted[0][0] if bb_sorted else ''
+                        bb_second_prob = bb_sorted[1][1] if len(bb_sorted) > 1 else 0
+                        
+                        original_class = final_results[original_idx]['class']
+                        original_conf = final_results[original_idx]['confidence']
+                        
+                        print(f"      WBC {original_idx+1} (black bg rescue): Original='{original_class}' ({original_conf:.2%}), BB ALL={all_prob:.2%}, BB top='{bb_top_class}'")
+                        
+                        # Store pass2 ALL prob on the result for CLL disambiguation
+                        final_results[original_idx]['pass2_all_prob'] = all_prob
+                        
+                        # Only rescue to ALL if black bg shows clear ALL dominance
+                        if (bb_top_class == ALL_CLASS and 
+                            all_prob >= effective_all_threshold and
+                            (all_prob - bb_second_prob) >= effective_all_margin):
+                            # Black bg clearly shows ALL → override Normal WBC or CLL
                             final_results[original_idx] = {
-                                'class': 'Normal WBC',
-                                'confidence': 0.5,
-                                'probabilities': {},
-                                'used_black_bg': False
+                                'class': ALL_CLASS,
+                                'confidence': all_prob,
+                                'probabilities': bb_probs,
+                                'used_black_bg': True,
+                                'rescued_from': original_class,
+                                'pass2_all_prob': all_prob
                             }
-                            continue
-                        
-                        result_class = reclassify_results[j]['class']
-                        result_conf = reclassify_results[j]['confidence']
-                        result_probs = reclassify_results[j]['probabilities']
-                        
-                        # Filter out non-WBC classes (if RBC/SCA was top)
-                        if result_class.lower() in NON_WBC_CLASSES:
-                            wbc_only = {k: v for k, v in result_probs.items() if k.lower() not in NON_WBC_CLASSES}
-                            if wbc_only:
-                                best = max(wbc_only.items(), key=lambda x: x[1])
-                                result_class, result_conf = best[0], best[1]
-                            else:
-                                result_class, result_conf = 'Normal WBC', 0.5
-                        
-                        print(f"      WBC {original_idx+1} (reclassified): '{result_class}' ({result_conf:.2%})")
-                        
-                        final_results[original_idx] = {
-                            'class': result_class,
-                            'confidence': result_conf,
-                            'probabilities': result_probs,
-                            'used_black_bg': False
-                        }
+                            print(f"                 => ALL RESCUED (bb ALL={all_prob:.2%} dominant, was '{original_class}')")
+                        else:
+                            print(f"                 => Kept as '{original_class}' (bb ALL={all_prob:.2%} not dominant)")
                 
-                # --- POST-PROCESSING: Apply disease confidence thresholds ---
-                # This is the equivalent of DISEASE_THRESHOLDS_CONF from app_old.py
-                # If a disease has low confidence, reclassify as Normal WBC
+                # NOTE: CLL/ALL disambiguation is handled at the SMEAR LEVEL (before Pass 2).
+                # If >=2 high-confidence CLL cells exist (>=50%), ALL CLL cells are converted to ALL.
+                # This works because real CLL gives 3-6% confidence, while ALL-as-CLL gives 74-92%.
+                
+                # --- POST-PROCESSING: Disease confidence thresholds ---
                 for i, result in enumerate(final_results):
                     if not result:
                         continue
@@ -1065,32 +1120,40 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     wbc_conf = result['confidence']
                     probs = result['probabilities']
                     
-                    # Skip Normal WBC and already-validated ALL (from Pass 1 black bg)
+                    # Skip Normal WBC and already-validated ALL
                     if 'normal' in wbc_class.lower():
                         continue
                     if wbc_class == ALL_CLASS and result.get('used_black_bg', False):
-                        continue  # ALL validated by black bg - don't threshold
+                        continue  # ALL validated by black bg rescue - don't threshold
+                    if wbc_class == ALL_CLASS and result.get('smear_level_all_conversion', False):
+                        continue  # ALL from smear-level CLL→ALL conversion - don't threshold
                     
-                    # Apply disease confidence threshold
+                    # CLL: Trust the model's raw prediction — NO confidence threshold.
+                    # (Only reached if smear-level conversion did NOT trigger)
+                    if wbc_class == CLL_CLASS:
+                        print(f"      WBC {i+1}: CLL KEPT (conf={wbc_conf:.2%})")
+                        continue
+                    
+                    # Generic disease confidence threshold (AML, CML, low-conf ALL from Pass 1)
                     threshold = DISEASE_CONFIDENCE_THRESHOLDS.get(wbc_class.lower(), DEFAULT_DISEASE_THRESHOLD)
                     if wbc_conf < threshold:
                         old_class = wbc_class
-                        old_conf = wbc_conf
-                        # Fall back to Normal WBC but use the DISEASE confidence level
-                        # (since this cell was reassigned FROM that disease class)
                         result['class'] = 'Normal WBC'
-                        result['confidence'] = old_conf  # Keep the disease confidence
+                        result['confidence'] = wbc_conf
                         result['reassigned_from'] = old_class
-                        result['reassigned_confidence'] = old_conf
-                        print(f"      WBC {i+1}: '{old_class}' ({old_conf:.2%}) BELOW threshold ({threshold:.0%}) → Normal WBC (conf={old_conf:.2%})")
+                        print(f"      WBC {i+1}: '{old_class}' ({wbc_conf:.2%}) BELOW threshold ({threshold:.0%}) → Normal WBC")
                 
                 # Count results
                 none_count = sum(1 for r in final_results if r is None)
                 blackbg_count = sum(1 for r in final_results if r and r.get('used_black_bg'))
                 all_count_debug = sum(1 for r in final_results if r and r['class'] == ALL_CLASS)
                 cll_count_debug = sum(1 for r in final_results if r and r['class'] == CLL_CLASS)
+                cml_count_debug = sum(1 for r in final_results if r and r['class'] == CML_CLASS)
+                aml_count_debug = sum(1 for r in final_results if r and r['class'] == AML_CLASS)
                 reassigned_count = sum(1 for r in final_results if r and r.get('reassigned_from'))
-                print(f"   > Results: {len(final_results) - none_count} valid, {blackbg_count} from black bg, {all_count_debug} ALL, {cll_count_debug} CLL, {reassigned_count} reassigned to Normal")
+                rescued_count = sum(1 for r in final_results if r and r.get('rescued_from'))
+                smear_converted = sum(1 for r in final_results if r and r.get('smear_level_all_conversion'))
+                print(f"   > Results: {len(final_results) - none_count} valid, {blackbg_count} bb-rescued, {smear_converted} smear-CLL→ALL, {all_count_debug} ALL, {cll_count_debug} CLL, {cml_count_debug} CML, {aml_count_debug} AML, {reassigned_count} reassigned")
                 
                 # --- Process final WBC results ---
                 for i, result in enumerate(final_results):
