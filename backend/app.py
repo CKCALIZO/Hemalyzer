@@ -360,6 +360,74 @@ def interpret_disease_classification(wbc_classifications, rbc_classifications, c
 # Store for multi-field analysis session
 multi_field_session = {}
 
+# ============================================================
+# LOW CONFIDENCE DETECTION - ISO 25010 Safety Metric
+# ============================================================
+LOW_CONFIDENCE_THRESHOLD = 0.70  # 70% - ISO 25010 safety standard
+
+def check_low_confidence_predictions(wbc_classifications, rbc_classifications):
+    """
+    Check for predictions with low confidence scores.
+    Used for ISO 25010 safety metric to warn users.
+    
+    Args:
+        wbc_classifications: List of WBC classification results
+        rbc_classifications: List of RBC classification results
+    
+    Returns:
+        dict: {
+            'has_low_confidence': bool,
+            'low_confidence_wbcs': list of WBCs with low confidence,
+            'low_confidence_rbcs': list of RBCs with low confidence,
+            'total_low_confidence_count': int,
+            'warning_message': str
+        }
+    """
+    low_conf_wbcs = []
+    low_conf_rbcs = []
+    
+    # Check WBC classifications
+    for wbc in wbc_classifications:
+        conf = wbc.get('classification_confidence', 1.0)
+        if conf < LOW_CONFIDENCE_THRESHOLD and 'normal' not in wbc.get('classification', '').lower():
+            low_conf_wbcs.append({
+                'wbc_id': wbc.get('wbc_id'),
+                'classification': wbc.get('classification'),
+                'confidence': conf,
+                'confidence_percentage': round(conf * 100, 1)
+            })
+    
+    # Check RBC classifications
+    for rbc in rbc_classifications:
+        conf = rbc.get('classification_confidence', 1.0)
+        if conf < LOW_CONFIDENCE_THRESHOLD and 'normal' not in rbc.get('classification', '').lower():
+            low_conf_rbcs.append({
+                'rbc_id': rbc.get('rbc_id'),
+                'classification': rbc.get('classification'),
+                'confidence': conf,
+                'confidence_percentage': round(conf * 100, 1)
+            })
+    
+    has_low_confidence = len(low_conf_wbcs) > 0 or len(low_conf_rbcs) > 0
+    
+    warning_message = ""
+    if has_low_confidence:
+        total_count = len(low_conf_wbcs) + len(low_conf_rbcs)
+        warning_message = (
+            f"Low confidence detected in model predictions. "
+            f"{total_count} cell(s) classified with confidence below {LOW_CONFIDENCE_THRESHOLD*100:.0f}%. "
+            f"Results should be reviewed carefully for safety and accuracy (ISO 25010 safety standard)."
+        )
+    
+    return {
+        'has_low_confidence': has_low_confidence,
+        'low_confidence_wbcs': low_conf_wbcs,
+        'low_confidence_rbcs': low_conf_rbcs,
+        'total_low_confidence_count': len(low_conf_wbcs) + len(low_conf_rbcs),
+        'warning_message': warning_message,
+        'threshold': LOW_CONFIDENCE_THRESHOLD
+    }
+
 def aggregate_multi_field_analysis(field_results_list, session_id=None):
     """
     Aggregate results from multiple 100x fields for more accurate analysis.
@@ -409,6 +477,9 @@ def aggregate_multi_field_analysis(field_results_list, session_id=None):
         fields_analyzed=len(field_results_list)
     )
     
+    # Check for low confidence predictions (ISO 25010 safety metric)
+    low_confidence_check = check_low_confidence_predictions(all_wbc_classifications, all_rbc_classifications)
+    
     return {
         'fields_analyzed': len(field_results_list),
         'aggregated_counts': aggregated_counts,
@@ -417,7 +488,8 @@ def aggregate_multi_field_analysis(field_results_list, session_id=None):
         'rbc_classifications': all_rbc_classifications,
         'disease_interpretation': disease_interpretation,
         'sample_adequacy': disease_interpretation['sample_adequacy'],
-        'is_multi_field': True
+        'is_multi_field': True,
+        'low_confidence_warning': low_confidence_check
     }
 
 # ============================================================
@@ -434,7 +506,7 @@ CLIENT = InferenceHTTPClient(
 )
 
 # Your Roboflow model IDs
-MODEL_ID = "hemalens-6807i/2"  # Enhanced YOLOv8-NAS model
+MODEL_ID = "hemalens-6807i/2" # Enhanced YOLOv8-NAS model
 # Note: If baseline model doesn't exist, we'll simulate with reduced detection rate
 
 
@@ -1398,6 +1470,9 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         # Get sample adequacy
         adequacy = disease_interpretation.get('sample_adequacy', {})
         
+        # Check for low confidence predictions (ISO 25010 safety metric)
+        low_confidence_check = check_low_confidence_predictions(wbc_classifications, rbc_classifications)
+        
         return {
             'success': True,
             
@@ -1455,7 +1530,10 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             'annotated_image': annotated_base64,
             'convnext_loaded': classifier.is_loaded(),
             'is_single_field': True,
-            'recommendations': adequacy.get('recommendations', [])
+            'recommendations': adequacy.get('recommendations', []),
+            
+            # ===== LOW CONFIDENCE WARNING (ISO 25010 Safety Standard) =====
+            'low_confidence_warning': low_confidence_check
         }
         
     except Exception as e:

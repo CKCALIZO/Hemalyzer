@@ -9,8 +9,10 @@ import { RegistrationForm } from "../components/homepage/RegistrationForm.jsx";
 import { UploadSection } from "../components/homepage/UploadSection.jsx";
 import { AnalysisResults } from "../components/homepage/AnalysisResults.jsx";
 import { ClassificationsModal } from "../components/homepage/ClassificationsModal.jsx";
+import { LowConfidenceWarning } from "../components/LowConfidenceWarning.jsx";
 import { ProcessedImagesThumbnails } from "../components/ProcessedImagesThumbnails.jsx";
 import { useAnalysis } from "../context/AnalysisContext.jsx";
+import { useEffect } from "react";
 
 const Homepage = () => {
     const {
@@ -49,6 +51,8 @@ const Homepage = () => {
     const [showRegistrationModal, setShowRegistrationModal] = useState(false);
     const [showRemovePatientModal, setShowRemovePatientModal] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
+    const [showLowConfidenceWarning, setShowLowConfidenceWarning] = useState(false);
+    const [lowConfidenceData, setLowConfidenceData] = useState(null);
 
     // Handle editing patient info
     const handleEditPatient = () => {
@@ -76,6 +80,17 @@ const Homepage = () => {
         setIsEditMode(false);
         setShowRegistrationModal(true);
     };
+
+    // Check for low confidence predictions when currentResults changes
+    useEffect(() => {
+        if (currentResults && currentResults.low_confidence_warning) {
+            const lowConfWarning = currentResults.low_confidence_warning;
+            if (lowConfWarning.has_low_confidence) {
+                setLowConfidenceData(lowConfWarning);
+                setShowLowConfidenceWarning(true);
+            }
+        }
+    }, [currentResults]);
 
     return (
         <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900 relative">
@@ -371,6 +386,12 @@ const Homepage = () => {
                     onClose={() => setShowClassificationsModal(false)}
                     currentResults={currentResults}
                     isBulkProcessing={isBulkProcessing}
+                />
+
+                <LowConfidenceWarning
+                    show={showLowConfidenceWarning}
+                    onClose={() => setShowLowConfidenceWarning(false)}
+                    lowConfidenceData={lowConfidenceData}
                 />
             </div>
         </div>
