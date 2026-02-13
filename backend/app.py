@@ -1577,6 +1577,71 @@ def health_check():
     })
 
 
+@app.route('/api/restart', methods=['POST'])
+def restart_backend():
+    """
+    Restart backend session and clear resources.
+    Called when user starts new analysis, resets session, or ends analysis.
+    Clears memory, unloads models, reloads fresh model, and resets session state.
+    """
+    global multi_field_session
+    
+    print("\n" + "="*60)
+    print("BACKEND RESTART REQUESTED")
+    print("="*60)
+    
+    try:
+        # Clear session data
+        multi_field_session = {}
+        print("[Restart] Cleared multi-field session data")
+        
+        # Unload ConvNeXt model to free memory
+        if classifier.is_loaded():
+            print("[Restart] Unloading ConvNeXt model...")
+            classifier.unload_model()
+        
+        # Clear garbage and cache
+        import gc
+        import torch
+        gc.collect()
+        
+        # Clear CUDA cache if using GPU
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            print("[Restart] CUDA cache cleared")
+        
+        print("[Restart] Memory freed and garbage collected")
+        
+        # IMPORTANT: Reload the ConvNeXt model immediately
+        print("[Restart] Reloading ConvNeXt model...")
+        load_convnext_model()
+        
+        if not classifier.is_loaded():
+            raise Exception("Failed to reload ConvNeXt model")
+        
+        print("[Restart] ConvNeXt model reloaded successfully")
+        print("="*60)
+        print("Backend restart complete - ready for next analysis\n")
+        
+        return jsonify({
+            'status': 'success',
+            'message': 'Backend restarted and model reloaded',
+            'model_loaded': classifier.is_loaded(),
+            'device': classifier.get_device()
+        }), 200
+        
+    except Exception as e:
+        print(f"[Restart] ERROR during restart: {e}")
+        traceback.print_exc()
+        print("="*60 + "\n")
+        return jsonify({
+            'status': 'error',
+            'message': f'Backend restart failed: {str(e)}',
+            'model_loaded': classifier.is_loaded()
+        }), 500
+
+
 @app.route('/api/analyze', methods=['POST'])
 def analyze_blood_smear():
     """

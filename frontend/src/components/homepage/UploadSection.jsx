@@ -492,7 +492,7 @@ export const UploadSection = ({
                     <button
                         onClick={handleReset}
                         className="w-full mt-4 px-4 py-2 bg-white border border-slate-300 text-slate-600 
-                        rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium"
+                        rounded-lg hover:bg-slate-50 transition-colors text-sm font-medium cursor-pointer"
                     >
                         Reset Analysis Session
                     </button>
@@ -508,7 +508,7 @@ export const UploadSection = ({
                         }}
                         className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2.5 
                         bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg 
-                        transition-colors text-sm shadow-md hover:shadow-lg border border-red-700"
+                        transition-colors text-sm shadow-md hover:shadow-lg border border-red-700 cursor-pointer"
                     >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

@@ -41,7 +41,7 @@ export const LowConfidenceWarning = ({
                     {/* ISO 25010 Safety Notice */}
                     <div className="bg-amber-50 border border-amber-200 p-4 rounded-lg mb-6">
                         <p className="text-sm text-amber-900">
-                            <span className="font-semibold block mb-1">ISO 25010 Safety Standard - Model Confidence Alert</span>
+                            <span className="font-semibold block mb-1">Model Confidence Alert</span>
                             {warning_message}
                         </p>
                     </div>

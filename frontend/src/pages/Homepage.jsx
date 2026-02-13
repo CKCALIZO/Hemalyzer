@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Header } from "../components/Header.jsx"
 import { Footer } from "../components/Footer.jsx";
@@ -12,7 +11,6 @@ import { ClassificationsModal } from "../components/homepage/ClassificationsModa
 import { LowConfidenceWarning } from "../components/LowConfidenceWarning.jsx";
 import { ProcessedImagesThumbnails } from "../components/ProcessedImagesThumbnails.jsx";
 import { useAnalysis } from "../context/AnalysisContext.jsx";
-import { useEffect } from "react";
 
 const Homepage = () => {
     const {
@@ -81,16 +79,13 @@ const Homepage = () => {
         setShowRegistrationModal(true);
     };
 
-    // Check for low confidence predictions when currentResults changes
-    useEffect(() => {
-        if (currentResults && currentResults.low_confidence_warning) {
-            const lowConfWarning = currentResults.low_confidence_warning;
-            if (lowConfWarning.has_low_confidence) {
-                setLowConfidenceData(lowConfWarning);
-                setShowLowConfidenceWarning(true);
-            }
+    // Handle clicking on a processed image - check for low confidence warnings
+    const handleProcessedImageClick = (image, index) => {
+        if (image && image.low_confidence_warning && image.low_confidence_warning.has_low_confidence) {
+            setLowConfidenceData(image.low_confidence_warning);
+            setShowLowConfidenceWarning(true);
         }
-    }, [currentResults]);
+    };
 
     return (
         <div className="flex min-h-screen bg-slate-50 font-sans text-slate-900 relative">
@@ -293,6 +288,7 @@ const Homepage = () => {
                                         processedImages={processedImages}
                                         currentImageCount={processedImages.length}
                                         targetImageCount={TARGET_IMAGE_COUNT}
+                                        onImageClick={handleProcessedImageClick}
                                     />
                                 )}
 

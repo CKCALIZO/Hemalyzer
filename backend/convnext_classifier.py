@@ -781,6 +781,24 @@ class ConvNeXtClassifier:
         """Check if model is loaded and ready"""
         return self.model is not None
     
+    def unload_model(self):
+        """Unload model and free memory"""
+        try:
+            if self.model is not None:
+                self.model = None
+                self.preprocessor = None
+                self.transform = None
+                self.pre_transform = None
+                # Force garbage collection
+                import gc
+                gc.collect()
+                # Clear CUDA cache if using GPU
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                print("[ConvNeXtClassifier] Model unloaded and memory freed")
+        except Exception as e:
+            print(f"[ConvNeXtClassifier] Error during unload: {e}")
+    
     def get_class_names(self):
         """Get list of class names"""
         return self.class_names if self.class_names else []

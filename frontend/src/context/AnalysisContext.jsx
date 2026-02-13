@@ -118,8 +118,33 @@ export const AnalysisProvider = ({ children }) => {
     const abortControllerRef = useRef(null);
     const cancelledRef = useRef(false);
 
+    // Helper function to restart backend
+    const restartBackend = useCallback(async () => {
+        try {
+            const response = await fetch(`${API_URL}/api/restart`, {
+                method: 'POST',
+                headers: getApiHeaders()
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                console.log('[Frontend] Backend restarted:', data.message);
+                return true;
+            } else {
+                console.warn('[Frontend] Backend restart returned non-ok status:', response.status);
+                return false;
+            }
+        } catch (error) {
+            console.error('[Frontend] Failed to restart backend:', error);
+            return false;
+        }
+    }, []);
+
     // Cancel/End Session function
     const cancelAnalysis = useCallback(() => {
+        // Restart backend to clear session
+        restartBackend();
+
         // Abort any in-flight fetch requests
         if (abortControllerRef.current) {
             abortControllerRef.current.abort();
@@ -136,7 +161,7 @@ export const AnalysisProvider = ({ children }) => {
         setBulkFiles([]);
         setSelectedFile(null);
         setPreviewUrl(null);
-    }, []);
+    }, [restartBackend]);
 
     // Calculate aggregated results - Simplified for 7-class model
     const calculateFinalResults = useCallback((allClassifications, allProcessedImages, counts, allRBCClassifications = []) => {
@@ -430,6 +455,9 @@ export const AnalysisProvider = ({ children }) => {
 
     // Handle Reset - Clears all analysis state to start a new analysis
     const handleReset = useCallback(async () => {
+        // Restart backend to clear session and free memory
+        await restartBackend();
+
         try {
             await clearSession();
         } catch (error) {
@@ -459,7 +487,7 @@ export const AnalysisProvider = ({ children }) => {
         setBulkProgress({ current: 0, total: 0 });
         setImageProgress(0);
         setIsBulkProcessing(false);
-    }, []);
+    }, [restartBackend]);
 
     // Client-side image validation helper
     const validateImageFile = useCallback((file) => {
@@ -576,6 +604,11 @@ export const AnalysisProvider = ({ children }) => {
             return;
         }
 
+        // Restart backend for first analysis of a new session
+        if (processedImages.length === 0) {
+            await restartBackend();
+        }
+
         setLoading(true);
         setError(null);
         setAnalysisProgress({ stage: 'Uploading', percentage: 10, message: 'Uploading image...' });
@@ -632,7 +665,8 @@ export const AnalysisProvider = ({ children }) => {
                 rbcCount: data.rbc_count || data.stage1_detection?.counts?.RBC || 0,
                 plateletCount: data.platelet_count || data.stage1_detection?.counts?.Platelets || 0,
                 sickleCount: data.rbc_classifications?.filter(r => r.is_sickle_cell || r.is_abnormal)?.length || 0,
-                wbcClassifications: data.wbc_classifications || data.stage2_classification || []
+                wbcClassifications: data.wbc_classifications || data.stage2_classification || [],
+                low_confidence_warning: data.low_confidence_warning
             }];
             setProcessedImages(newProcessedImages);
 
@@ -690,7 +724,7 @@ export const AnalysisProvider = ({ children }) => {
             setLoading(false);
             setAnalysisProgress({ stage: '', percentage: 0, message: '' });
         }
-    }, [selectedFile, previewUrl, processedImages, aggregatedCounts, aggregatedClassifications, aggregatedRBCClassifications, patientName, patientId, patientAge, patientGender, patientPhone, isRegistered, calculateFinalResults]);
+    }, [selectedFile, previewUrl, processedImages, aggregatedCounts, aggregatedClassifications, aggregatedRBCClassifications, patientName, patientId, patientAge, patientGender, patientPhone, isRegistered, calculateFinalResults, restartBackend]);
 
     // Handle Bulk Upload
     const handleBulkUpload = useCallback(async () => {
