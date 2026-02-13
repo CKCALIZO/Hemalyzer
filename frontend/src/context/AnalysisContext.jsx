@@ -274,10 +274,26 @@ export const AnalysisProvider = ({ children }) => {
         else { overallClassification = 'high'; overallInterpretation = 'High Abnormal Classification - majority of WBCs classified as abnormal'; }
 
         let patientStatus = 'Normal';
-        const hasCritical = diseaseFindings.some(f => f.severity === 'HIGH');
-        const hasAbnormal = diseaseFindings.some(f => f.severity === 'MODERATE' || f.severity === 'LOW');
-        if (hasCritical || sicklePercentage > 30) patientStatus = 'Critical';
-        else if (hasAbnormal || sicklePercentage >= 3) patientStatus = 'Abnormal';
+        
+        // Check if any disease threshold is met (Severity HIGH, MODERATE, or LOW)
+        const diseaseThresholdMet = diseaseFindings.some(f => 
+            ['HIGH', 'MODERATE', 'LOW', 'SEVERE'].includes(f.severity)
+        );
+        const sickleThresholdMet = sicklePercentage >= 3;
+
+        // Calculate Average WBC Classification Confidence
+        const validConfs = allClassifications.map(c => c.classification_confidence || c.confidence || 0).filter(c => c > 0);
+        const avgConfidence = validConfs.length > 0 ? validConfs.reduce((a, b) => a + b, 0) / validConfs.length : 0;
+
+        // Reliability Force-Logic:
+        // Even if thresholds are met, if the sample size is small (< 15 cells) AND 
+        // the AI confidence is low (< 50%), this indicates false positives in a normal smear.
+        const isAnalysisReliable = totalWBC >= 15 || avgConfidence >= 0.50;
+
+        // If any threshold is met AND the analysis is reliable, status is Abnormal
+        if ((diseaseThresholdMet || sickleThresholdMet) && isAnalysisReliable) {
+            patientStatus = 'Abnormal';
+        }
 
         return {
             thresholdMet: true, totalWBC: counts.wbc, totalRBC: counts.rbc, totalPlatelets: counts.platelets,

@@ -9,6 +9,8 @@ lerna-debug.log*
 *.pth
 frontend/package-lock.json
 frontend/package.json
+backend/convnext_classifier_old.py
+backend/app_old.py
 
 CML/ 
 Normal/

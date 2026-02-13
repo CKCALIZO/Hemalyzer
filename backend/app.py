@@ -434,7 +434,7 @@ CLIENT = InferenceHTTPClient(
 )
 
 # Your Roboflow model IDs
-MODEL_ID = "hema-dci5u/1"  # Enhanced YOLOv8-NAS model
+MODEL_ID = "hemalens-6807i/2"  # Enhanced YOLOv8-NAS model
 # Note: If baseline model doesn't exist, we'll simulate with reduced detection rate
 
 
@@ -452,35 +452,61 @@ MODEL_ID = "hema-dci5u/1"  # Enhanced YOLOv8-NAS model
 # ============================================================
 
 # Legend mapping for numbered annotations on the image
+# Color scheme: RBC=Red, Normal WBC=Blue, Abnormal WBC=Violet, SCA=Orange, Platelet=Yellow
 ANNOTATION_LEGEND = {
-    'Normal WBC': '1',
+    'Platelet': '0',
     'Normal RBC': '1',
-    'Acute Myeloid Leukemia': '2',
-    'Acute Lymphoblastic Leukemia': '3',
-    'Chronic Lymphocytic Leukemia': '4',
+    'Normal WBC': '2',
+    'Acute Myeloid Leukemia': '3',
+    'Acute Lymphoblastic Leukemia': '4',
     'Chronic Myeloid Leukemia': '5',
-    'Sickle Cell Anemia': '6',
+    'Chronic Lymphocytic Leukemia': '6',
+    'Sickle Cell Anemia': '7',
+}
+
+# Annotation colors (RGB) for each cell class
+ANNOTATION_COLORS = {
+    'Platelet': (255, 255, 0),              # Yellow
+    'Normal RBC': (255, 0, 0),              # Red
+    'Normal WBC': (0, 100, 255),            # Blue
+    'Acute Myeloid Leukemia': (148, 0, 211),  # Violet
+    'Acute Lymphoblastic Leukemia': (148, 0, 211),  # Violet
+    'Chronic Myeloid Leukemia': (148, 0, 211),      # Violet
+    'Chronic Lymphocytic Leukemia': (148, 0, 211),  # Violet
+    'Sickle Cell Anemia': (255, 165, 0),    # Orange
 }
 
 def _get_short_label(classification):
     """Get a numbered label for bounding box display from the full classification name."""
     cls_lower = classification.lower()
-    if 'normal wbc' in cls_lower:
+    if 'normal rbc' in cls_lower:
         return '1'
-    elif 'acute myeloid' in cls_lower:
+    elif 'normal wbc' in cls_lower:
         return '2'
-    elif 'acute lymphoblastic' in cls_lower:
+    elif 'acute myeloid' in cls_lower:
         return '3'
-    elif 'chronic lymphocytic' in cls_lower:
+    elif 'acute lymphoblastic' in cls_lower:
         return '4'
     elif 'chronic myeloid' in cls_lower:
         return '5'
-    elif 'sickle' in cls_lower:
+    elif 'chronic lymphocytic' in cls_lower:
         return '6'
-    elif 'normal rbc' in cls_lower:
-        return '1'
+    elif 'sickle' in cls_lower:
+        return '7'
     else:
         return '?'  # Fallback
+
+def _get_annotation_color(classification):
+    """Get annotation color (RGB) for a classification label."""
+    return ANNOTATION_COLORS.get(classification, (255, 255, 255))
+
+def _draw_cell_label(image, x1, y1, label_text, color, font_scale=0.4, thickness=1):
+    """Draw a numbered label above a bounding box."""
+    label_size, _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+    cv2.rectangle(image, (x1, y1 - label_size[1] - 6),
+                 (x1 + label_size[0] + 4, y1), color, -1)
+    cv2.putText(image, label_text, (x1 + 2, y1 - 3),
+               cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness)
 
 
 # ============================================================
@@ -494,17 +520,6 @@ ENABLE_RBC_SAMPLING = True  # Enable sampling for faster processing (1000 total 
 def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
     """
     Process blood smear image using TWO-STAGE analysis pipeline:
-    
-    STAGE 1 - YOLOv8 Detection (Roboflow):
-        - Detects and counts total WBCs, RBCs, and Platelets
-        - Provides bounding boxes for each detected cell
-        - Purpose: Initial cell detection and total cell counting
-    
-    STAGE 2 - ConvNeXt Classification:
-        - Classifies each detected WBC into: Normal WBC, AML, ALL, CML, CLL
-        - Classifies RBCs to detect Sickle Cells (>=95% confidence threshold)
-        - Purpose: WBC disease classification and sickle cell detection
-    
     BOUNDING BOX COLORS:
     - RBC / SCA: Red
     - Normal WBC: Green
@@ -716,12 +731,13 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
         # Save CLEAN image for cropping cells (before any annotations)
         image_rgb_clean = image_rgb.copy()
         
-        # Colors for different cell types (RGB format)
+        # Colors for Stage 1 bounding boxes (RGB format)
+        # These are initial detection colors; Stage 2 will redraw with classification colors
         colors = {
-            'RBC': (255, 0, 0),        # Red
-            'WBC': (0, 255, 0),        # Green
-            'Platelets': (255, 255, 0), # Yellow
-            'Platelet': (255, 255, 0),  # Yellow (alternate name)
+            'RBC': (255, 0, 0),          # Red (Normal RBC)
+            'WBC': (0, 100, 255),        # Blue (will be redrawn in Stage 2)
+            'Platelets': (255, 255, 0),  # Yellow
+            'Platelet': (255, 255, 0),   # Yellow (alternate name)
         }
         default_color = (255, 255, 255)  # White for unknown
         
@@ -899,20 +915,40 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 rbc_indices = [rbc_indices[i] for i in sample_indices]
                 print(f"   > RBC sampling: {original_rbc_count} -> {len(rbc_crops)} (statistically representative)")
 
-            # 2. Two-Pass WBC Classification (Original + Black Background)
-            # Pass 1: Original crops (standard preprocessing)
-            # Pass 2: Black background crops (for Lymphoblast/ALL dataset compatibility)
-            # Best result wins based on confidence
+            # ============================================================
+            # 2. TWO-PASS WBC CLASSIFICATION (Black BG First Approach)
+            # Adapted from old 20-class model technique to 7-class model:
+            # Pass 1: Classify with BLACK BACKGROUND first
+            #         - If ALL is dominant (top WBC class + raw prob >= threshold) → keep as ALL
+            #         - Otherwise → mark for reclassification with original crop
+            # Pass 2: Reclassify ONLY fallback cells with ORIGINAL crops
+            # Post: Apply disease confidence thresholds - low confidence disease → Normal WBC
+            # This matches the old 20-class approach from app_old.py
+            # ============================================================
             if wbc_crops:
                 if not classifier.is_loaded():
                     load_convnext_model()
                 
-                print(f"   > Two-pass classifying {len(wbc_crops)} WBCs...")
+                ALL_CLASS = 'Acute Lymphoblastic Leukemia'
+                CLL_CLASS = 'Chronic Lymphocytic Leukemia'
+                ALL_BLACKBG_THRESHOLD = 0.50  
+                NON_WBC_CLASSES = {'normal rbc', 'sickle cell anemia'}
                 
-                # --- PASS 1: Original crops ---
-                pass1_results = classifier.classify_batch(wbc_crops, ['WBC']*len(wbc_crops), batch_size=16)
+                # Disease confidence thresholds (from app_old.py DISEASE_THRESHOLDS_CONF)
+                # If a disease class has confidence below this threshold, fall back to Normal WBC
+                # This prevents low-confidence disease predictions from polluting results
+                DISEASE_CONFIDENCE_THRESHOLDS = {
+                    'acute myeloid leukemia': 0.75,       # AML: 85% (Increased from 75%)
+                    'acute lymphoblastic leukemia': 0.80,  # ALL: 80% (Increased from 70%, unless validated by black bg)
+                    'chronic myeloid leukemia': 0.93,      # CML: 93% (Increased from 88%)
+                    'chronic lymphocytic leukemia': 0.95,   # CLL: 95% (Increased from 88% to reduce false positives)
+                }
+                DEFAULT_DISEASE_THRESHOLD = 0.80  # Default increased to 80%
                 
-                # --- PASS 2: Black background crops (WBC only) ---
+                print(f"   > Two-pass WBC classification (black bg first, sequential)...")
+                print(f"   > Creating black background crops for {len(wbc_crops)} WBCs...")
+                
+                # --- PASS 1: Black background crops (matches ALL training data) ---
                 black_bg_crops = []
                 for crop_pil in wbc_crops:
                     try:
@@ -922,61 +958,144 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         print(f"      Warning: Black bg crop failed, using original: {e}")
                         black_bg_crops.append(crop_pil)
                 
-                pass2_results = classifier.classify_batch(black_bg_crops, ['WBC']*len(black_bg_crops), batch_size=16)
+                print(f"   > Pass 1: Classifying {len(black_bg_crops)} WBCs with black background...")
+                black_bg_results = classifier.classify_batch(black_bg_crops, ['WBC']*len(black_bg_crops), batch_size=16)
                 
-                # --- MERGE: Pick best result per WBC ---
-                for i in range(len(wbc_crops)):
-                    r1 = pass1_results[i] if i < len(pass1_results) else None
-                    r2 = pass2_results[i] if i < len(pass2_results) else None
-                    
-                    if not r1 and not r2:
-                        print(f"      WARNING: WBC {i+1} has None result from both passes!")
+                # Track which crops need reclassification (sequential approach like old model)
+                needs_reclassify = []  # List of (index, original_crop) tuples
+                final_results = [None] * len(wbc_crops)
+                
+                for i, bbg_result in enumerate(black_bg_results):
+                    if not bbg_result:
+                        print(f"      WBC {i+1}: Black bg classification FAILED - will reclassify")
+                        needs_reclassify.append((i, wbc_crops[i]))
                         continue
                     
-                    # If one pass failed, use the other
-                    if not r1:
-                        result = r2
-                        chosen_pass = 2
-                    elif not r2:
-                        result = r1
-                        chosen_pass = 1
+                    probs = bbg_result['probabilities']
+                    
+                    # Get raw ALL probability from black bg (before classify_batch fallback)
+                    all_prob = probs.get(ALL_CLASS, 0)
+                    
+                    # Get top WBC class from raw probabilities (excluding non-WBC)
+                    wbc_probs = {k: v for k, v in probs.items() if k.lower() not in NON_WBC_CLASSES}
+                    if not wbc_probs:
+                        needs_reclassify.append((i, wbc_crops[i]))
+                        continue
+                    
+                    top_wbc = max(wbc_probs.items(), key=lambda x: x[1])
+                    top_wbc_class, top_wbc_prob = top_wbc
+                    
+                    print(f"      WBC {i+1} (black bg): Top='{top_wbc_class}' ({top_wbc_prob:.2%}), ALL={all_prob:.2%}")
+                    
+                    # === ALL DETECTION PRIORITY ===
+                    # If ALL is the top or second-top WBC class and prob >= threshold → keep as ALL
+                    sorted_wbc = sorted(wbc_probs.items(), key=lambda x: x[1], reverse=True)
+                    all_in_top2 = any(cls == ALL_CLASS for cls, _ in sorted_wbc[:2])
+                    
+                    if top_wbc_class == ALL_CLASS and all_prob >= ALL_BLACKBG_THRESHOLD:
+                        # ALL is top class with sufficient probability
+                        final_results[i] = {
+                            'class': ALL_CLASS,
+                            'confidence': all_prob,
+                            'probabilities': probs,
+                            'used_black_bg': True
+                        }
+                        print(f"                 => ALL KEPT (top class, prob {all_prob:.2%} >= {ALL_BLACKBG_THRESHOLD:.0%})")
+                    elif all_in_top2 and all_prob >= ALL_BLACKBG_THRESHOLD:
+                        # ALL is second-top but prob is decent - keep as ALL
+                        final_results[i] = {
+                            'class': ALL_CLASS,
+                            'confidence': all_prob,
+                            'probabilities': probs,
+                            'used_black_bg': True
+                        }
+                        print(f"                 => ALL KEPT (top-2, prob {all_prob:.2%} >= {ALL_BLACKBG_THRESHOLD:.0%})")
                     else:
-                        # Both passes succeeded - pick best by confidence
-                        # Exclude non-WBC classes from comparison
-                        NON_WBC = {'normal rbc', 'sickle cell anemia'}
+                        # Not ALL - reclassify with original crop for better non-ALL classification
+                        print(f"                 => Not ALL (prob {all_prob:.2%}), will reclassify with original crop")
+                        needs_reclassify.append((i, wbc_crops[i]))
+                
+                # --- PASS 2: Reclassify ONLY fallback cells with original crops ---
+                if needs_reclassify:
+                    print(f"   > Pass 2: Reclassifying {len(needs_reclassify)} WBCs with ORIGINAL crops...")
+                    reclassify_crops = [crop for _, crop in needs_reclassify]
+                    reclassify_results = classifier.classify_batch(reclassify_crops, ['WBC']*len(reclassify_crops), batch_size=16)
+                    
+                    for j, (original_idx, _) in enumerate(needs_reclassify):
+                        if not reclassify_results[j]:
+                            print(f"      WBC {original_idx+1}: Reclassification FAILED")
+                            final_results[original_idx] = {
+                                'class': 'Normal WBC',
+                                'confidence': 0.5,
+                                'probabilities': {},
+                                'used_black_bg': False
+                            }
+                            continue
                         
-                        c1, conf1 = r1['class'], r1['confidence']
-                        c2, conf2 = r2['class'], r2['confidence']
+                        result_class = reclassify_results[j]['class']
+                        result_conf = reclassify_results[j]['confidence']
+                        result_probs = reclassify_results[j]['probabilities']
                         
-                        # Filter out non-WBC for pass 1
-                        if c1.lower() in NON_WBC:
-                            wbc_probs1 = {k: v for k, v in r1['probabilities'].items() if k.lower() not in NON_WBC}
-                            if wbc_probs1:
-                                best1 = max(wbc_probs1.items(), key=lambda x: x[1])
-                                c1, conf1 = best1[0], best1[1]
+                        # Filter out non-WBC classes (if RBC/SCA was top)
+                        if result_class.lower() in NON_WBC_CLASSES:
+                            wbc_only = {k: v for k, v in result_probs.items() if k.lower() not in NON_WBC_CLASSES}
+                            if wbc_only:
+                                best = max(wbc_only.items(), key=lambda x: x[1])
+                                result_class, result_conf = best[0], best[1]
                             else:
-                                c1, conf1 = 'Normal WBC', 0.5
+                                result_class, result_conf = 'Normal WBC', 0.5
                         
-                        # Filter out non-WBC for pass 2
-                        if c2.lower() in NON_WBC:
-                            wbc_probs2 = {k: v for k, v in r2['probabilities'].items() if k.lower() not in NON_WBC}
-                            if wbc_probs2:
-                                best2 = max(wbc_probs2.items(), key=lambda x: x[1])
-                                c2, conf2 = best2[0], best2[1]
-                            else:
-                                c2, conf2 = 'Normal WBC', 0.5
+                        print(f"      WBC {original_idx+1} (reclassified): '{result_class}' ({result_conf:.2%})")
                         
-                        # Prefer whichever pass has higher confidence
-                        if conf2 > conf1:
-                            result = r2
-                            result['class'] = c2
-                            result['confidence'] = conf2
-                            chosen_pass = 2
-                        else:
-                            result = r1
-                            result['class'] = c1
-                            result['confidence'] = conf1
-                            chosen_pass = 1
+                        final_results[original_idx] = {
+                            'class': result_class,
+                            'confidence': result_conf,
+                            'probabilities': result_probs,
+                            'used_black_bg': False
+                        }
+                
+                # --- POST-PROCESSING: Apply disease confidence thresholds ---
+                # This is the equivalent of DISEASE_THRESHOLDS_CONF from app_old.py
+                # If a disease has low confidence, reclassify as Normal WBC
+                for i, result in enumerate(final_results):
+                    if not result:
+                        continue
+                    
+                    wbc_class = result['class']
+                    wbc_conf = result['confidence']
+                    probs = result['probabilities']
+                    
+                    # Skip Normal WBC and already-validated ALL (from Pass 1 black bg)
+                    if 'normal' in wbc_class.lower():
+                        continue
+                    if wbc_class == ALL_CLASS and result.get('used_black_bg', False):
+                        continue  # ALL validated by black bg - don't threshold
+                    
+                    # Apply disease confidence threshold
+                    threshold = DISEASE_CONFIDENCE_THRESHOLDS.get(wbc_class.lower(), DEFAULT_DISEASE_THRESHOLD)
+                    if wbc_conf < threshold:
+                        old_class = wbc_class
+                        old_conf = wbc_conf
+                        # Fall back to Normal WBC but use the DISEASE confidence level
+                        # (since this cell was reassigned FROM that disease class)
+                        result['class'] = 'Normal WBC'
+                        result['confidence'] = old_conf  # Keep the disease confidence
+                        result['reassigned_from'] = old_class
+                        result['reassigned_confidence'] = old_conf
+                        print(f"      WBC {i+1}: '{old_class}' ({old_conf:.2%}) BELOW threshold ({threshold:.0%}) → Normal WBC (conf={old_conf:.2%})")
+                
+                # Count results
+                none_count = sum(1 for r in final_results if r is None)
+                blackbg_count = sum(1 for r in final_results if r and r.get('used_black_bg'))
+                all_count_debug = sum(1 for r in final_results if r and r['class'] == ALL_CLASS)
+                cll_count_debug = sum(1 for r in final_results if r and r['class'] == CLL_CLASS)
+                reassigned_count = sum(1 for r in final_results if r and r.get('reassigned_from'))
+                print(f"   > Results: {len(final_results) - none_count} valid, {blackbg_count} from black bg, {all_count_debug} ALL, {cll_count_debug} CLL, {reassigned_count} reassigned to Normal")
+                
+                # --- Process final WBC results ---
+                for i, result in enumerate(final_results):
+                    if not result:
+                        continue
                     
                     idx = wbc_indices[i]
                     detection = detections['cells'][idx]
@@ -985,9 +1104,9 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     wbc_class = result['class']
                     wbc_confidence = result['confidence']
                     probs = result['probabilities']
+                    used_black_bg = result.get('used_black_bg', False)
                     
-                    # Final NON_WBC filter (safety net)
-                    NON_WBC_CLASSES = {'normal rbc', 'sickle cell anemia'}
+                    # Final NON_WBC safety net
                     if wbc_class.lower() in NON_WBC_CLASSES:
                         wbc_only_probs = {k: v for k, v in probs.items() if k.lower() not in NON_WBC_CLASSES}
                         if wbc_only_probs:
@@ -996,32 +1115,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         else:
                             wbc_class, wbc_confidence = 'Normal WBC', 0.5
                     
-                    # === ALL RECOVERY ===
-                    # The 70% ALL confidence threshold in classify_batch may cause genuine ALL cells
-                    # to fall back to CLL/other classes. Use raw probabilities from BOTH passes
-                    # to recover ALL when it was the strongest WBC signal.
-                    ALL_CLASS = 'Acute Lymphoblastic Leukemia'
-                    if wbc_class != ALL_CLASS and r1 and r2:
-                        NON_WBC_SET = {'normal rbc', 'sickle cell anemia'}
-                        # Get ALL probability from both passes (raw, before fallback)
-                        all_prob_p1 = r1['probabilities'].get(ALL_CLASS, 0)
-                        all_prob_p2 = r2['probabilities'].get(ALL_CLASS, 0)
-                        max_all_prob = max(all_prob_p1, all_prob_p2)
-                        
-                        # Check if ALL was the top WBC prediction in either pass (before fallback)
-                        wbc_probs_p1 = {k: v for k, v in r1['probabilities'].items() if k.lower() not in NON_WBC_SET}
-                        wbc_probs_p2 = {k: v for k, v in r2['probabilities'].items() if k.lower() not in NON_WBC_SET}
-                        p1_top = max(wbc_probs_p1.items(), key=lambda x: x[1])[0] if wbc_probs_p1 else None
-                        p2_top = max(wbc_probs_p2.items(), key=lambda x: x[1])[0] if wbc_probs_p2 else None
-                        
-                        # If EITHER pass had ALL as top WBC class AND probability >= 50%, recover ALL
-                        if (p1_top == ALL_CLASS or p2_top == ALL_CLASS) and max_all_prob >= 0.50:
-                            wbc_class = ALL_CLASS
-                            wbc_confidence = max_all_prob
-                            short_label = _get_short_label(wbc_class)
-                            is_disease = True
-                    
-                    print(f"      WBC {i+1}: '{wbc_class}' ({wbc_confidence:.2%})")
+                    print(f"      WBC {i+1}: '{wbc_class}' ({wbc_confidence:.2%}) {'[BLACK BG]' if used_black_bg else '[ORIGINAL]'}")
                     
                     # Generate display crop
                     display_crop = crop_pil.resize((384, 384), Image.LANCZOS)
@@ -1029,9 +1123,10 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     display_crop.save(c_buf, format='PNG')
                     crop_b64 = base64.b64encode(c_buf.getvalue()).decode('utf-8')
 
-                    # Determine short label for bounding box
+                    # Determine short label and color for bounding box
                     short_label = _get_short_label(wbc_class)
                     is_disease = 'normal' not in wbc_class.lower()
+                    label_color = _get_annotation_color(wbc_class)
 
                     wbc_res = {
                         'wbc_id': len(wbc_classifications) + 1,
@@ -1042,7 +1137,8 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         'short_label': short_label,
                         'is_disease': is_disease,
                         'probabilities': probs,
-                        'cropped_image': crop_b64
+                        'cropped_image': crop_b64,
+                        'used_black_bg': used_black_bg
                     }
                     wbc_classifications.append(wbc_res)
                     
@@ -1058,22 +1154,13 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         'is_abnormal': is_disease
                     })
                     
-                    # Draw numbered classification label on annotated image bounding box
+                    # Draw numbered classification label on annotated image
                     x1, y1, x2, y2 = map(int, detection['bbox'])
-                    label_color = (0, 100, 255) if is_disease else (0, 255, 0)  # Blue for disease WBC, Green for normal WBC
-                    # Redraw bounding box with classification-aware color
                     cv2.rectangle(image_rgb, (x1, y1), (x2, y2), label_color, 1)
-                    label_text = short_label  # Numbered label only (1-5)
-                    font_scale = 0.4
-                    thickness = 1
-                    label_size, _ = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
-                    # Draw label background above bounding box
-                    cv2.rectangle(image_rgb, (x1, y1 - label_size[1] - 6), 
-                                 (x1 + label_size[0] + 4, y1), label_color, -1)
-                    cv2.putText(image_rgb, label_text, (x1 + 2, y1 - 3), 
-                               cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness)
+                    _draw_cell_label(image_rgb, x1, y1, short_label, label_color)
 
             # 3. Batch Classify RBCs
+            classified_rbc_indices = set()  # Track which RBC indices got classified
             if rbc_crops:
                 if not classifier.is_loaded(): 
                     load_convnext_model()
@@ -1084,6 +1171,7 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                     if not result: continue
                     
                     idx = rbc_indices[i]
+                    classified_rbc_indices.add(idx)
                     detection = detections['cells'][idx]
                     crop_pil = rbc_crops[i]
                     
@@ -1100,6 +1188,9 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         display_crop.save(c_buf, format='PNG')
                         crop_b64 = base64.b64encode(c_buf.getvalue()).decode('utf-8')
                     
+                    short_label = _get_short_label(rbc_class)
+                    label_color = _get_annotation_color(rbc_class)
+                    
                     rbc_res = {
                         'rbc_id': len(rbc_classifications) + 1,
                         'bbox': detection['bbox'],
@@ -1111,33 +1202,48 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                         'cropped_image': crop_b64,
                         'is_sickle_cell': is_sickle,
                         'is_disease': is_sickle,
-                        'short_label': 'SCA' if is_sickle else 'Normal'
+                        'short_label': short_label
                     }
                     rbc_classifications.append(rbc_res)
                     
-                    # Draw numbered label on sickle cells in annotated image
+                    # Draw numbered label on ALL classified RBCs
+                    x1, y1, x2, y2 = map(int, detection['bbox'])
+                    cv2.rectangle(image_rgb, (x1, y1), (x2, y2), label_color, 1)
+                    _draw_cell_label(image_rgb, x1, y1, short_label, label_color)
+                    
                     if is_sickle:
-                        x1, y1, x2, y2 = map(int, detection['bbox'])
-                        sca_color = (255, 0, 0)  # Red - matches RBC bounding box color
-                        sca_label = '6'  # Numbered label for SCA
-                        font_scale = 0.4
-                        thickness = 1
-                        label_size, _ = cv2.getTextSize(sca_label, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
-                        cv2.rectangle(image_rgb, (x1, y1 - label_size[1] - 6), 
-                                     (x1 + label_size[0] + 4, y1), sca_color, -1)
-                        cv2.putText(image_rgb, sca_label, (x1 + 2, y1 - 3), 
-                                   cv2.FONT_HERSHEY_SIMPLEX, font_scale, (255, 255, 255), thickness)
-                        
                         cropped_cells.append({
                             'id': f"RBC_{len(rbc_classifications)}",
                             'cell_type': 'RBC',
                             'classification': 'Sickle Cell Anemia',
                             'confidence': sickle_conf,
-                            'short_label': 'SCA',
+                            'short_label': short_label,
                             'is_disease': True,
                             'cropped_image': crop_b64,
                             'is_abnormal': True
                         })
+            
+            # 4. Label ALL remaining unclassified cells (unsampled RBCs + Platelets)
+            classified_indices = set(wbc_indices) | classified_rbc_indices
+            for idx, detection in enumerate(detections['cells']):
+                if idx in classified_indices:
+                    continue  # Already labeled by Stage 2
+                
+                cell_type = detection.get('cell_type', 'Unknown')
+                x1, y1, x2, y2 = map(int, detection['bbox'])
+                
+                if cell_type == 'RBC':
+                    # Unclassified RBC - assumed normal
+                    label_text = '1'
+                    label_color = ANNOTATION_COLORS['Normal RBC']
+                elif cell_type == 'Platelet':
+                    # Platelet - numbered 0 in yellow
+                    label_text = '0'
+                    label_color = ANNOTATION_COLORS['Platelet']
+                else:
+                    continue
+                
+                _draw_cell_label(image_rgb, x1, y1, label_text, label_color)
             
             print(f"Classified {len(wbc_classifications)} WBCs")
             print(f"Classified {len(rbc_classifications)} RBCs")
@@ -1147,44 +1253,46 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
             cropped_cells = []
             print(f"ConvNeXt model not loaded - skipping classification")
         
-        # Convert annotated image to base64 with high quality
-        # Draw legend on annotated image (top-left corner)
-        legend_items = [
-            ('1 = Normal (WBC/RBC)', (0, 255, 0)),
-            ('2 = AML', (0, 100, 255)),
-            ('3 = ALL', (0, 100, 255)),
-            ('4 = CLL', (0, 100, 255)),
-            ('5 = CML', (0, 100, 255)),
-            ('6 = SCA (RBC)', (255, 0, 0)),
+        # ========== BOTTOM LEGEND BAR ==========
+        # Draw a horizontal legend bar at the bottom of the annotated image
+        img_h, img_w = image_rgb.shape[:2]
+        legend_bar_height = 28
+        
+        # Create expanded image with legend bar space
+        expanded_image = np.zeros((img_h + legend_bar_height, img_w, 3), dtype=np.uint8)
+        expanded_image[:img_h, :, :] = image_rgb
+        
+        # Dark background for legend bar
+        cv2.rectangle(expanded_image, (0, img_h), (img_w, img_h + legend_bar_height), (30, 30, 30), -1)
+        # Top border line
+        cv2.line(expanded_image, (0, img_h), (img_w, img_h), (80, 80, 80), 1)
+        
+        legend_entries = [
+            ('0 Platelet', (255, 255, 0)),
+            ('1 Normal RBC', (255, 0, 0)),
+            ('2 Normal WBC', (0, 100, 255)),
+            ('3 AML', (148, 0, 211)),
+            ('4 ALL', (148, 0, 211)),
+            ('5 CML', (148, 0, 211)),
+            ('6 CLL', (148, 0, 211)),
+            ('7 SCA', (255, 165, 0)),
         ]
-        legend_font_scale = 0.35
-        legend_thickness = 1
-        legend_line_height = 16
-        legend_padding = 6
-        legend_x = 4
-        legend_y_start = 4
         
-        # Calculate legend background size
-        max_text_width = 0
-        for text, _ in legend_items:
-            text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, legend_font_scale, legend_thickness)
-            max_text_width = max(max_text_width, text_size[0])
-        legend_bg_width = max_text_width + legend_padding * 2 + 4
-        legend_bg_height = len(legend_items) * legend_line_height + legend_padding * 2
+        legend_font = 0.32
+        legend_thick = 1
+        x_offset = 8
+        y_center = img_h + legend_bar_height // 2
         
-        # Draw semi-transparent background
-        overlay = image_rgb.copy()
-        cv2.rectangle(overlay, (0, 0), (legend_bg_width, legend_bg_height), (0, 0, 0), -1)
-        cv2.addWeighted(overlay, 0.7, image_rgb, 0.3, 0, image_rgb)
-        cv2.rectangle(image_rgb, (0, 0), (legend_bg_width, legend_bg_height), (255, 255, 255), 1)
+        for text, color in legend_entries:
+            # Draw colored dot
+            cv2.circle(expanded_image, (x_offset + 4, y_center), 4, color, -1)
+            # Draw text
+            cv2.putText(expanded_image, text, (x_offset + 12, y_center + 4),
+                       cv2.FONT_HERSHEY_SIMPLEX, legend_font, (220, 220, 220), legend_thick)
+            text_size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, legend_font, legend_thick)
+            x_offset += text_size[0] + 22
         
-        # Draw legend text
-        for i, (text, color) in enumerate(legend_items):
-            y_pos = legend_y_start + legend_padding + i * legend_line_height + 10
-            cv2.putText(image_rgb, text, (legend_x + legend_padding, y_pos),
-                       cv2.FONT_HERSHEY_SIMPLEX, legend_font_scale, color, legend_thickness)
-        
-        pil_image = Image.fromarray(image_rgb)
+        pil_image = Image.fromarray(expanded_image)
         buffer = io.BytesIO()
         pil_image.save(buffer, format='JPEG', quality=95)
         annotated_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
@@ -1258,11 +1366,14 @@ def process_blood_smear(image_bytes, conf_threshold=0.2, iou_threshold=0.2):
                 'sickle_cell_count': sickle_cell_count,
                 
                 'color_legend': {
-                    'Normal WBC': 'rgb(0, 255, 0)',
-                    'Disease WBC': 'rgb(0, 100, 255)',
-                    'RBC': 'rgb(255, 0, 0)',
-                    'SCA': 'rgb(255, 0, 0)',
-                    'Platelets': 'rgb(255, 255, 0)'
+                    'Platelet (0)': 'rgb(255, 255, 0)',
+                    'Normal RBC (1)': 'rgb(255, 0, 0)',
+                    'Normal WBC (2)': 'rgb(0, 100, 255)',
+                    'AML (3)': 'rgb(148, 0, 211)',
+                    'ALL (4)': 'rgb(148, 0, 211)',
+                    'CML (5)': 'rgb(148, 0, 211)',
+                    'CLL (6)': 'rgb(148, 0, 211)',
+                    'SCA (7)': 'rgb(255, 165, 0)'
                 },
                 
                 'workflow': {

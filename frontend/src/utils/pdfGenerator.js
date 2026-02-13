@@ -14,7 +14,10 @@ export const generatePDF = (report) => {
         if (diseaseFindings && Array.isArray(diseaseFindings)) {
             diseaseFindings.forEach(finding => {
                 const severity = finding.severity || 'NORMAL';
-                const label = finding.condition || finding.type || 'Unknown';
+                // Use type for label to avoid repetitive condition text
+                // Clean up type to remove parenthesis explanation for cleaner list
+                const fullType = finding.type || 'Unknown';
+                const label = fullType.split('(')[0].trim();  
 
                 if (severity === 'NORMAL' || severity === 'BELOW_THRESHOLD') {
                     // Collect below-threshold diseases for a single grouped line
@@ -24,41 +27,13 @@ export const generatePDF = (report) => {
 
                 // Above threshold: show which threshold was met
                 if (finding.recommendation) {
+                    // Use the custom recommendation generated in AnalysisContext
+                    // Clean it up if it repeats the type name
                     abnormalLines.push(`- ${label}: ${finding.recommendation}`);
                 } else {
-                    // Fallback: Generate interpretation based on disease type and threshold met
-                    const type = finding.type || '';
+                    // Fallback should rarely be reached now as AnalysisContext generates recommendations
                     const pct = finding.percentage ? finding.percentage.toFixed(1) : '0';
-
-                    if (type.includes('AML')) {
-                        if (severity === 'HIGH') {
-                            abnormalLines.push(`- ${label} (${pct}%): Blast Phase threshold met (>= 20% blasts). AML blast phase classification threshold reached.`);
-                        } else {
-                            abnormalLines.push(`- ${label} (${pct}%): Blasts detected below blast phase classification threshold (< 20%).`);
-                        }
-                    } else if (type.includes('ALL')) {
-                        if (severity === 'HIGH') {
-                            abnormalLines.push(`- ${label} (${pct}%): Lymphoblast Phase threshold met (>= 20% lymphoblasts). ALL lymphoblast classification threshold reached.`);
-                        } else {
-                            abnormalLines.push(`- ${label} (${pct}%): Lymphoblasts detected below lymphoblast classification threshold (< 20%).`);
-                        }
-                    } else if (type.includes('CML')) {
-                        if (severity === 'HIGH') {
-                            abnormalLines.push(`- ${label} (${pct}%): Blast Crisis threshold met (>= 20% blasts). CML blast phase classification threshold reached.`);
-                        } else if (severity === 'MODERATE') {
-                            abnormalLines.push(`- ${label} (${pct}%): Accelerated Phase threshold met (10-19% blasts). Accelerated phase classification threshold reached.`);
-                        } else if (severity === 'LOW') {
-                            abnormalLines.push(`- ${label} (${pct}%): Chronic Phase (< 10% blasts). Below accelerated phase threshold.`);
-                        }
-                    } else if (type.includes('CLL')) {
-                        if (severity === 'HIGH') {
-                            abnormalLines.push(`- ${label} (${pct}%): Advanced/Untreated CLL threshold met (> 70% abnormal lymphocytes). High CLL classification threshold reached.`);
-                        } else if (severity === 'MODERATE') {
-                            abnormalLines.push(`- ${label} (${pct}%): Typical CLL threshold met (50-70% abnormal lymphocytes). Moderate CLL classification threshold reached.`);
-                        } else if (severity === 'LOW') {
-                            abnormalLines.push(`- ${label} (${pct}%): Suspicious Lymphocytosis (40-50%). Above monitoring threshold.`);
-                        }
-                    }
+                    abnormalLines.push(`- ${label} (${pct}%): Threshold met.`);
                 }
             });
         }
@@ -180,13 +155,26 @@ export const generatePDF = (report) => {
 
     // 5. Classification Rows (Normal vs Disease)
     if (report.data && report.data.classificationCounts) {
-        Object.entries(report.data.classificationCounts).forEach(([className, count]) => {
+        // Sort by count descending
+        const sortedEntries = Object.entries(report.data.classificationCounts)
+            .sort(([, countA], [, countB]) => countB - countA);
+            
+        sortedEntries.forEach(([className, count]) => {
             const totalWBC = report.summary?.wbcCount || 1;
             const pct = ((count / totalWBC) * 100).toFixed(1);
+            
+            // Map long internal names to shorter display names if needed
+            let displayName = className;
+            if (className === 'Acute Lymphoblastic Leukemia') displayName = 'ALL';
+            if (className === 'Acute Myeloid Leukemia') displayName = 'AML';
+            if (className === 'Chronic Myeloid Leukemia') displayName = 'CML';
+            if (className === 'Chronic Lymphocytic Leukemia') displayName = 'CLL';
+            if (className === 'Sickle Cell Anemia') displayName = 'Sickle Cell';
+
             tableData.push([
-                className,
+                displayName,
                 pct,
-                className === 'Normal WBC' ? '> 80' : '< 5',
+                "",  // No reference value for classification counts
                 "%"
             ]);
         });

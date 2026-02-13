@@ -721,13 +721,17 @@ class ConvNeXtClassifier:
                     )
                 
                 # ALL Confidence Logic (prevent black bg overfitting)
+                # NOTE: CLL is EXCLUDED from fallback list because ALL and CLL are both
+                # lymphocyte disorders and the model frequently confuses them. When ALL
+                # falls below threshold, falling to CLL creates false positives on ALL smears.
                 is_valid_all = True
                 if (cell_type == 'WBC' and self.all_class_idx is not None and 
                     predicted_idx == self.all_class_idx):
                     all_confidence = float(probs_numpy[self.all_class_idx])
                     if all_confidence < self.all_confidence_threshold:
                         # Confidence too low, fall back to second highest WBC class
-                        wbc_classes = ['Normal WBC', 'Acute Myeloid Leukemia', 'Chronic Myeloid Leukemia', 'Chronic Lymphocytic Leukemia']
+                        # CRITICAL: CLL excluded - both are lymphocyte disorders and confuse each other
+                        wbc_classes = ['Normal WBC', 'Acute Myeloid Leukemia', 'Chronic Myeloid Leukemia']
                         wbc_indices = [self.class_names.index(cls) for cls in wbc_classes if cls in self.class_names]
                         if wbc_indices:
                             wbc_probs = [(idx, probs_numpy[idx]) for idx in wbc_indices]

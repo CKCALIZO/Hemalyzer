@@ -41,6 +41,7 @@ export const FinalResults = ({
     const [expandedSickleCell, setExpandedSickleCell] = useState(false); // Track sickle cell expansion
     const [activeTab, setActiveTab] = useState('overview'); // Tabs: overview, analysis, counts
     const [showDetailedMetrics, setShowDetailedMetrics] = useState(false); // Detailed Metrics panel
+    const [showEstimatedCounts, setShowEstimatedCounts] = useState(false); // Toggle for estimated cell counts in Cell Counts tab
 
     if (!aggregatedResults || !aggregatedResults.thresholdMet) {
 
@@ -61,7 +62,8 @@ export const FinalResults = ({
         diseaseWBCCount,
         overallClassification,
         sickleCell,
-        patientStatus
+        patientStatus,
+        classificationCounts
     } = aggregatedResults;
 
     // Get classification category based on new 7-class ConvNeXt model
@@ -207,7 +209,7 @@ export const FinalResults = ({
             },
             data: {
                 diseaseFindings: diseaseFindings,
-                classificationCounts: wbcClassifications,
+                classificationCounts: classificationCounts,
                 normalWBCCount: normalWBCCount,
                 diseaseWBCCount: diseaseWBCCount,
                 sickleCell: sickleCell
@@ -529,120 +531,6 @@ export const FinalResults = ({
 
                             {showDetailedMetrics && (
                                 <div className="mt-3 bg-white border border-slate-200 rounded-lg p-5 shadow-sm space-y-5">
-                                    {/* Estimated Cell Counts */}
-                                    <div>
-                                        <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                                            <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
-                                            </svg>
-                                            Estimated Cell Counts
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {/* WBC Estimation */}
-                                            <div className={`rounded-lg p-4 border ${
-                                                estimatedWBCCount > 0 && estimatedWBCCount < 5000 ? 'bg-amber-50 border-amber-300' :
-                                                estimatedWBCCount > 10000 ? 'bg-red-50 border-red-300' : 'bg-blue-50 border-blue-200'
-                                            }`}>
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Estimated WBC Count</p>
-                                                    {estimatedWBCCount > 0 && estimatedWBCCount < 5000 && (
-                                                        <span className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
-                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                                                            LOW
-                                                        </span>
-                                                    )}
-                                                    {estimatedWBCCount > 10000 && (
-                                                        <span className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
-                                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-                                                            HIGH
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-2xl font-bold text-blue-900">
-                                                    {estimatedWBCCount ? estimatedWBCCount.toLocaleString() : '—'} <span className="text-sm font-normal text-blue-600">cells/mm³</span>
-                                                </p>
-                                                <p className="text-xs text-blue-600 mt-1">
-                                                    {estimatedWBCCount ? `${(estimatedWBCCount / 1000).toFixed(1)} × 10⁹/L` : '—'}
-                                                </p>
-                                                <p className="text-xs text-slate-500 mt-2">Formula: Ave. WBC/HPF × 2,000</p>
-                                                <div className="mt-2 pt-2 border-t border-blue-200 space-y-1">
-                                                    <p className="text-xs text-slate-600">
-                                                        <span className="font-medium">Normal Range:</span> 5,000 – 10,000 /mm³ (5–10 × 10⁹/L)
-                                                    </p>
-                                                    {estimatedWBCCount > 0 && (
-                                                        <p className={`text-xs font-semibold mt-1 ${
-                                                            estimatedWBCCount < 5000 ? 'text-amber-600' :
-                                                            estimatedWBCCount > 10000 ? 'text-red-600' : 'text-green-600'
-                                                        }`}>
-                                                            {estimatedWBCCount < 5000 ? '↓ Below normal range (Leukopenia)' :
-                                                             estimatedWBCCount > 10000 ? '↑ Above normal range (Leukocytosis)' :
-                                                             '✓ Within normal range'}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            {/* RBC Estimation */}
-                                            {(() => {
-                                                const rbcM = estimatedRBCCount ? estimatedRBCCount / 1e6 : 0;
-                                                const isMale = patientGender?.toLowerCase() === 'male';
-                                                const isFemale = patientGender?.toLowerCase() === 'female';
-                                                const low = isFemale ? 4.0 : 4.5;
-                                                const high = isFemale ? 5.5 : 6.0;
-                                                const genderLabel = isMale ? 'Male' : isFemale ? 'Female' : 'General';
-                                                const isLow = rbcM > 0 && rbcM < low;
-                                                const isHigh = rbcM > high;
-                                                return (
-                                                    <div className={`rounded-lg p-4 border ${
-                                                        isLow ? 'bg-amber-50 border-amber-300' :
-                                                        isHigh ? 'bg-red-50 border-red-300' : 'bg-red-50 border-red-200'
-                                                    }`}>
-                                                        <div className="flex items-center justify-between mb-1">
-                                                            <p className="text-xs font-semibold text-red-700 uppercase tracking-wide">Estimated RBC Count</p>
-                                                            {isLow && (
-                                                                <span className="flex items-center gap-1 text-xs font-bold text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full">
-                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M19 14l-7 7m0 0l-7-7m7 7V3" /></svg>
-                                                                    LOW
-                                                                </span>
-                                                            )}
-                                                            {isHigh && (
-                                                                <span className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full">
-                                                                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 10l7-7m0 0l7 7m-7-7v18" /></svg>
-                                                                    HIGH
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                        <p className="text-2xl font-bold text-red-900">
-                                                            {rbcM > 0 ? rbcM.toFixed(2) : '—'} <span className="text-sm font-normal text-red-600">M/mm³</span>
-                                                        </p>
-                                                        <p className="text-xs text-red-600 mt-1">
-                                                            {rbcM > 0 ? `${rbcM.toFixed(2)} × 10¹²/L` : '—'}
-                                                        </p>
-                                                        <p className="text-xs text-slate-500 mt-2">Formula: Ave. RBC/field × 200,000</p>
-                                                        <p className="text-xs text-slate-500">Avg RBC/field: {avgRBCPerField ? avgRBCPerField.toFixed(1) : '—'}</p>
-                                                        <div className="mt-2 pt-2 border-t border-red-200 space-y-1">
-                                                            <p className="text-xs text-slate-600">
-                                                                <span className="font-medium">♂ Male Normal:</span> 4.5 – 6.0 M/mm³ (4.5–6.0 × 10¹²/L)
-                                                            </p>
-                                                            <p className="text-xs text-slate-600">
-                                                                <span className="font-medium">♀ Female Normal:</span> 4.0 – 5.5 M/mm³ (4.0–5.5 × 10¹²/L)
-                                                            </p>
-                                                            {rbcM > 0 && (
-                                                                <p className={`text-xs font-semibold mt-1 ${
-                                                                    isLow ? 'text-amber-600' :
-                                                                    isHigh ? 'text-red-600' : 'text-green-600'
-                                                                }`}>
-                                                                    {isLow ? `↓ Below normal (${genderLabel} range: ${low}–${high} M/mm³)` :
-                                                                     isHigh ? `↑ Above normal (${genderLabel} range: ${low}–${high} M/mm³)` :
-                                                                     `✓ Within normal (${genderLabel} range: ${low}–${high} M/mm³)`}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })()}
-                                        </div>
-                                    </div>
 
                                     {/* Raw Detection Counts */}
                                     <div>
@@ -679,9 +567,8 @@ export const FinalResults = ({
                                     {/* Analysis Info */}
                                     <div className="bg-slate-50 rounded-lg p-3 border border-slate-200 text-xs text-slate-500">
                                         <p>
-                                            <strong>Note:</strong> Estimated counts are calculated from {processedImages.length} fields of view 
-                                            (100× oil immersion). WBC formula: Average WBC per HPF × 2,000. RBC formula: Average RBC per field × 200,000.
-                                            Reference ranges based on established hematology standards.
+                                            <strong>Note:</strong> Raw detection counts aggregated from {processedImages.length} fields of view 
+                                            (100× oil immersion). For estimated WBC/RBC counts per µL, see the Cell Counts &amp; Raw Data tab.
                                         </p>
                                     </div>
                                 </div>
@@ -1441,29 +1328,127 @@ export const FinalResults = ({
                                 </div>
                             </div>
 
-                            {/* Estimated Cell Counts */}
-                            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                                <p className="text-sm font-medium text-blue-800 mb-3">Estimated Cell Counts (per µL)</p>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-white rounded-lg p-3 border border-blue-100">
-                                        <p className="text-2xl font-bold text-blue-700">
-                                            {estimatedWBCCount?.toLocaleString() || 0}
-                                        </p>
-                                        <p className="text-sm text-blue-600">WBC/µL</p>
-                                        <p className="text-xs text-slate-500 mt-1">
-                                            Formula: ({totalWBC} / 10) × 2,000
-                                        </p>
+                            {/* Estimated Cell Counts - Hidden behind toggle */}
+                            <div className="mt-3">
+                                <button
+                                    onClick={() => setShowEstimatedCounts(!showEstimatedCounts)}
+                                    className="w-full flex items-center justify-between px-4 py-3 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-lg transition-colors border border-blue-200"
+                                >
+                                    <span className="font-medium flex items-center gap-2 text-sm">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z" />
+                                        </svg>
+                                        Estimated Cell Counts (per µL)
+                                    </span>
+                                    <svg className={`w-4 h-4 transition-transform ${showEstimatedCounts ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+                                {showEstimatedCounts && (
+                                    <div className="mt-2 bg-blue-50 rounded-lg p-4 border border-blue-200">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            {/* WBC Estimation Card */}
+                                            {(() => {
+                                                const val = estimatedWBCCount || 0;
+                                                const min = 5000;
+                                                const max = 10000;
+                                                let status = 'NORMAL';
+                                                let statusColor = 'bg-green-100 text-green-800 border-green-200';
+                                                if (val < min) { status = 'LOW'; statusColor = 'bg-yellow-100 text-yellow-800 border-yellow-200'; }
+                                                else if (val > max) { status = 'HIGH'; statusColor = 'bg-red-100 text-red-800 border-red-200'; }
+
+                                                return (
+                                                    <div className="bg-white rounded-lg p-3 border border-blue-100">
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <p className="text-sm text-blue-600 font-semibold">WBC/µL</p>
+                                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusColor}`}>
+                                                                {status}
+                                                            </span>
+                                                        </div>
+                                                        <p className={`text-2xl font-bold ${status === 'HIGH' ? 'text-red-600' : status === 'LOW' ? 'text-yellow-600' : 'text-blue-700'}`}>
+                                                            {val.toLocaleString()}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 mt-1">
+                                                            Normal: 5,000 - 10,000 /mm³
+                                                        </p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                                            Ref: 5-10 × 10⁹/L
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })()}
+
+                                            {/* RBC Estimation Card */}
+                                            {(() => {
+                                                const val = estimatedRBCCount || 0;
+                                                const isMale = (patientGender || 'Male').toLowerCase() === 'male';
+                                                // Male: 4.5-6.0 M, Female: 4.0-5.5 M
+                                                const min = isMale ? 4500000 : 4000000;
+                                                const max = isMale ? 6000000 : 5500000;
+                                                let status = 'NORMAL';
+                                                let statusColor = 'bg-green-100 text-green-800 border-green-200';
+                                                if (val < min) { status = 'LOW'; statusColor = 'bg-yellow-100 text-yellow-800 border-yellow-200'; }
+                                                else if (val > max) { status = 'HIGH'; statusColor = 'bg-red-100 text-red-800 border-red-200'; }
+
+                                                return (
+                                                    <div className="bg-white rounded-lg p-3 border border-blue-100">
+                                                        <div className="flex justify-between items-start mb-1">
+                                                            <p className="text-sm text-red-500 font-semibold">RBC/µL</p>
+                                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${statusColor}`}>
+                                                                {status}
+                                                            </span>
+                                                        </div>
+                                                        <p className={`text-2xl font-bold ${status === 'HIGH' ? 'text-red-600' : status === 'LOW' ? 'text-yellow-600' : 'text-red-600'}`}>
+                                                            {val.toLocaleString()}
+                                                        </p>
+                                                        <p className="text-xs text-slate-500 mt-1">
+                                                            Normal ({isMale ? 'Male' : 'Female'}): {(min / 1000000).toFixed(1)}-{(max / 1000000).toFixed(1)} M/mm³
+                                                        </p>
+                                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                                            Ref: {(min / 1000000).toFixed(1)}-{(max / 1000000).toFixed(1)} × 10¹²/L
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+
+                                        {/* Reference Values Table */}
+                                        <div className="mt-4 border-t border-blue-100 pt-3">
+                                            <p className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2">Reference Normal Values</p>
+                                            <div className="overflow-x-auto">
+                                                <table className="min-w-full text-xs text-slate-600">
+                                                    <thead>
+                                                        <tr className="bg-blue-100/50 text-left">
+                                                            <th className="px-2 py-1 font-semibold">Test</th>
+                                                            <th className="px-2 py-1 font-semibold">Normal Values (mm³)</th>
+                                                            <th className="px-2 py-1 font-semibold">SI Units</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-blue-50">
+                                                        <tr>
+                                                            <td className="px-2 py-1">RBC (Male)</td>
+                                                            <td className="px-2 py-1">4.5 - 6.0 M/mm³</td>
+                                                            <td className="px-2 py-1">4.5 - 6.0 × 10¹²/L</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td className="px-2 py-1">RBC (Female)</td>
+                                                            <td className="px-2 py-1">4.0 - 5.5 M/mm³</td>
+                                                            <td className="px-2 py-1">4.0 - 5.5 × 10¹²/L</td>
+                                                        </tr>
+                                                        <tr>
+                                                            <td className="px-2 py-1">WBC Count</td>
+                                                            <td className="px-2 py-1">5,000 - 10,000/mm³</td>
+                                                            <td className="px-2 py-1">5 - 10 × 10⁹/L</td>
+                                                        </tr>
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            <p className="text-[10px] text-slate-400 mt-2 italic">
+                                                Formulas: WBC = Avg WBC/HPF × 2,000 | RBC = Avg RBC/Field × 200,000
+                                            </p>
+                                        </div>
                                     </div>
-                                    <div className="bg-white rounded-lg p-3 border border-blue-100">
-                                        <p className="text-2xl font-bold text-red-600">
-                                            {estimatedRBCCount?.toLocaleString() || 0}
-                                        </p>
-                                        <p className="text-sm text-red-500">RBC/µL</p>
-                                        <p className="text-xs text-slate-500 mt-1">
-                                            Formula: ({avgRBCPerField?.toFixed(1) || 0} avg) × 200,000
-                                        </p>
-                                    </div>
-                                </div>
+                                )}
                             </div>
                         </div>
 
