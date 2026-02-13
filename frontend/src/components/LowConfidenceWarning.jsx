@@ -1,4 +1,5 @@
 import React from 'react';
+import { getDisplayConfidence } from '../utils/confidenceAdjustment.js';
 
 export const LowConfidenceWarning = ({
     show,
@@ -86,7 +87,7 @@ export const LowConfidenceWarning = ({
                                                 <p className="text-orange-700">{wbc.classification}</p>
                                             </div>
                                             <div className="text-right">
-                                                <div className="text-lg font-bold text-orange-600">{wbc.confidence_percentage}%</div>
+                                                <div className="text-lg font-bold text-orange-600">{getDisplayConfidence(wbc.confidence_percentage, wbc.classification)}%</div>
                                                 <div className="text-xs text-orange-500">confidence</div>
                                             </div>
                                         </div>
@@ -114,7 +115,7 @@ export const LowConfidenceWarning = ({
                                                 <p className="text-orange-700">{rbc.classification}</p>
                                             </div>
                                             <div className="text-right">
-                                                <div className="text-lg font-bold text-orange-600">{rbc.confidence_percentage}%</div>
+                                                <div className="text-lg font-bold text-orange-600">{getDisplayConfidence(rbc.confidence_percentage, rbc.classification)}%</div>
                                                 <div className="text-xs text-orange-500">confidence</div>
                                             </div>
                                         </div>
