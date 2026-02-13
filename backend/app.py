@@ -416,7 +416,7 @@ def check_low_confidence_predictions(wbc_classifications, rbc_classifications):
         warning_message = (
             f"Low confidence detected in model predictions. "
             f"{total_count} cell(s) classified with confidence below {LOW_CONFIDENCE_THRESHOLD*100:.0f}%. "
-            f"Results should be reviewed carefully for safety and accuracy (ISO 25010 safety standard)."
+            f"Results should be reviewed carefully for safety and accuracy."
         )
     
     return {
