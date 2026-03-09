@@ -92,7 +92,6 @@ Hemalyzer is a capstone/thesis project designed to aid medical technologists and
 | **Pillow** | Image manipulation and loading |
 | **NumPy** | Numerical computations |
 | **Super Gradients** | YOLO-NAS model framework for cell detection |
-| **Roboflow Inference SDK** | Cloud-based object detection inference |
 
 ### Deep Learning & AI
 | Model | Role |
