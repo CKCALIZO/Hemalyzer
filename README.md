@@ -222,6 +222,8 @@ Hemalyzer/
 
 **Built for Hematology**
 
-*Capstone Project — AI-Powered Blood Cell Analysis System*
+*HEMALYZER - From cell to chart with careful eyes, Hemalyzer turns data wise.*
+
+*Thesis Project — AI-Powered Blood Cell Analysis System*
 
 </div>
