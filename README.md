@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🔬 Hemalyzer
+# Hemalyzer
 
 ### AI-Powered Hematology Blood Cell Analyzer
 
@@ -23,20 +23,20 @@
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-- [About the Project](#-about-the-project)
-- [System Architecture](#-system-architecture)
-- [Tech Stack](#-tech-stack)
-- [Deep Learning Models](#-deep-learning-models)
-- [Features](#-features)
-- [Getting Started](#-getting-started)
-- [Project Structure](#-project-structure)
-- [Contributors](#-contributors)
+- [About the Project](#about-the-project)
+- [System Architecture](#system-architecture)
+- [Tech Stack](#tech-stack)
+- [Deep Learning Models](#deep-learning-models)
+- [Features](#features)
+- [Getting Started](#getting-started)
+- [Project Structure](#project-structure)
+- [Contributors](#contributors)
 
 ---
 
-## 🧬 About the Project
+## About the Project
 
 Hemalyzer is a capstone/thesis project designed to aid medical technologists and hematology students in analyzing peripheral blood smear images captured under **100x oil immersion magnification**. The system performs:
 
@@ -47,7 +47,7 @@ Hemalyzer is a capstone/thesis project designed to aid medical technologists and
 
 ---
 
-## 🏗 System Architecture
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -68,7 +68,7 @@ Hemalyzer is a capstone/thesis project designed to aid medical technologists and
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 
 ### Frontend
 | Technology | Purpose |
@@ -101,7 +101,7 @@ Hemalyzer is a capstone/thesis project designed to aid medical technologists and
 
 ---
 
-## 🧠 Deep Learning Models
+## Deep Learning Models
 
 ### Cell Detection — YOLO-NAS / YOLOv8
 - Detects and localizes **RBCs**, **WBCs**, and **Platelets** from microscope images
@@ -129,23 +129,23 @@ A fine-tuned **ConvNeXt Base** model classifies individual cell crops into:
 
 ---
 
-## ✨ Features
+## Features
 
-- 📸 **Image Upload** — Upload microscope blood smear images for analysis
-- 🔍 **Automated Cell Detection** — Detects and counts RBCs, WBCs, and Platelets
-- 🧪 **Disease Classification** — Classifies cells for leukemia subtypes and sickle cell disease
-- 📊 **Statistical Analysis** — Confidence intervals, sample adequacy, and estimated counts
-- 🩺 **Clinical Thresholds** — Based on standard hematology reference values
-- 📄 **PDF Report Generation** — Export analysis results as formatted PDF reports
-- 🖼 **Processed Image Thumbnails** — Visual review of detected and classified cells
-- ⚠️ **Low Confidence Alerts** — Warns when model predictions are uncertain
-- 🎮 **Simulation Mode** — Live processing demonstration for presentations
-- 👤 **Patient Registration** — Record patient info linked to analysis sessions
-- 💾 **Session Storage** — Persist analysis data across page navigation
+- **Image Upload** — Upload microscope blood smear images for analysis
+- **Automated Cell Detection** — Detects and counts RBCs, WBCs, and Platelets
+- **Disease Classification** — Classifies cells for leukemia subtypes and sickle cell disease
+- **Statistical Analysis** — Confidence intervals, sample adequacy, and estimated counts
+- **Clinical Thresholds** — Based on standard hematology reference values
+- **PDF Report Generation** — Export analysis results as formatted PDF reports
+- **Processed Image Thumbnails** — Visual review of detected and classified cells
+- **Low Confidence Alerts** — Warns when model predictions are uncertain
+- **Simulation Mode** — Live processing demonstration for presentations
+- **Patient Registration** — Record patient info linked to analysis sessions
+- **Session Storage** — Persist analysis data across page navigation
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 - **Node.js** (v18+)
@@ -170,7 +170,7 @@ python app.py
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 Hemalyzer/
@@ -208,17 +208,19 @@ Hemalyzer/
 
 ---
 
-## 👥 Contributors
+## Contributors
 
 | Contributor | GitHub |
 |---|---|
 | **CKCALIZO** | [@CKCALIZO](https://github.com/CKCALIZO) |
+| **ExoGenic1**| [@ExoGenic1](https://github.com/Exogenic1) |
+| **rairaii11** | [@rairaii11](https://github.com/rairaii11) |
 
 ---
 
 <div align="center">
 
-**Built with 🩸 for Hematology**
+**Built for Hematology**
 
 *Capstone Project — AI-Powered Blood Cell Analysis System*
 
